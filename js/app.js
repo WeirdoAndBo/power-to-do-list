@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.24-c';
+const APP_VERSION = '1.0.25-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -699,7 +699,7 @@ function machbarColumnHtml(bereich, kategorie) {
  const backlogHtml = `<div class="list">${insertRootHtml(bereich, kategorie, '', 'div', true)}`
   + (backlogTop.length
    ? backlogTop.map(t => cardHtml(t, bereich.color, { move: true }) + insertRootHtml(bereich, kategorie, t.id, 'div', true)).join('')
-   : '<p class="bempty">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</p>' + insertRootHtml(bereich, kategorie, '', 'div', true)) + '</div>';
+   : `<div class="empty" style="--c:${bereich.color}">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</div>` + insertRootHtml(bereich, kategorie, '', 'div', true)) + '</div>';
  return `<p class="zlabel">Zeitnah</p><div class="list zone" ${dropTarget} data-bl="0">${doableHtml}</div>
  ${backlogSectionHtml(bereich, kategorie, backlogAll.length, backlogHtml)}${doneBoxHtml(done, bereich.color)}`;
 }
@@ -791,7 +791,7 @@ function uebersichtColumnHtml(bereich, kategorie) {
   : insertRootHtml(bereich, kategorie, '') + `<div class="empty" style="--c:${bereich.color}">${emptyText}</div>` + insertRootHtml(bereich, kategorie, '', 'div', false, true);
  const backlogHtml = backlogSectionHtml(bereich, kategorie, backlog.length, backlog.length
   ? `<ul class="tree">${insertRootHtml(bereich, kategorie, '', 'li', true)}${backlog.map(t => treeNodeHtml(t, bereich.color, bereich.id, 0) + insertRootHtml(bereich, kategorie, t.id, 'li', true)).join('')}</ul>`
-  : insertRootHtml(bereich, kategorie, '', 'div', true) + '<p class="bempty">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</p>' + insertRootHtml(bereich, kategorie, '', 'div', true));
+  : insertRootHtml(bereich, kategorie, '', 'div', true) + `<div class="empty" style="--c:${bereich.color}">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</div>` + insertRootHtml(bereich, kategorie, '', 'div', true));
  const doneHtml = done.length
   ? `<details class="done"><summary>Erledigt · ${done.length}</summary><ul class="tree">${nodes(done, 1)}</ul></details>`
   : '';
