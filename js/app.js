@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.18-c';
+const APP_VERSION = '1.0.19-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -377,11 +377,21 @@ function placeOf(task) {
  return bereichId + '|' + (bereichId ? kategorieIn(task, bereichId) : '');
 }
 // Lesbarer Name eines Orts, z. B. „Arbeit · Akquise“
+// Version C: Kategorien können ein Emoji vor dem Namen haben (kategorie.icon, optional)
+const KATEGORIE_ICONS = ['💼', '📞', '💰', '📊', '📝', '📅', '📣', '💡', '🛠️', '💻', '🏠', '🧹', '🛒', '🍳', '🌱', '🐾',
+ '❤️', '🏃', '🧘', '💊', '👨‍👩‍👧', '🎉', '✈️', '🚗', '📚', '🎨', '🎵', '📷', '⚽', '🧾', '📦'];
+const katName = kategorie => (kategorie.icon ? kategorie.icon + ' ' : '') + kategorie.name;
+function iconPickerHtml(selected = '') {
+ return `<div class="icons" role="radiogroup" aria-label="Emoji">`
+  + `<label class="noicon" title="Kein Emoji"><input type="radio" name="icon" value=""${selected ? '' : ' checked'}>–</label>`
+  + KATEGORIE_ICONS.map(icon => `<label><input type="radio" name="icon" value="${icon}"${icon === selected ? ' checked' : ''}>${icon}</label>`).join('')
+  + '</div>';
+}
 function placeName(bereichId, kategorieId) {
  const bereich = getBereich(bereichId);
  if (!bereich) return 'Ohne Bereich';
  const kategorie = bereich.subs.find(k => k.id === kategorieId);
- return bereich.name + (kategorie ? ' · ' + kategorie.name : '');
+ return bereich.name + (kategorie ? ' · ' + katName(kategorie) : '');
 }
 // Der gerade sichtbare Ort, als Vorbelegung für „Neues To-Do“
 function currentPlace() {
@@ -416,7 +426,7 @@ function taskOptionsHtml(tasks, selectedId) {
 function kategorieOptionsHtml(bereichId, selectedId) {
  const bereich = getBereich(bereichId);
  if (!bereich) return '';
- return bereich.subs.map(k => `<option value="${k.id}"${k.id === selectedId ? ' selected' : ''}>${esc(k.name)}</option>`).join('');
+ return bereich.subs.map(k => `<option value="${k.id}"${k.id === selectedId ? ' selected' : ''}>${esc(katName(k))}</option>`).join('');
 }
 // Auswahl „Wohin“: erst Bereich, dann Kategorie (nur die des gewählten Bereichs;
 // ohne Kategorien wird die zweite Auswahl ausgeblendet). Das Ergebnis steht im
@@ -831,7 +841,7 @@ function bereichOpenHtml(bereich) {
  const tabs = bereich.id
   ? `<nav class="subtabs" aria-label="Kategorien von ${name}">`
    + bereich.subs.map((k, i) => `<button class="tab" data-act="gocol" data-i="${i}" data-drop="zone" data-cat="${bereich.id}" data-area="${k.id}"`
-    + ` style="--c:${bereich.color}" aria-current="${i === currentColumn}"><i></i>${esc(k.name)}</button>`).join('')
+    + ` style="--c:${bereich.color}" aria-current="${i === currentColumn}"><i></i>${esc(katName(k))}</button>`).join('')
    + `<button class="tab new" data-act="newsub" data-id="${bereich.id}">+ Kategorie</button></nav>`
   : '';
  const columns = columnsOf(bereich).map(kategorie => {
@@ -840,7 +850,7 @@ function bereichOpenHtml(bereich) {
    ? `<button class="colgrip" data-cat="${bereich.id}" data-s="${kategorie.id}" aria-label="Kategorie ${esc(kategorie.name)} verschieben, mit Pfeil links oder rechts">${ICON_GRIP}</button>`
    : '';
   const columnHead = bereich.subs.length
-   ? `<div class="colhead">${columnGrip}<h2>${esc(kategorie.name)}</h2><button class="iconbtn" data-act="editsub" data-id="${bereich.id}" data-s="${kategorie.id}"`
+   ? `<div class="colhead">${columnGrip}<h2>${esc(katName(kategorie))}</h2><button class="iconbtn" data-act="editsub" data-id="${bereich.id}" data-s="${kategorie.id}"`
     + ` aria-label="Kategorie ${esc(kategorie.name)} bearbeiten">${ICON_PEN}</button></div>`
    : '';
   const content = state.view === 'baum' ? uebersichtColumnHtml(bereich, kategorie) : machbarColumnHtml(bereich, kategorie);
@@ -2326,7 +2336,7 @@ async function confirmDelete(question, detail) {
 function kategoriePositionOptions(bereichId, skipId, selectedIndex) {
  const others = getBereich(bereichId).subs.filter(k => k.id !== skipId);
  const options = [`<option value="0">Ganz vorne</option>`]
-  .concat(others.map((k, i) => `<option value="${i + 1}">nach „${esc(k.name)}“</option>`));
+  .concat(others.map((k, i) => `<option value="${i + 1}">nach „${esc(katName(k))}“</option>`));
  const chosen = selectedIndex == null ? others.length : Math.min(selectedIndex, others.length);
  return options.map((o, i) => i === chosen ? o.replace('<option', '<option selected') : o).join('');
 }
@@ -2375,7 +2385,7 @@ function duplicateKategorie(fromBereichId, kategorieId, toBereichId, index) {
  const to = getBereich(toBereichId);
  const kategorie = from.subs.find(k => k.id === kategorieId);
  undoSnapshot = snapshot();
- const copy = { id: uid(), name: `${kategorie.name} (Kopie)` };
+ const copy = { id: uid(), name: `${kategorie.name} (Kopie)`, ...(kategorie.icon ? { icon: kategorie.icon } : {}) };
  const originals = allTasks().filter(t => !t.done && isIn(t, fromBereichId, kategorieId));
  const newIds = new Map(originals.map(t => [t.id, uid()]));
  originals.forEach(t => {
@@ -2400,7 +2410,12 @@ function duplicateKategorie(fromBereichId, kategorieId, toBereichId, index) {
  const n = originals.length;
  toast(`„${esc(copy.name)}“ angelegt${n ? ` – mit ${n} To-Do${pluralS(n)}` : ''}.`, true);
 }
-// Kategorie anlegen (ohne kategorieId) oder bearbeiten: Name, Verschieben, Duplizieren, Löschen
+function setIcon(kategorie, icon) {
+ if (icon) kategorie.icon = icon;
+ else delete kategorie.icon;
+ return kategorie;
+}
+// Kategorie anlegen (ohne kategorieId) oder bearbeiten: Name, Emoji, Verschieben, Duplizieren, Löschen
 async function kategorieDialog(bereichId, kategorieId) {
  const bereich = getBereich(bereichId);
  if (!bereich) return;
@@ -2413,12 +2428,13 @@ async function kategorieDialog(bereichId, kategorieId) {
   : '';
  const r = await modal(`<h2>${kategorie ? 'Kategorie bearbeiten' : 'Neue Kategorie'}</h2><p>in ${esc(bereich.name)}</p>
   <input class="field" name="name" value="${esc(kategorie ? kategorie.name : '')}" placeholder="z. B. Akquise" autocomplete="off" aria-label="Name">
+  <label class="lbl">Emoji</label>${iconPickerHtml(kategorie && kategorie.icon)}
   ${firstHint}
   ${actions}
   <div class="btns">${kategorie ? buttonHtml('del', 'Löschen', 'ghost') : buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', kategorie ? 'Fertig' : 'Anlegen', 'pri')}</div>`);
  // Ein geänderter Name gilt auch beim Verschieben und Duplizieren
  const renameFirst = () => {
-  if (kategorie && r.vals.name && r.vals.name !== kategorie.name) { kategorie.name = r.vals.name; save(); }
+  if (kategorie && r.vals.name) { kategorie.name = r.vals.name; setIcon(kategorie, r.vals.icon); save(); }
  };
  if (r.v === 'move' || r.v === 'dup') {
   const moving = r.v === 'move';
@@ -2452,8 +2468,9 @@ async function kategorieDialog(bereichId, kategorieId) {
  undoSnapshot = snapshot();
  if (kategorie) {
   kategorie.name = r.vals.name;
+  setIcon(kategorie, r.vals.icon);
  } else {
-  bereich.subs.push({ id: uid(), name: r.vals.name });
+  bereich.subs.push(setIcon({ id: uid(), name: r.vals.name }, r.vals.icon));
   currentColumn = bereich.subs.length - 1;
   state.openCat = bereichId;
  }
@@ -2642,7 +2659,7 @@ function isValidTask(key, task) {
 }
 function isValidBereich(bereich) {
  const validKategorien = bereich.subs == null
-  || (Array.isArray(bereich.subs) && bereich.subs.every(k => k && ID_PATTERN.test(k.id) && typeof k.name === 'string'));
+  || (Array.isArray(bereich.subs) && bereich.subs.every(k => k && ID_PATTERN.test(k.id) && typeof k.name === 'string' && (k.icon == null || typeof k.icon === 'string')));
  return ID_PATTERN.test(bereich.id) && typeof bereich.name === 'string' && COLOR_PATTERN.test(bereich.color) && validKategorien;
 }
 function isValidInbox(inbox) {

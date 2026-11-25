@@ -655,6 +655,19 @@ test('Kategorie duplizieren: Kopie mit ihren offenen To-Dos', async () => {
  await click('#undo');
  expect(!saved().cats[0].subs.some(k => k.name === 'Akquise (Kopie)') && Object.keys(saved().tasks).length === before, 'Rückgängig entfernt die Kopie nicht');
 });
+test('Kategorie bekommt ein Emoji aus der Auswahl', async () => {
+ await click('[data-act="editsub"][data-s="orga"]');
+ const pick = $('#modal input[name=icon][value="📅"]');
+ expect(pick, 'Emoji-Auswahl fehlt');
+ pick.checked = true;
+ await click('#modal [data-v="ok"]');
+ expect(saved().cats[0].subs.find(k => k.id === 'orga').icon === '📅', 'Emoji wurde nicht gespeichert');
+ expect([...doc.querySelectorAll('.colhead h2')].some(h => h.textContent === '📅 Orga'), 'Emoji steht nicht vor dem Namen');
+ await click('[data-act="editsub"][data-s="orga"]');
+ $('#modal input[name=icon][value=""]').checked = true;
+ await click('#modal [data-v="ok"]');
+ expect(!saved().cats[0].subs.find(k => k.id === 'orga').icon, 'Emoji lässt sich nicht wieder entfernen');
+});
 test('Kategorie löschen nur nach Sicherheitsfrage', async () => {
  await click('[data-act="editsub"][data-s="orga"]');
  await click('#modal [data-v="del"]');

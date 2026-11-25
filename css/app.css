@@ -476,3 +476,11 @@ details.blsec .bempty{padding:6px 8px 12px}
 
 /* Version C: roter Knopf in der Sicherheitsfrage „… löschen?“ */
 .btn.pri.danger{background:#c8463b;color:#fff}
+
+/* Version C: Emoji-Auswahl für Kategorien */
+.icons{display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,1fr));gap:4px;margin-top:8px}
+.icons label{position:relative;height:38px;display:grid;place-items:center;font-size:20px;border-radius:10px;cursor:pointer;background:var(--soft)}
+.icons .noicon{font-size:16px;color:var(--mute)}
+.icons input{position:absolute;opacity:0;pointer-events:none}
+.icons label:has(input:checked){box-shadow:inset 0 0 0 2px var(--acc);background:var(--card)}
+.icons label:has(input:focus-visible){outline:2px solid var(--acc);outline-offset:2px}
