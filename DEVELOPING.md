@@ -13,7 +13,7 @@ Diese Anleitung ist für Menschen, die HTML, CSS und JavaScript können und die 
 ## Ordnerstruktur
 
 ```
-index.html             Grundgerüst: Kopfzeile, Umschalter Übersicht/Machbar/Heute, leere Container
+index.html             Grundgerüst: Kopfzeile, Umschalter Übersicht/Heute, leere Container
 css/app.css            Gestaltung (Farben ganz oben in :root)
 js/app.js              Logik, Ansichten, Dialoge, Speichern, Export/Import
 sw.js                  Service Worker: legt die Dateien für den Offline-Betrieb ab
@@ -39,8 +39,9 @@ Im Code heißen Funktionen und Variablen so wie die Dinge in der App: `bereich`,
 | Ziel            | To-Do mit `goal: true`                      | Newsletter starten       |
 | Vorher-To-Do „geht sonst nicht“ | `needs`                     | sperrt das To-Do         |
 | Vorher-To-Do „würde nur helfen“ | `soft`                      | sperrt nichts            |
-| Tab „Machbar“   | `state.view = 'jetzt'`                      |                          |
-| Tab „Übersicht“ | `state.view = 'baum'`                       |                          |
+| Übersicht, Schalter „Machbar“ an  | `state.view = 'jetzt'`    |                          |
+| Übersicht, Schalter „Machbar“ aus | `state.view = 'baum'`     |                          |
+| Schalter „Machbar“ (gemerkt, auch während „Heute“) | `state.machbar` (true/false, optional) | |
 | Tab „Heute“     | `state.view = 'heute'`                      |                          |
 | Aufgeklappter Bereich | `state.openCat`                       |                          |
 | Zeitnah / Backlog | `backlog: false` / `backlog: true`        |                          |
@@ -62,7 +63,8 @@ state = {
   ],
   inbox: [ { id, t: 'Text', ctx: <To-Do-ID oder null> } ], // „Später einsortieren“
   openCat: 'arbeit',                // welcher Bereich aufgeklappt ist (null = keiner)
-  view: 'jetzt',                    // 'heute' | 'jetzt' | 'baum'
+  view: 'jetzt',                    // 'heute' | 'jetzt' (Übersicht, Machbar an) | 'baum' (Übersicht, Machbar aus)
+  machbar: true,                    // Schalter „Machbar“; fehlt er, gilt view === 'jetzt'
   anim: true,                       // sanfte Animationen an/aus
   day: <Zeitstempel>,               // Beginn des aktuellen Tages (4 Uhr morgens)
   format: 1                         // Version des Datenformats
@@ -99,8 +101,9 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | Wer gehört zu wem                      | `goalsOf`, `taskAndAllBefore`, `parentsOf`, `openNeeds`, `pathsToGoals` |
 | In welchem Bereich/welcher Kategorie   | `bereicheOf`, `kategorieIn`, `isIn`, `placeOf` |
 | Tab „Heute“                            | `heuteViewHtml`, `setToday`, `saveDayOrder`    |
-| Tab „Machbar“                          | `machbarColumnHtml`, `cardHtml`, `backlogRowHtml` |
-| Tab „Übersicht“                        | `uebersichtColumnHtml`, `treeNodeHtml`         |
+| Schalter „Machbar“                     | `machbarSwitchHtml`, `setMachbar`; Spalten: `machbarColumnHtml`, `cardHtml`, `backlogRowHtml` |
+| Karten ziehen (Reihenfolge, andere Kategorie) | Abschnitt „Ziehen“ Nr. 3 (`.mgrip`, `dropItems`), `dropCard` speichert die Reihenfolge über `prio` |
+| Übersicht mit Schalter aus             | `uebersichtColumnHtml`, `treeNodeHtml` (Ziel ganz oben = `cardHtml` mit `options.tree`) |
 | Unter-To-Dos in der Übersicht umsortieren | `moveInTree`, `treeDropTarget`, `applyTreeMove`, Ziehen am Griff (`.tgrip`, Abschnitt „Ziehen“ Nr. 5), Pfeiltasten |
 | Bereiche und Kategorien (Akkordeon)    | `bereichBarHtml`, `bereichOpenHtml`, `bereichDialog`, `kategorieDialog` |
 | Kategorie-Navigation (Knöpfe über den Spalten) | `subtabs` in `bereichOpenHtml`, `goToColumn` (Sprung + Aufleuchten), `markCurrentTab` |
@@ -157,15 +160,15 @@ Die eigenen Daten im Browser zurücksetzen: Entwicklertools → „Anwendung“ 
 
 ## Testen
 
-**Selbsttest (automatisch):** Die App lokal starten (siehe oben) und <http://localhost:8000/tests/test.html> öffnen, dann „Test starten“. Die Seite klickt die App in einem Rahmen durch: anlegen (auch mit „+“ in einer Spalte), abhaken, Rückgängig, Heute-Schalter, Reihenfolge in Heute, Spalten umsortieren, Backlog, Löschen (in Machbar, Heute, Fokusmodus und Übersicht), Fokusmodus, Sicherung speichern und laden (auch alte und kaputte Dateien). Grün = in Ordnung, rot = mit Grund, was nicht geklappt hat. Die eigene Liste wird vorher gesichert und danach wiederhergestellt. Den Tab während des Tests nicht schließen.
+**Selbsttest (automatisch):** Die App lokal starten (siehe oben) und <http://localhost:8000/tests/test.html> öffnen, dann „Test starten“. Die Seite klickt die App in einem Rahmen durch: anlegen (auch mit „+“ in einer Spalte), abhaken, Rückgängig, Heute-Schalter, Reihenfolge in Heute, Spalten umsortieren, Backlog, Schalter „Machbar“ an/aus, Löschen (mit Machbar an, in Heute, Fokusmodus und Übersicht), Fokusmodus, Sicherung speichern und laden (auch alte und kaputte Dateien). Grün = in Ordnung, rot = mit Grund, was nicht geklappt hat. Die eigene Liste wird vorher gesichert und danach wiederhergestellt. Den Tab während des Tests nicht schließen.
 
 Einen neuen Test ergänzen: in `tests/test.html` einen Block `test('Name', async () => { … })` hinzufügen. Mit `click('css-selektor')` klicken, mit `saved()` den gespeicherten Zustand lesen, mit `expect(bedingung, 'Fehlertext')` prüfen.
 
 **Von Hand** (was der Selbsttest nicht kann):
 
-1. Alle drei Tabs ansehen: Übersicht, Machbar, Heute. Sieht alles aus wie vorher?
+1. Beide Tabs ansehen: Übersicht (Schalter „Machbar“ an und aus) und Heute. Sieht alles aus wie vorher?
 2. In „Heute“ eine Karte am Griff ziehen und die Reihenfolge ändern.
-3. In „Machbar“ eine Karte am Griff ins Backlog, auf einen Knopf der Kategorie-Navigation und auf einen anderen Bereich ziehen.
+3. Mit Schalter „Machbar“ an eine Karte am Griff ins Backlog, auf einen Knopf der Kategorie-Navigation und auf einen anderen Bereich ziehen.
 4. In der Übersicht Äste auf- und zuklappen. Ein Unter-To-Do am Griff hoch/runter ziehen (Reihenfolge) und nach rechts/links (Ebene). Die farbige Linie zeigt, wo es landet.
 5. Eine Kategorie-Spalte am Griff im Spaltenkopf ziehen (am Rand scrollt es seitlich mit). Nach dem Neuladen bleibt die Reihenfolge.
 6. Fenster schmal ziehen (Handy-Breite): nichts ragt seitlich heraus, Kategorien lassen sich wischen.
