@@ -53,7 +53,7 @@ S = {
   tasks: { <id>: To-Do, ... },      // alle To-Dos und Ziele, nach ID
   cats: [                           // Bereiche, in Anzeigereihenfolge
     { id: 'arbeit', name: 'Arbeit', color: '#5b8def',
-      subs: [ { id: 'akq', name: 'Akquise' }, ... ] }   // Kategorien
+      subs: [ { id: 'akq', name: 'Akquise' }, ... ] }   // Kategorien, in Spaltenreihenfolge
   ],
   inbox: [ { id, t: 'Text', ctx: <To-Do-ID oder null> } ], // „Später einsortieren“
   openCat: 'arbeit',                // welcher Bereich aufgeklappt ist (null = keiner)
@@ -96,6 +96,7 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | Tab „Machbar“                          | `colJetzt`, `card`, `brow`                     |
 | Tab „Übersicht“                        | `colBaum`, `node`                              |
 | Bereiche und Kategorien (Akkordeon)    | `catBar`, `catOpen`, `catDialog`, `subDialog`  |
+| Kategorie-Spalten umsortieren          | `moveSub`, Ziehen am Griff (`.colgrip`), Pfeiltasten, „Nach links/rechts“ in `subDialog` |
 | Ganze Seite neu aufbauen               | `render`                                       |
 | Fokusmodus                             | `openFocus`, `renderFocus`, `closeFocus`       |
 | Popup und Hinweis unten                | `modal`, `btn`, `toast`                        |
@@ -154,8 +155,9 @@ Es gibt keine automatischen Tests. Nach einer Änderung von Hand prüfen:
 4. Ein To-Do ins Backlog verschieben und zurück.
 5. Fokusmodus öffnen und schließen.
 6. „Rückgängig“ im Hinweis unten ausprobieren.
-7. Fenster schmal ziehen (Handy-Breite) und prüfen, dass nichts seitlich herausragt.
-8. Entwicklertools → „Konsole“: Es dürfen keine roten Fehler stehen.
+7. Eine Kategorie-Spalte am Griff im Spaltenkopf ziehen (am Rand scrollt es seitlich mit), mit Pfeiltasten am Griff verschieben und über den Stift „Nach links/rechts“. Nach dem Neuladen bleibt die Reihenfolge.
+8. Fenster schmal ziehen (Handy-Breite) und prüfen, dass nichts seitlich herausragt.
+9. Entwicklertools → „Konsole“: Es dürfen keine roten Fehler stehen.
 
 ## Nach jeder Änderung: Versionsnummer erhöhen
 
