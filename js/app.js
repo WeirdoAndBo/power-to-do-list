@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.8-c';
+const APP_VERSION = '1.0.9-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -92,6 +92,7 @@ let focusId = null;             // To-Do, das gerade im Fokusmodus offen ist
 let lastRenderedBereich;        // welcher Bereich beim letzten render() offen war
 let ignoreClicksUntil = 0;      // Zeitpunkt, bis zu dem Klicks ignoriert werden (direkt nach dem Ziehen)
 const treeOpen = new Map();     // auf-/zugeklappte Äste in der Übersicht
+const treeDrill = new Map();    // Ziel-Karten in der Übersicht: in welche Ebene hineingetippt wurde (Liste von IDs)
 const openBacklogs = new Set(); // aufgeklappte Backlog-Kästen
 const openChains = new Set();   // aufgeklappte Ziel-Ketten auf Karten
 
@@ -487,7 +488,7 @@ function cardHtml(task, color, options = {}) {
  <div class="cbody">${checkButtonHtml(task, color)}<div class="ctext"><h3>${title}</h3>${chainBoxHtml(task)}
  ${waitingHtml}</div></div>
  ${options.tree || ''}
- <button class="ask" data-act="block" data-id="${task.id}"><b aria-hidden="true">+</b> ${task.goal ? 'To-Do' : 'Vorher-To-Do'}</button></${tag}>`;
+ <button class="ask" data-act="block" data-id="${(options.askFor || task).id}"><b aria-hidden="true">+</b> ${(options.askFor || task).goal ? 'To-Do' : 'Vorher-To-Do'}</button></${tag}>`;
 }
 // Kleiner Papierkorb-Knopf für Listenzeilen (Erledigt, Heute geschafft, Danach dran)
 function deleteMiniHtml(task) {
@@ -534,44 +535,81 @@ function machbarColumnHtml(bereich, kategorie) {
  <details class="bl zone" ${dropTarget} data-bl="1" data-k="${esc(backlogKey)}"${openBacklogs.has(backlogKey) ? ' open' : ''}>`
   + `<summary>Backlog · ${backlogAll.length}</summary>${backlogHtml}</details>${doneBoxHtml(done, bereich.color)}`;
 }
-// Tab „Übersicht“: ein Knoten im Baum, ruft sich für seine Vorher-To-Dos selbst auf.
-// path = Weg im Baum (für auf/zu), level = Tiefe (0 = Ziel ganz oben), viaSoft = hängt über „hilft nur“ dran,
-// parentId = das To-Do darüber in dieser Karte (nur dann gibt es den Griff zum Umsortieren).
-// Ein Ziel ganz oben (level 0) ist dieselbe Karte wie mit Schalter „Machbar“ an (cardHtml), darunter
-// Fortschritt und die aufklappbaren Vorher-To-Dos.
-// Unter-To-Dos haben keinen Papierkorb (kein Platz): Löschen über Tippen auf den Titel → „Bearbeiten“ → „Löschen“.
-function treeNodeHtml(task, color, path, level, viaSoft, parentId = null) {
- const children = [
+// Vorher-To-Dos eines To-Dos als [To-Do, hilftNur], Erledigte ans Ende
+function childrenOf(task) {
+ return [
   ...task.needs.map(id => [getTask(id), 0]),
   ...task.soft.map(id => [getTask(id), 1])
  ].filter(([child]) => child).sort((a, b) => a[0].done - b[0].done);
+}
+// Gültiger Pfad, in den auf einer Ziel-Karte hineingetippt wurde (verschwundene Schritte fallen weg)
+function drillPathOf(cardKey, root) {
+ const path = [];
+ let current = root;
+ for (const id of treeDrill.get(cardKey) || []) {
+  if (!current.needs.includes(id) && !current.soft.includes(id)) break;
+  path.push(id);
+  current = getTask(id);
+ }
+ return path;
+}
+// Tab „Übersicht“: ein Knoten im Baum.
+// path = Weg im Baum (für auf/zu), level = Tiefe (0 = Ziel ganz oben), viaSoft = hängt über „hilft nur“ dran,
+// parentId = das To-Do darüber (nur dann gibt es den Griff zum Umsortieren),
+// cardKey = Schlüssel der Ziel-Karte, in der die Zeile steht.
+// Version C: Ein Ziel ganz oben (level 0) ist dieselbe Karte wie mit Schalter „Machbar“ an (cardHtml).
+// Die Karte zeigt immer nur EINE Ebene von Vorher-To-Dos, in voller Breite (kein Einrücken).
+// Hat ein Vorher-To-Do selbst welche, führt der Knopf „2 ›“ hinein; oben führt ein Pfad zurück.
+// Ohne cardKey (z. B. „Erreichte Ziele“) wird wie früher eingerückt aufgeklappt.
+// Unter-To-Dos haben keinen Papierkorb (kein Platz): Löschen über Tippen auf den Titel → „Bearbeiten“ → „Löschen“.
+function treeNodeHtml(task, color, path, level, viaSoft, parentId = null, cardKey = null) {
  const key = path + '/' + task.id;
- const isOpen = treeOpen.has(key) ? treeOpen.get(key) : level > 0;
  const title = esc(task.t);
  const inBacklog = task.backlog && !task.done;
- const isCard = level === 0;
- const childList = children.length && isOpen
-  ? `<ul data-act="none">${children.map(([child, soft]) => treeNodeHtml(child, color, key, level + 1, soft, task.id)).join('')}</ul>`
-  : '';
- if (isCard) {
-  const open = children.filter(([child]) => !child.done).length;
-  const toggleCard = children.length
+ if (level === 0) {
+  const drill = drillPathOf(key, task);
+  const current = drill.length ? getTask(drill[drill.length - 1]) : task;
+  const currentKey = [key, ...drill].join('/');
+  const children = childrenOf(current);
+  const all = childrenOf(task);
+  const isOpen = drill.length > 0 || (treeOpen.has(key) ? treeOpen.get(key) : false);
+  const doneCount = all.filter(([child]) => child.done).length;
+  const toggleCard = all.length
    ? `<button class="ttog" data-act="tog" data-k="${esc(key)}" data-l="0" aria-expanded="${isOpen}">${ICON_CHEVRON}`
-    + `${isOpen ? 'Zuklappen' : `${children.length} Vorher-To-Do${pluralS(children.length)}${open < children.length ? ` · ${children.length - open} erledigt` : ''}`}</button>`
+    + `${isOpen ? 'Zuklappen' : `${all.length} Vorher-To-Do${pluralS(all.length)}${doneCount ? ` · ${doneCount} erledigt` : ''}`}</button>`
+   : '';
+  // Pfad „Ziel › Schritt › Schritt“: jeder Teil führt zurück auf diese Ebene
+  const crumbs = drill.length
+   ? `<nav class="crumbs" data-act="none" aria-label="Ebene">`
+    + [task.id, ...drill.slice(0, -1)].map((id, i) => `<button data-act="drill" data-k="${esc(key)}" data-d="${i}">${i === 0 ? '‹ ' : ''}${esc(getTask(id).t)}</button><span aria-hidden="true">›</span>`).join('')
+    + `<b>${esc(current.t)}</b></nav>`
+   : '';
+  const rows = children.map(([child, soft]) => treeNodeHtml(child, color, currentKey, 1, soft, current.id, key)).join('');
+  const list = isOpen && (children.length || drill.length)
+   ? `${crumbs}<ul class="flat" data-act="none">${rows || '<li class="flatempty">Noch nichts davor.</li>'}</ul>`
    : '';
   const bar = task.done ? '' : `<div class="pbar" data-act="none" aria-hidden="true"><i style="width:${progress(task)}%"></i></div>`;
   return cardHtml(task, color, {
    move: !task.done, tag: 'li', cls: ' tcard',
-   attrs: `data-tid="${task.id}" data-k="${esc(key)}" data-l="0"`,
-   tree: `${children.length ? bar : ''}${toggleCard}${childList}`
+   // Für das Umsortieren gilt die Karte als die Ebene, die gerade zu sehen ist (data-tid = current)
+   attrs: `data-tid="${current.id}" data-k="${esc(currentKey)}" data-l="0"${drill.length ? ` data-up="${drill.length > 1 ? drill[drill.length - 2] : task.id}"` : ''}`,
+   tree: `${all.length ? bar : ''}${toggleCard}${list}`,
+   askFor: current
   });
  }
+ const children = childrenOf(task);
+ const isOpen = treeOpen.has(key) ? treeOpen.get(key) : true;
  let toggle = '<span class="mini"></span>';
- if (children.length) {
-  const label = isOpen ? 'Zuklappen' : (level === 0 ? 'Alles aufklappen' : 'Aufklappen');
-  const tip = level === 0 ? (isOpen ? 'Alles zuklappen' : 'Alles aufklappen') : '';
-  toggle = `<button class="mini chev" data-act="tog" data-k="${esc(key)}" data-l="${level}" aria-expanded="${isOpen}" aria-label="${label}" title="${tip}">${ICON_CHEVRON}</button>`;
+ if (cardKey && children.length) {
+  const open = children.filter(([child]) => !child.done).length;
+  toggle = `<button class="drill" data-act="drill" data-k="${esc(cardKey)}" data-id="${task.id}"`
+   + ` aria-label="${title}: ${children.length} Vorher-To-Do${pluralS(children.length)} zeigen" title="Hinein: was davor kommt">${open || '✓'}${ICON_CHEVRON}</button>`;
+ } else if (children.length) {
+  toggle = `<button class="mini chev" data-act="tog" data-k="${esc(key)}" data-l="${level}" aria-expanded="${isOpen}" aria-label="${isOpen ? 'Zuklappen' : 'Aufklappen'}">${ICON_CHEVRON}</button>`;
  }
+ const childList = !cardKey && children.length && isOpen
+  ? `<ul data-act="none">${children.map(([child, soft]) => treeNodeHtml(child, color, key, level + 1, soft, task.id)).join('')}</ul>`
+  : '';
  const grip = parentId
   ? `<button class="cgrip tgrip" aria-label="${title} umsortieren (Pfeiltasten: hoch/runter = Reihenfolge, rechts/links = Ebene)"`
    + ` title="Ziehen: hoch/runter = Reihenfolge, nach rechts = kommt vor das To-Do darüber">${ICON_GRIP}</button>`
@@ -1399,6 +1437,9 @@ document.addEventListener('keydown', event => {
   newKey = applyTreeMove(id, parentLi.dataset.tid, previous, undefined, true);
  } else if (event.key === 'ArrowLeft' && +li.dataset.l > 1) {
   newKey = applyTreeMove(id, parentLi.dataset.tid, treeParentLi(parentLi), parentLi.dataset.tid, true);
+ } else if (event.key === 'ArrowLeft' && parentLi.dataset.up) {
+  // Hineingetippt: aus der gezeigten Ebene heraus, direkt hinter das To-Do, in dem man gerade ist
+  applyTreeMove(id, parentLi.dataset.tid, { dataset: { tid: parentLi.dataset.up, k: '' } }, parentLi.dataset.tid, true);
  }
  if (newKey) document.querySelector(`.tree li[data-k="${CSS.escape(newKey)}"] > .row .tgrip`)?.focus();
 });
@@ -2087,6 +2128,15 @@ function toggleBereich(bereichId) {
  render();
  if (state.openCat !== null) document.querySelector('.cat.open')?.scrollIntoView({ block: 'nearest', behavior: state.anim ? 'smooth' : 'auto' });
 }
+// Ziel-Karte in der Übersicht: eine Ebene tiefer (id) oder zurück auf Ebene Nr. depth des Pfads
+function drillInto(cardKey, id, depth) {
+ const root = getTask(cardKey.split('/').pop());
+ const path = root ? drillPathOf(cardKey, root) : [];
+ treeDrill.set(cardKey, id ? [...path, id] : path.slice(0, +depth));
+ render();
+ const card = document.querySelector(`.tcard[data-k^="${CSS.escape(cardKey)}"]`);
+ (card?.querySelector('.crumbs button:last-of-type') || card?.querySelector('.ttog'))?.focus({ preventScroll: true });
+}
 // Ast in der Übersicht auf-/zuklappen. Bei einem Ziel (level 0) gilt es für alle Äste darunter.
 function toggleTreeBranch(key, level) {
  const isOpen = treeOpen.has(key) ? treeOpen.get(key) : level > 0;
@@ -2094,6 +2144,7 @@ function toggleTreeBranch(key, level) {
   [...treeOpen.keys()].forEach(k => { if (k.startsWith(key + '/')) treeOpen.delete(k); });
  }
  treeOpen.set(key, !isOpen);
+ if (level === 0 && treeDrill.has(key)) { treeDrill.delete(key); treeOpen.set(key, false); }
  render();
 }
 // Alle Klicks laufen hier zusammen. Jeder Knopf im HTML trägt data-act="…" (und meist data-id),
@@ -2136,6 +2187,7 @@ document.addEventListener('click', event => {
   case 'move': case 'mgrip': moveMenu(id); break;
   case 'tozeit': moveTo(id, { bl: false }); break;
   case 'tog': toggleTreeBranch(button.dataset.k, +button.dataset.l); break;
+  case 'drill': drillInto(button.dataset.k, id, button.dataset.d); break;
  }
 });
 // Tastatur: Escape schließt den Fokusmodus, Enter öffnet eine Karte, Pfeiltasten wechseln die Kategorie

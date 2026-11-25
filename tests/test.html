@@ -325,11 +325,18 @@ test('Übersicht: Unter-To-Dos mit Pfeiltasten umsortieren und einrücken', asyn
  await pressKey(grip, 'ArrowRight');
  let s = saved();
  expect(s.tasks.g1.needs.join() === 'b' && s.tasks.b.needs.includes('a'), '„a“ kommt nicht vor „b“');
+ // Version C: Die Karte zeigt nur eine Ebene. „a“ liegt jetzt in „b“ – hineintippen
+ expect(!$('.tree li[data-tid="a"]'), '„a“ wird noch auf der oberen Ebene gezeigt');
+ await click('.tree li[data-tid="b"] > .row [data-act="drill"]');
+ expect($('.tcard .crumbs') && $('.tcard .crumbs b').textContent === 'Text überlegen', 'Pfad „… › Text überlegen“ fehlt');
+ expect($('.tree li[data-tid="a"]') && $('.tree li[data-tid="ex"]'), 'Vorher-To-Dos von „b“ fehlen nach dem Hineintippen');
  grip = $('.tree li[data-tid="a"] > .row .tgrip');
- expect(doc.activeElement === grip, 'Griff hat nach dem Verschieben den Fokus verloren');
+ grip.focus();
  await pressKey(grip, 'ArrowLeft');
  s = saved();
  expect(s.tasks.g1.needs.join() === 'b,a' && !s.tasks.b.needs.includes('a'), '„a“ ist nicht wieder eine Ebene höher');
+ await click('.tcard .crumbs button[data-d="0"]');
+ expect(!$('.tcard .crumbs'), 'Zurück zur obersten Ebene ging nicht');
  grip = $('.tree li[data-tid="a"] > .row .tgrip');
  await pressKey(grip, 'ArrowUp');
  expect(saved().tasks.g1.needs.join() === 'a,b', 'Reihenfolge ist nicht „a, b“');
