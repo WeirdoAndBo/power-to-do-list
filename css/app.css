@@ -493,7 +493,7 @@ details.blsec .bempty{padding:6px 8px 12px}
 /* Version C: Sammlung etwas kräftiger hinterlegt als die anderen Spalten */
 .cat .col.colsammlung{background:color-mix(in srgb,var(--c) 19%,var(--bg));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 26%,transparent)}
 
-/* Version C: Die Linie unter der letzten Karte (bzw. unter dem Hinweis einer leeren Liste) ist immer zu sehen,
+/* Version C: Die Linie unter dem Hinweis einer leeren Liste (Zeitnah, Sammlung) ist immer zu sehen,
    etwas zurückhaltender; die Frage daneben erscheint erst beim Drüberfahren */
 .insroot.last,.tree>li.insroot.last{margin:8px 0 2px}
 .insroot.last .ins{opacity:.6}

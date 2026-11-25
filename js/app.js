@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.23-c';
+const APP_VERSION = '1.0.24-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -650,7 +650,7 @@ function backlogSectionHtml(bereich, kategorie, count, inner) {
 const ROOT_QUESTION = 'Neues To-Do';
 const insertQuestion = parent => parent && parent.goal ? 'Was gehört dazu?' : 'Was muss vorher passieren?';
 const insertLabelHtml = question => `<span aria-hidden="true">+</span><em aria-hidden="true">${esc(question)}</em>`;
-// last = Linie unter der letzten Karte bzw. unter dem Hinweis einer leeren Liste: immer sichtbar
+// last = Linie unter dem Hinweis einer leeren Liste (Zeitnah, Sammlung): immer sichtbar
 function insertRootHtml(bereich, kategorie, afterId, tag = 'div', backlog = false, last = false) {
  return `<${tag} class="insroot${last ? ' last' : ''}"><button class="ins" data-act="insroot" data-cat="${bereich.id}" data-area="${kategorie.id}" data-bl="${backlog ? 1 : 0}" data-after="${afterId || ''}"`
   + ` style="--c:${bereich.color}" aria-label="Hier ein neues To-Do in ${esc(kategorie.name || bereich.name)} anlegen">${insertLabelHtml(ROOT_QUESTION)}</button></${tag}>`;
@@ -694,12 +694,12 @@ function machbarColumnHtml(bereich, kategorie) {
  // Ablageziel fürs Ziehen
  const dropTarget = `data-drop="zone" data-cat="${bereich.id}" data-area="${kategorie.id}"`;
  const doableHtml = insertRootHtml(bereich, kategorie, '') + (doable.length
-  ? doable.map((t, i) => cardHtml(t, bereich.color, { move: true }) + insertRootHtml(bereich, kategorie, t.id, 'div', false, i === doable.length - 1)).join('')
+  ? doable.map(t => cardHtml(t, bereich.color, { move: true }) + insertRootHtml(bereich, kategorie, t.id)).join('')
   : `<div class="empty" style="--c:${bereich.color}">Hier ist gerade nichts zu tun.</div>` + insertRootHtml(bereich, kategorie, '', 'div', false, true));
  const backlogHtml = `<div class="list">${insertRootHtml(bereich, kategorie, '', 'div', true)}`
   + (backlogTop.length
-   ? backlogTop.map((t, i) => cardHtml(t, bereich.color, { move: true }) + insertRootHtml(bereich, kategorie, t.id, 'div', true, i === backlogTop.length - 1)).join('')
-   : '<p class="bempty">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</p>' + insertRootHtml(bereich, kategorie, '', 'div', true, true)) + '</div>';
+   ? backlogTop.map(t => cardHtml(t, bereich.color, { move: true }) + insertRootHtml(bereich, kategorie, t.id, 'div', true)).join('')
+   : '<p class="bempty">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</p>' + insertRootHtml(bereich, kategorie, '', 'div', true)) + '</div>';
  return `<p class="zlabel">Zeitnah</p><div class="list zone" ${dropTarget} data-bl="0">${doableHtml}</div>
  ${backlogSectionHtml(bereich, kategorie, backlogAll.length, backlogHtml)}${doneBoxHtml(done, bereich.color)}`;
 }
@@ -787,11 +787,11 @@ function uebersichtColumnHtml(bereich, kategorie) {
  // Ablageflächen fürs Ziehen von Karten (wie mit Schalter „Machbar“ an)
  const dropTarget = `data-drop="zone" data-cat="${bereich.id}" data-area="${kategorie.id}"`;
  const soonHtml = soon.length
-  ? `<ul class="tree">${insertRootHtml(bereich, kategorie, '', 'li')}${soon.map((t, i) => treeNodeHtml(t, bereich.color, bereich.id, 0) + insertRootHtml(bereich, kategorie, t.id, 'li', false, i === soon.length - 1)).join('')}</ul>`
+  ? `<ul class="tree">${insertRootHtml(bereich, kategorie, '', 'li')}${soon.map(t => treeNodeHtml(t, bereich.color, bereich.id, 0) + insertRootHtml(bereich, kategorie, t.id, 'li')).join('')}</ul>`
   : insertRootHtml(bereich, kategorie, '') + `<div class="empty" style="--c:${bereich.color}">${emptyText}</div>` + insertRootHtml(bereich, kategorie, '', 'div', false, true);
  const backlogHtml = backlogSectionHtml(bereich, kategorie, backlog.length, backlog.length
-  ? `<ul class="tree">${insertRootHtml(bereich, kategorie, '', 'li', true)}${backlog.map((t, i) => treeNodeHtml(t, bereich.color, bereich.id, 0) + insertRootHtml(bereich, kategorie, t.id, 'li', true, i === backlog.length - 1)).join('')}</ul>`
-  : insertRootHtml(bereich, kategorie, '', 'div', true) + '<p class="bempty">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</p>' + insertRootHtml(bereich, kategorie, '', 'div', true, true));
+  ? `<ul class="tree">${insertRootHtml(bereich, kategorie, '', 'li', true)}${backlog.map(t => treeNodeHtml(t, bereich.color, bereich.id, 0) + insertRootHtml(bereich, kategorie, t.id, 'li', true)).join('')}</ul>`
+  : insertRootHtml(bereich, kategorie, '', 'div', true) + '<p class="bempty">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</p>' + insertRootHtml(bereich, kategorie, '', 'div', true));
  const doneHtml = done.length
   ? `<details class="done"><summary>Erledigt · ${done.length}</summary><ul class="tree">${nodes(done, 1)}</ul></details>`
   : '';
@@ -808,7 +808,7 @@ function sammlungColumnHtml(bereich, kategorie) {
  const card = t => state.view === 'baum' ? treeNodeHtml(t, bereich.color, bereich.id, 0) : cardHtml(t, bereich.color, { move: true });
  const tag = state.view === 'baum' ? 'li' : 'div';
  const items = open.length
-  ? open.map((t, i) => card(t) + insertRootHtml(bereich, kategorie, t.id, tag, false, i === open.length - 1)).join('')
+  ? open.map(t => card(t) + insertRootHtml(bereich, kategorie, t.id, tag)).join('')
   : '';
  const inner = state.view === 'baum'
   ? `<ul class="tree">${insertRootHtml(bereich, kategorie, '', 'li')}${items}</ul>`
