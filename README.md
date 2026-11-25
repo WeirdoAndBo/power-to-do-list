@@ -12,8 +12,9 @@ Dies ist **Version C** (Experiment, baut auf Version B 1.0.6 auf): Bereiche lieg
 
 - **Übersicht**: Baum mit dem Ziel oben und aufklappbaren Unter-To-dos. Der Ort, um in Ruhe alles systematisch zu erfassen.
 - **Schalter „Machbar“** (im Kopf des aufgeklappten Bereichs): An = pro Kategorie nur die To-dos, die gerade nicht blockiert sind, als Karten; darunter der Backlog und das Erledigte. Aus = wieder der ganze Baum. Der Schalter gilt für alle Bereiche und bleibt so, auch nach einem Wechsel zu „Heute“.
-- **Karten**: sehen mit Schalter an und aus gleich aus (Kopf mit Heute und ⋯ für Verschieben/Details; darunter Häkchen, Titel, „+“ und Mülleimer). Mit Schalter aus zeigt die Ziel-Karte zusätzlich ihre Vorher-To-Dos zum Aufklappen, nur wenig eingerückt.
-- **Hinter jedem To-Do** (auch dem Haupt-To-Do einer Karte) stehen „+“ (etwas davor einfügen) und der Mülleimer.
+- **Karten**: sehen mit Schalter an und aus gleich aus (Kopf mit Heute und ⋯ für Verschieben/Details; darunter Häkchen, Titel und Mülleimer). Mit Schalter aus hat die Ziel-Karte im Kopf einen Pfeil mit der Anzahl der Vorher-To-Dos: Er klappt alle Ebenen auf einmal auf oder zu. Die Ebenen zeigen senkrechte Linien.
+- **Hinter jedem To-Do** stehen nur der Heute-Schalter und der Mülleimer.
+- **Neues To-Do an einer Stelle**: Mit der Maus zwischen zwei To-Dos fahren, dann erscheint ein „+“. Klick, Text eintippen, Enter. Gleich danach öffnet sich das nächste Feld, Escape schließt es. Der eingerückte Streifen direkt unter einem To-Do legt etwas an, das davor kommt (eine Ebene tiefer). Am Handy sind die „+“ ganz leicht immer zu sehen.
 - **Text bearbeiten**: Text antippen, ändern, Enter. Escape bricht ab. Verbindungen und Details: im Menü ⋯ oder im Fokusmodus.
 - **Ziehen**: Es gibt keine Griffe. Man zieht ein Element dort, wo man es anfasst (Maus: drücken und ziehen; Handy: kurz halten, dann ziehen). Jede Karte lässt sich so ziehen: an eine andere Stelle in derselben Kategorie (eine farbige Linie zeigt, wo sie landet), in eine andere Spalte, auf einen Knopf der Kategorie-Navigation, ins Backlog oder auf einen anderen Bereich.
 - **Heute**: nur die To-dos, die du für heute markiert hast. Die Reihenfolge lässt sich per Griff ziehen (oder Pfeiltasten). Jeden Morgen ab 4 Uhr wird „Heute“ geleert; Offenes geht nicht verloren.

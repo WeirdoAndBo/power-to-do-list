@@ -291,7 +291,7 @@ test('Löschen in „Heute geschafft“', async () => {
 });
 test('Unter-To-Do in der Übersicht mit dem Mülleimer löschen', async () => {
  await zeige(false);
- const toggle = $('.tree li.card[data-id="g1"] > .ttog');
+ const toggle = $('.tree li.card[data-id="g1"] > .chead .cardtog');
  if (toggle.getAttribute('aria-expanded') !== 'true') await click(toggle);
  const trash = $('.tree li[data-tid="b"] > .row [data-act="del"]');
  expect(trash, 'Mülleimer am Unter-To-Do fehlt');
@@ -300,7 +300,7 @@ test('Unter-To-Do in der Übersicht mit dem Mülleimer löschen', async () => {
  expect(!saved().tasks.b, '„b“ wurde nicht gelöscht');
  await click('#undo');
  expect(saved().tasks.b, '„b“ ist nach Rückgängig nicht zurück');
- await click('.tree li.card[data-id="g1"] > .ttog');
+ await click('.tree li.card[data-id="g1"] > .chead .cardtog');
  await zeige(true);
 });
 test('Text direkt bearbeiten: antippen, tippen, Enter', async () => {
@@ -328,7 +328,8 @@ test('Übersicht: Ziel-Karte hat Heute und ⋯ im Kopf, + und Mülleimer hinter 
  expect(head, 'Kopfbereich auf der Karte fehlt');
  expect(head.querySelector('[data-act="today"]') && head.querySelector('[data-act="move"]'), 'Heute oder ⋯ fehlt im Kopf');
  expect(!$('.tree li[data-tid="g1"] [data-act="edit"]') && !$('.tree li[data-tid="g1"] .ask'), 'Stift oder „+ To-Do“ unten ist noch da');
- expect($('.tree li[data-tid="g1"] > .cbody [data-act="block"]') && $('.tree li[data-tid="g1"] > .cbody [data-act="del"]'), '+ oder Mülleimer hinter dem Titel fehlt');
+ expect(!$('.tree li[data-tid="g1"] > .cbody [data-act="block"]') && $('.tree li[data-tid="g1"] > .cbody [data-act="del"]'), 'Hinter dem Titel soll nur der Mülleimer stehen');
+ expect(head.querySelector('.cardtog'), 'Pfeil zum Auf-/Zuklappen fehlt im Kopf');
  await click(head.querySelector('[data-act="today"]'));
  expect(saved().tasks.g1.today, 'Heute-Schalter im Kopf hat nicht geschaltet');
  await click('.tree li[data-tid="g1"] > .chead [data-act="today"]');
@@ -339,7 +340,7 @@ test('Übersicht: Ziel-Karte hat Heute und ⋯ im Kopf, + und Mülleimer hinter 
  expect(saved().tasks.g8, '„g8“ ist nach Rückgängig nicht zurück');
 });
 test('Übersicht: Unter-To-Dos mit Pfeiltasten umsortieren und einrücken', async () => {
- await click('.tree li[data-tid="g1"] > .ttog');
+ await click('.tree li[data-tid="g1"] > .chead .cardtog');
  let grip = $('.tree li[data-tid="b"] > .row .tgrip');
  expect(grip, 'Griff am Unter-To-Do fehlt');
  expect(!$('.tree li[data-tid="g1"] > .row .tgrip'), 'Ziel ganz oben darf keinen Griff haben');
@@ -390,7 +391,7 @@ test('Karten sehen mit Schalter „Machbar“ an und aus gleich aus', async () =
  await zeige(false);
  const goal = $('.tree li.card[data-id="g1"]');
  expect(goal, 'Ziel ist in der Übersicht keine Karte');
- const parts = el => ['[data-act="today"]', '[data-act="move"]', '.cbody [data-act="block"]', '.cbody [data-act="del"]', '.cbody .check', '.cbody h3 .t']
+ const parts = el => ['[data-act="today"]', '[data-act="move"]', '.cbody [data-act="del"]', '.cbody .check', '.cbody h3 .t']
   .filter(sel => el.querySelector(sel)).join();
  const goalParts = parts(goal);
  await zeige(true);
@@ -399,7 +400,7 @@ test('Karten sehen mit Schalter „Machbar“ an und aus gleich aus', async () =
 });
 test('Unter-To-Dos auf der Ziel-Karte: nur wenig eingerückt, ohne Punkte', async () => {
  await zeige(false);
- if ($('.tree li.card[data-id="g1"] > .ttog').getAttribute('aria-expanded') !== 'true') await click('.tree li.card[data-id="g1"] > .ttog');
+ if ($('.tree li.card[data-id="g1"] > .chead .cardtog').getAttribute('aria-expanded') !== 'true') await click('.tree li.card[data-id="g1"] > .chead .cardtog');
  const one = $('.tcard li[data-tid="a"] > .row');
  const two = $('.tcard li[data-tid="c"] > .row');
  expect(one && two, 'Unter-To-Dos fehlen');
@@ -407,6 +408,39 @@ test('Unter-To-Dos auf der Ziel-Karte: nur wenig eingerückt, ohne Punkte', asyn
  const indent = l2.left - l1.left;
  expect(indent > 5 && indent <= 20, 'Zweite Ebene ist nicht schmal eingerückt (' + indent + ' px)');
  expect(!$('.lvl'), 'Ebenen-Punkte sind noch da');
+ await zeige(true);
+});
+test('Ein Pfeil im Kartenkopf klappt alle Ebenen auf und zu', async () => {
+ await zeige(false);
+ const tog = () => $('.tree li.card[data-id="g1"] > .chead .cardtog');
+ if (tog().getAttribute('aria-expanded') === 'true') await click(tog());
+ expect(!$('.tree li[data-tid="a"]'), 'Zugeklappt sind Unter-To-Dos zu sehen');
+ await click(tog());
+ expect($('.tree li[data-tid="a"]') && $('.tree li[data-tid="c"]') && $('.tree li[data-tid="ex"]'), 'Aufgeklappt fehlen tiefere Ebenen');
+ expect(!$('.tcard .row .chev'), 'Zeilen haben noch eigene Pfeile');
+ const row = $('.tree li[data-tid="b"] > .row');
+ expect(row.querySelector('[data-act="today"]') && row.querySelector('[data-act="del"]') && !row.querySelector('[data-act="block"], [data-act="addsub"]'), 'Hinter dem To-Do sollen nur Heute und Mülleimer stehen');
+ await click(tog());
+ expect(!$('.tree li[data-tid="a"]'), 'Zuklappen ging nicht');
+ await click(tog());
+});
+test('„+“ zwischen To-Dos: neues To-Do an genau dieser Stelle eintippen', async () => {
+ const ins = $('.ins[data-p="g1"][data-after="a"]');
+ expect(ins, 'Einfüge-Streifen zwischen „a“ und „b“ fehlt');
+ await click(ins);
+ const input = $('.insrow .tinput');
+ expect(input && doc.activeElement === input, 'Eingabefeld erscheint nicht');
+ input.value = 'Dazwischen';
+ await pressKey(input, 'Enter');
+ const created = Object.values(saved().tasks).find(t => t.t === 'Dazwischen');
+ expect(created, 'Neues To-Do wurde nicht angelegt');
+ expect(saved().tasks.g1.needs.join() === ['a', created.id, 'b'].join(), 'Steht nicht zwischen „a“ und „b“: ' + saved().tasks.g1.needs.join());
+ const next = $('.insrow .tinput');
+ expect(next && doc.activeElement === next, 'Danach öffnet sich kein Feld für das nächste To-Do');
+ await pressKey(next, 'Escape');
+ expect(!$('.insrow'), 'Escape schließt das Feld nicht');
+ await click('#undo');
+ expect(!saved().tasks[created.id], 'Rückgängig hat das Einfügen nicht zurückgenommen');
  await zeige(true);
 });
 test('Karte innerhalb der Kategorie an eine andere Stelle ziehen (Machbar an)', async () => {

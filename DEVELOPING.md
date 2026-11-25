@@ -104,7 +104,8 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | Schalter „Machbar“                     | `machbarSwitchHtml`, `setMachbar`; Spalten: `machbarColumnHtml`, `cardHtml`, `backlogRowHtml` |
 | Karten ziehen (Reihenfolge, andere Kategorie) | Abschnitt „Ziehen“ Nr. 3 (`dragCard`, `dropItems`), `dropCard` speichert die Reihenfolge über `prio` |
 | Ziehen, wo man anfasst (ohne Griffe)   | Abschnitt „Ziehen“ Nr. 6: `dragTargetAt` wählt `dragCard`/`dragTreeRow`/`dragDayCard`/`dragColumn`; Handy: `HOLD_MS` halten. Griffe (`.cgrip`, `.tgrip`, `.colgrip`) nur noch für die Tastatur |
-| Text direkt bearbeiten, + und Mülleimer | `titleHtml` (`data-act="rename"` → `startRename`), `taskActionsHtml` |
+| Text direkt bearbeiten, Mülleimer, „+“ zwischen To-Dos | `titleHtml` (`data-act="rename"` → `startRename`), `taskActionsHtml`, `insertHtml` (`data-act="ins"` → `startInsert`) |
+| Ein Pfeil pro Ziel-Karte (alles auf/zu) | `.cardtog` in `treeNodeHtml`, Zustand in `treeOpen` |
 | Übersicht mit Schalter aus             | `uebersichtColumnHtml`, `treeNodeHtml` (Ziel ganz oben = `cardHtml` mit `options.tree`; Zeilen nicht eingerückt, Ebene als `.lvl`-Punkte) |
 | Unter-To-Dos in der Übersicht umsortieren | `moveInTree`, `treeDropTarget`, `applyTreeMove`, Ziehen am Griff (`.tgrip`, Abschnitt „Ziehen“ Nr. 5), Pfeiltasten |
 | Bereiche und Kategorien (Akkordeon)    | `bereichBarHtml`, `bereichOpenHtml`, `bereichDialog`, `kategorieDialog` |

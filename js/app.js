@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.10-c';
+const APP_VERSION = '1.0.11-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -480,20 +480,25 @@ function cardHtml(task, color, options = {}) {
   : '';
  const tag = options.tag || 'article';
  return `<${tag} class="card${options.cls || ''}" data-act="focus" data-id="${task.id}" ${options.attrs || ''} style="--c:${color}" tabindex="0" aria-label="${title} – im Fokusmodus öffnen">
- <div class="chead">${grip}${task.done ? '' : todaySwitchHtml(task)}<span class="sp"></span>${moveButton}</div>
+ <div class="chead">${grip}${task.done ? '' : todaySwitchHtml(task)}<span class="sp"></span>${options.headExtra || ''}${moveButton}</div>
  <div class="cbody">${checkButtonHtml(task, color)}<div class="ctext"><h3>${titleHtml(task)}</h3>${chainBoxHtml(task)}
  ${waitingHtml}</div><span class="cacts">${taskActionsHtml(task)}</span></div>
- ${options.tree || ''}</${tag}>`;
+ ${options.tree === undefined ? (task.done ? '' : insertHtml(task.id, '', color)) : options.tree}</${tag}>`;
 }
 // Titel eines To-Dos. Antippen = direkt hier bearbeiten (Enter speichert, Escape bricht ab), siehe startRename.
 function titleHtml(task) {
  return `<span class="t" data-act="rename" data-id="${task.id}" tabindex="0" role="button" aria-label="${esc(task.t)} – Text bearbeiten">${esc(task.t)}</span>`;
 }
-// Version C: hinter jedem To-Do „+“ (etwas davor einfügen) und der kleine Mülleimer
+// Version C: hinter jedem To-Do der kleine Mülleimer (und in Zeilen davor der Heute-Schalter).
+// Neue To-Dos kommen über das „+“, das zwischen den To-Dos erscheint (insertHtml).
 function taskActionsHtml(task) {
- const title = esc(task.t);
- return `${task.done ? '' : `<button class="mini add" data-act="block" data-id="${task.id}" aria-label="Vorher-To-Do für ${title} hinzufügen" title="Etwas davor einfügen">+</button>`}`
-  + `<button class="mini del" data-act="del" data-id="${task.id}" aria-label="${title} löschen" title="Löschen">${ICON_TRASH}</button>`;
+ return `<button class="mini del" data-act="del" data-id="${task.id}" aria-label="${esc(task.t)} löschen" title="Löschen">${ICON_TRASH}</button>`;
+}
+// Unsichtbarer Streifen zwischen To-Dos. Mit der Maus darüber erscheint „+“; Klick = hier ein neues To-Do eintippen.
+// parentId = das To-Do, vor dem das neue kommt; afterId = steht danach direkt hinter diesem (leer = ganz vorn).
+function insertHtml(parentId, afterId, color, cls = '') {
+ return `<button class="ins${cls}" data-act="ins" data-p="${parentId}" data-after="${afterId || ''}" style="--c:${color}"`
+  + ` aria-label="Hier ein neues To-Do einfügen" title="Hier einfügen"><span aria-hidden="true">+</span></button>`;
 }
 // Kleiner Papierkorb-Knopf für Listenzeilen (Erledigt, Heute geschafft, Danach dran)
 function deleteMiniHtml(task) {
@@ -546,37 +551,42 @@ function machbarColumnHtml(bereich, kategorie) {
 // Ein Ziel ganz oben (level 0) ist dieselbe Karte wie mit Schalter „Machbar“ an (cardHtml), darunter
 // Fortschritt und die aufklappbaren Vorher-To-Dos.
 // Unter-To-Dos haben keinen Papierkorb (kein Platz): Löschen über Tippen auf den Titel → „Bearbeiten“ → „Löschen“.
-function treeNodeHtml(task, color, path, level, viaSoft, parentId = null) {
+function treeNodeHtml(task, color, path, level, viaSoft, parentId = null, inCard = false) {
  const children = [
   ...task.needs.map(id => [getTask(id), 0]),
   ...task.soft.map(id => [getTask(id), 1])
  ].filter(([child]) => child).sort((a, b) => a[0].done - b[0].done);
  const key = path + '/' + task.id;
- const isOpen = treeOpen.has(key) ? treeOpen.get(key) : level > 0;
  const title = esc(task.t);
  const inBacklog = task.backlog && !task.done;
- const isCard = level === 0;
- const childList = children.length && isOpen
-  ? `<ul data-act="none">${children.map(([child, soft]) => treeNodeHtml(child, color, key, level + 1, soft, task.id)).join('')}</ul>`
-  : '';
- if (isCard) {
-  const open = children.filter(([child]) => !child.done).length;
-  const toggleCard = children.length
-   ? `<button class="ttog" data-act="tog" data-k="${esc(key)}" data-l="0" aria-expanded="${isOpen}">${ICON_CHEVRON}`
-    + `${isOpen ? 'Zuklappen' : `${children.length} Vorher-To-Do${pluralS(children.length)}${open < children.length ? ` · ${children.length - open} erledigt` : ''}`}</button>`
+ if (level === 0) {
+  // Version C: EIN Pfeil im Kartenkopf klappt alles auf oder zu. Aufgeklappt sieht man alle Ebenen,
+  // die Ebenen zeigen die senkrechten Linien. Zwischen den To-Dos erscheint beim Drüberfahren „+“.
+  const isOpen = treeOpen.get(key) === true;
+  const all = taskAndAllBefore(task.id).size - 1;
+  const chevron = children.length
+   ? `<button class="hbtn cardtog" data-act="tog" data-k="${esc(key)}" data-l="0" aria-expanded="${isOpen}"`
+    + ` aria-label="${isOpen ? 'Alles zuklappen' : `Alles aufklappen: ${all} Vorher-To-Do${pluralS(all)}`}" title="${isOpen ? 'Alles zuklappen' : 'Alles aufklappen'}">`
+    + `<small>${all}</small>${ICON_CHEVRON}</button>`
+   : '';
+  const childList = children.length && isOpen
+   ? `<ul data-act="none">${children.map(([child, soft]) => treeNodeHtml(child, color, key, 1, soft, task.id, true)).join('')}</ul>`
    : '';
   const bar = task.done ? '' : `<div class="pbar" data-act="none" aria-hidden="true"><i style="width:${progress(task)}%"></i></div>`;
   return cardHtml(task, color, {
    move: !task.done, tag: 'li', cls: ' tcard',
    attrs: `data-tid="${task.id}" data-k="${esc(key)}" data-l="0"`,
-   tree: `${children.length ? bar : ''}${toggleCard}${childList}`
+   headExtra: chevron,
+   tree: `${children.length ? bar : ''}${task.done ? '' : insertHtml(task.id, '', color)}${childList}`
   });
  }
- let toggle = '<span class="mini"></span>';
- if (children.length) {
-  const label = isOpen ? 'Zuklappen' : (level === 0 ? 'Alles aufklappen' : 'Aufklappen');
-  const tip = level === 0 ? (isOpen ? 'Alles zuklappen' : 'Alles aufklappen') : '';
-  toggle = `<button class="mini chev" data-act="tog" data-k="${esc(key)}" data-l="${level}" aria-expanded="${isOpen}" aria-label="${label}" title="${tip}">${ICON_CHEVRON}</button>`;
+ // In einer Karte: alles offen, kein eigener Pfeil. Sonst (z. B. „Erreichte Ziele“): Pfeil pro Zeile wie früher.
+ const isOpen = inCard || (treeOpen.has(key) ? treeOpen.get(key) : true);
+ let toggle = '';
+ if (!inCard) {
+  toggle = children.length
+   ? `<button class="mini chev" data-act="tog" data-k="${esc(key)}" data-l="${level}" aria-expanded="${isOpen}" aria-label="${isOpen ? 'Zuklappen' : 'Aufklappen'}">${ICON_CHEVRON}</button>`
+   : '<span class="mini"></span>';
  }
  // Griff nur für die Tastatur (gezogen wird die ganze Zeile)
  const grip = parentId
@@ -585,11 +595,16 @@ function treeNodeHtml(task, color, path, level, viaSoft, parentId = null) {
  const row = `<div class="row${task.done ? ' isdone' : ''}${inBacklog ? ' inbl' : ''}">${grip}${checkButtonHtml(task, color)}`
   + `<span class="tw">${titleHtml(task)}${inBacklog ? ' <span class="tag bl" title="Liegt im Backlog">Backlog</span>' : ''}</span>`
   + `${viaSoft ? '<span class="tag">hilft</span>' : ''}
- ${task.done ? '' : todaySwitchHtml(task, 1)}${taskActionsHtml(task)}`
-  + `
- ${toggle}</div>`;
+ ${task.done ? '' : todaySwitchHtml(task, 1)}${inCard ? taskActionsHtml(task) : ''}${toggle}</div>`;
+ const childList = children.length && isOpen
+  ? `<ul data-act="none">${children.map(([child, soft]) => treeNodeHtml(child, color, key, level + 1, soft, task.id, inCard)).join('')}</ul>`
+  : '';
+ // Einfüge-Streifen: direkt unter der Zeile = kommt als Erstes vor dieses To-Do (eine Ebene tiefer),
+ // ganz am Ende = kommt danach auf derselben Ebene
+ const insertFirst = inCard && !task.done ? insertHtml(task.id, '', color, ' deeper') : '';
+ const insertAfter = inCard && parentId ? insertHtml(parentId, task.id, color) : '';
  return `<li data-tid="${task.id}" data-k="${esc(key)}" data-l="${level}" style="--c:${color}">${row}
- ${childList}</li>`;
+ ${insertFirst}${childList}${insertAfter}</li>`;
 }
 // Schalter „Machbar“ aus: eine Kategorie-Spalte mit den Zielen als Wurzeln
 function uebersichtColumnHtml(bereich, kategorie) {
@@ -1471,6 +1486,51 @@ document.addEventListener('pointerdown', event => {
 document.addEventListener('contextmenu', event => { if (touchDragging) event.preventDefault(); });
 
 /* ---------- Abläufe (Dialoge) ---------- */
+// „+“ zwischen To-Dos: Eingabefeld an dieser Stelle. Enter legt das To-Do an (geht sonst nicht) und öffnet
+// gleich das nächste Feld dahinter; Escape oder leer lassen schließt es.
+function startInsert(button) {
+ const parent = getTask(button.dataset.p);
+ if (!parent) return;
+ const afterId = button.dataset.after || null;
+ const box = document.createElement('div');
+ box.className = 'insrow';
+ box.style.setProperty('--c', button.style.getPropertyValue('--c'));
+ box.innerHTML = `<input class="tinput" placeholder="${parent.goal ? 'Was gehört dazu?' : 'Was muss vorher passieren?'}" aria-label="Neues To-Do" autocomplete="off">`;
+ button.replaceWith(box);
+ const input = box.querySelector('input');
+ input.focus();
+ let finished = false;
+ const finish = keep => {
+  if (finished) return;
+  finished = true;
+  const text = input.value.trim();
+  if (!keep || !text) { render(); return; }
+  undoSnapshot = snapshot();
+  const task = createTask(text, { backlog: !!parent.backlog });
+  // In „hilft nur“ einfügen, wenn das To-Do davor dort steht; sonst bei „geht sonst nicht“
+  const kind = afterId && parent.soft.includes(afterId) ? 'soft' : 'needs';
+  const list = parent[kind];
+  list.splice(afterId ? list.indexOf(afterId) + 1 : 0, 0, task.id);
+  if (kind === 'needs') {
+   task.prio = Math.max(task.prio, parent.prio + 1);
+   if (parent.today) task.today = true;
+  }
+  // Die Karte bleibt offen
+  document.querySelectorAll('.tcard').forEach(card => { if (card.contains(box)) treeOpen.set(card.dataset.k, true); });
+  save();
+  render();
+  toast(`„${esc(text)}“ eingefügt.`, true);
+  // Gleich weiter: nächstes Feld direkt dahinter
+  document.querySelector(`.ins[data-p="${parent.id}"][data-after="${task.id}"]`)?.click();
+ };
+ input.addEventListener('keydown', event => {
+  event.stopPropagation();
+  if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+  if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+ });
+ input.addEventListener('blur', () => finish(true));
+ input.addEventListener('click', event => event.stopPropagation());
+}
 // Text eines To-Dos direkt an Ort und Stelle bearbeiten. Enter (oder woanders hintippen) speichert, Escape bricht ab.
 function startRename(titleEl) {
  const task = getTask(titleEl.dataset.id);
@@ -2231,6 +2291,7 @@ document.addEventListener('click', event => {
   case 'quick': quickNote(); break;
   case 'edit': editTask(id); break;
   case 'rename': startRename(button); break;
+  case 'ins': startInsert(button); break;
   case 'inbox': sortInbox(); break;
   case 'menu': settingsDialog(); break;
   case 'machbar': setMachbar(state.view !== 'jetzt'); break;
