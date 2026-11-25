@@ -34,7 +34,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '1.0.4';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -477,11 +477,15 @@ function cardHtml(task, color, options = {}) {
  ${waitingHtml}</div></div>
  <button class="ask" data-act="block" data-id="${task.id}"><b aria-hidden="true">+</b> ${task.goal ? 'To-Do' : 'Vorher-To-Do'}</button></article>`;
 }
+// Kleiner Papierkorb-Knopf für Listenzeilen (Erledigt, Heute geschafft, Danach dran)
+function deleteMiniHtml(task) {
+ return `<button class="mini del" data-act="del" data-id="${task.id}" aria-label="${esc(task.t)} löschen">${ICON_TRASH}</button>`;
+}
 // Aufklappbarer Kasten „Erledigt · N“
 function doneBoxHtml(tasks, color) {
  if (!tasks.length) return '';
  const rows = tasks.map(task => `<div class="drow">${checkButtonHtml(task, color)}<span>${esc(task.t)}</span>`
-  + `<button class="mini del" data-act="del" data-id="${task.id}" aria-label="${esc(task.t)} löschen">${ICON_TRASH}</button></div>`).join('');
+  + `${deleteMiniHtml(task)}</div>`).join('');
  return `<details class="done"><summary>Erledigt · ${tasks.length}</summary>${rows}</details>`;
 }
 // Eine Zeile im Backlog-Kasten
@@ -511,7 +515,10 @@ function machbarColumnHtml(bereich, kategorie) {
  const backlogHtml = backlogTop.length
   ? backlogTop.map(t => backlogRowHtml(t, bereich.color)).join('')
   : '<p class="bempty">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</p>';
- return `<p class="zlabel">Zeitnah</p><div class="list zone" ${dropTarget} data-bl="0">${doableHtml}</div>
+ // Knopf „+ Neues To-Do“ direkt in der Spalte: legt es in diesem Bereich und dieser Kategorie an
+ const addHereHtml = `<button class="coladd" data-act="addhere" data-cat="${bereich.id}" data-area="${kategorie.id}"`
+  + ` aria-label="Neues To-Do in ${esc(kategorie.name || bereich.name)}"><span aria-hidden="true">+</span> Neues To-Do</button>`;
+ return `<p class="zlabel">Zeitnah</p><div class="list zone" ${dropTarget} data-bl="0">${doableHtml}</div>${addHereHtml}
  <details class="bl zone" ${dropTarget} data-bl="1" data-k="${esc(backlogKey)}"${openBacklogs.has(backlogKey) ? ' open' : ''}>`
   + `<summary>Backlog · ${backlogAll.length}</summary>${backlogHtml}</details>${doneBoxHtml(done, bereich.color)}`;
 }
@@ -584,12 +591,12 @@ function heuteViewHtml() {
   : `<div class="empty">${emptyText}</div>`;
  const waitingHtml = waiting.length
   ? `<details class="done"><summary>Danach dran · ${waiting.length}</summary>`
-   + waiting.map(t => `<div class="drow wrow"><span>${esc(t.t)}<small>erst: ${openNeeds(t).map(id => esc(getTask(id).t)).join(', ')}</small></span></div>`).join('')
+   + waiting.map(t => `<div class="drow wrow"><span>${esc(t.t)}<small>erst: ${openNeeds(t).map(id => esc(getTask(id).t)).join(', ')}</small></span>${deleteMiniHtml(t)}</div>`).join('')
    + '</details>'
   : '';
  const doneHtml = doneToday.length
   ? `<details class="done"><summary>Heute geschafft · ${doneToday.length}</summary>`
-   + doneToday.map(t => `<div class="drow">${checkButtonHtml(t, colorOf(t))}<span>${esc(t.t)}</span></div>`).join('')
+   + doneToday.map(t => `<div class="drow">${checkButtonHtml(t, colorOf(t))}<span>${esc(t.t)}</span>${deleteMiniHtml(t)}</div>`).join('')
    + '</details>'
   : '';
  return `<section class="col daywrap" style="--c:${GRAY}"><p class="dayhead">${date}</p>
@@ -753,7 +760,9 @@ function renderFocus() {
  const addButton = task.done
   ? ''
   : `<button class="softbtn" data-act="block" data-id="${task.id}">${task.goal ? '+ To-Do' : '+ Vorher-To-Do'}</button>`;
- focusEl.innerHTML = `<div class="ftop"><small>FOKUSMODUS</small><button class="iconbtn" data-act="closefocus" aria-label="Fokusmodus schließen">${ICON_CLOSE}</button></div>
+ focusEl.innerHTML = `<div class="ftop"><small>FOKUSMODUS</small><span class="fbtns">`
+  + `<button class="iconbtn" data-act="del" data-id="${task.id}" aria-label="${esc(task.t)} löschen" title="Löschen">${ICON_TRASH}</button>`
+  + `<button class="iconbtn" data-act="closefocus" aria-label="Fokusmodus schließen">${ICON_CLOSE}</button></span></div>
  <div class="fmain">${hint ? `<p class="goal">${hint}</p>` : ''}<h1>${esc(task.t)}</h1>
  ${beforeHtml}
  <div class="bigcheck">${checkButtonHtml(task, color)}<span>${task.done ? 'Geschafft' : 'Abhaken, wenn es geschafft ist'}</span></div>
@@ -1237,11 +1246,11 @@ async function askBefore(id) {
  render();
  toast(r.vals.kind === 'help' ? 'Notiert – sperrt nichts.' : 'Kommt vorher und steht jetzt oben.', true);
 }
-// Popup „Neues Ziel / Neues To-Do“ (Knopf + unten).
+// Popup „Neues Ziel / Neues To-Do“ (Knopf + unten und + in jeder Spalte).
 //   text = Vorbelegung des Titels, parent = To-Do, vor das das neue kommen soll,
-//   mode = 'sub' öffnet direkt „Unter-To-Do“. Gibt true zurück, wenn etwas angelegt wurde.
-async function addTask({ text = '', parent = null, mode = null } = {}) {
- const place = currentPlace();
+//   mode = 'sub' öffnet direkt „Unter-To-Do“, place = vorbelegter Ort „bereichId|kategorieId“
+//   (ohne: der gerade sichtbare Ort). Gibt true zurück, wenn etwas angelegt wurde.
+async function addTask({ text = '', parent = null, mode = null, place = currentPlace() } = {}) {
  const openBereichId = place.split('|')[0];
  const context = parent || (focusId && getTask(focusId) ? focusId : null);
  const candidates = allTasks().filter(t => !t.done);
@@ -1859,6 +1868,7 @@ document.addEventListener('click', event => {
   case 'closefocus': closeFocus(); break;
   case 'add': addTask(); break;
   case 'addsub': addTask({ parent: id, mode: 'sub' }); break;
+  case 'addhere': addTask({ mode: 'goal', place: button.dataset.cat + '|' + button.dataset.area }); break;
   case 'quick': quickNote(); break;
   case 'edit': editTask(id); break;
   case 'inbox': sortInbox(); break;
