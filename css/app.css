@@ -81,7 +81,7 @@ header{padding:28px 0 6px;display:flex;align-items:center;gap:12px;flex-wrap:wra
    Klick springt zur Spalte, die kurz aufleuchtet (Klasse .jump, setzt app.js). */
 .subtabs{display:flex;flex-wrap:wrap;gap:6px;padding:2px 2px 12px}
 .tab{flex:none;display:flex;align-items:center;gap:6px;min-height:32px;max-width:100%;padding:4px 12px;line-height:1.2;text-align:left;border-radius:20px;background:var(--card);box-shadow:var(--shadow);font-size:14px;color:var(--mute)}
-.tab i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+/* Version C: kein farbiger Punkt mehr in den Kategorie-Knöpfen (Rahmen zeigt die aktive Spalte, Emoji reicht) */
 .tab[aria-current=true]{color:var(--ink);font-weight:600;box-shadow:inset 0 0 0 2px var(--c)}
 .tab.new{background:transparent;box-shadow:inset 0 0 0 1.5px var(--line)}
 /* Spalten: auf dem Handy eine pro Bildschirm zum Wischen, am Desktop nebeneinander */

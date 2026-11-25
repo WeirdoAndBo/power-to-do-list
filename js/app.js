@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.19-c';
+const APP_VERSION = '1.0.20-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -841,7 +841,7 @@ function bereichOpenHtml(bereich) {
  const tabs = bereich.id
   ? `<nav class="subtabs" aria-label="Kategorien von ${name}">`
    + bereich.subs.map((k, i) => `<button class="tab" data-act="gocol" data-i="${i}" data-drop="zone" data-cat="${bereich.id}" data-area="${k.id}"`
-    + ` style="--c:${bereich.color}" aria-current="${i === currentColumn}"><i></i>${esc(katName(k))}</button>`).join('')
+    + ` style="--c:${bereich.color}" aria-current="${i === currentColumn}">${esc(katName(k))}</button>`).join('')
    + `<button class="tab new" data-act="newsub" data-id="${bereich.id}">+ Kategorie</button></nav>`
   : '';
  const columns = columnsOf(bereich).map(kategorie => {
