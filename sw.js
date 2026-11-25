@@ -1,7 +1,7 @@
 // Offline-Cache der Power-Liste. Es gibt keine Netzwerkaufrufe außer zum Laden der eigenen Dateien.
 // Bei jeder Änderung an den App-Dateien VERSION erhöhen (und APP_VERSION in js/app.js gleich setzen),
 // sonst bekommen installierte Apps die neue Fassung nicht.
-const VERSION = '1.0.17-c';
+const VERSION = '1.0.18-c';
 const CACHE = 'powerliste-' + VERSION;
 const FILES = [
   './',

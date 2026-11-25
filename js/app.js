@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.17-c';
+const APP_VERSION = '1.0.18-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -2288,6 +2288,9 @@ async function bereichDialog(id) {
   <label class="lbl">Farbe</label><div class="swatches">${colorChoices}</div>
   <div class="btns">${bereich ? buttonHtml('del', 'Löschen', 'ghost') : buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', bereich ? 'Fertig' : 'Anlegen', 'pri')}</div>`);
  if (r.v === 'del') {
+  const count = allTasks().filter(t => !t.done && isIn(t, id)).length;
+  if (!await confirmDelete(`Bereich „${esc(bereich.name)}“ löschen?`,
+   `Alle Kategorien darin sind dann weg.${count === 1 ? ' Das offene To-Do bleibt und steht danach unter „Ohne Bereich“.' : count ? ` Die ${count} offenen To-Dos bleiben und stehen danach unter „Ohne Bereich“.` : ''}`)) return;
   // Die To-Dos bleiben, sie stehen danach unter „Ohne Bereich“ (oder erben vom Ziel)
   undoSnapshot = snapshot();
   state.cats = state.cats.filter(b => b !== bereich);
@@ -2312,7 +2315,92 @@ async function bereichDialog(id) {
  save();
  render();
 }
-// Kategorie anlegen (ohne kategorieId) oder umbenennen/löschen
+// Version C: Sicherheitsfrage vor dem Löschen eines Bereichs oder einer Kategorie. Nur „Löschen“ und „Abbrechen“.
+async function confirmDelete(question, detail) {
+ const r = await modal(`<h2>${question}</h2><p>${detail}</p>
+  <div class="btns">${buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('yes', 'Löschen', 'pri danger')}</div>`);
+ return r.v === 'yes';
+}
+// Auswahl „Bereich“ und „Position“ für Verschieben und Duplizieren einer Kategorie.
+// Position = Stelle in der Reihenfolge des Ziel-Bereichs (0 = ganz vorne / links).
+function kategoriePositionOptions(bereichId, skipId, selectedIndex) {
+ const others = getBereich(bereichId).subs.filter(k => k.id !== skipId);
+ const options = [`<option value="0">Ganz vorne</option>`]
+  .concat(others.map((k, i) => `<option value="${i + 1}">nach „${esc(k.name)}“</option>`));
+ const chosen = selectedIndex == null ? others.length : Math.min(selectedIndex, others.length);
+ return options.map((o, i) => i === chosen ? o.replace('<option', '<option selected') : o).join('');
+}
+async function askKategorieTarget(title, bereichId, kategorie, keepIndex) {
+ const bereichOptions = state.cats.map(b => `<option value="${b.id}"${b.id === bereichId ? ' selected' : ''}>${esc(b.name)}</option>`).join('');
+ const pending = modal(`<h2>${title}</h2>
+  <label class="lbl" for="kt-cat">Bereich</label><select class="field" id="kt-cat" name="tcat">${bereichOptions}</select>
+  <label class="lbl" for="kt-pos">Position</label><select class="field" id="kt-pos" name="tpos">${kategoriePositionOptions(bereichId, kategorie.id, keepIndex)}</select>
+  <div class="btns">${buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', 'Fertig', 'pri')}</div>`);
+ const modalEl = $('#modal');
+ modalEl.querySelector('[name=tcat]').addEventListener('change', event => {
+  const same = event.target.value === bereichId;
+  modalEl.querySelector('[name=tpos]').innerHTML = kategoriePositionOptions(event.target.value, kategorie.id, same ? keepIndex : null);
+ });
+ const r = await pending;
+ if (r.v !== 'ok' || !getBereich(r.vals.tcat)) return null;
+ return { bereichId: r.vals.tcat, index: +r.vals.tpos || 0 };
+}
+// Kategorie in einen (anderen) Bereich und an eine Stelle verschieben. Ihre To-Dos kommen mit.
+function moveKategorieTo(fromBereichId, kategorieId, toBereichId, index) {
+ const from = getBereich(fromBereichId);
+ const to = getBereich(toBereichId);
+ const kategorie = from.subs.find(k => k.id === kategorieId);
+ undoSnapshot = snapshot();
+ from.subs.splice(from.subs.indexOf(kategorie), 1);
+ if (to !== from) {
+  // Gibt es die Kennung im Ziel-Bereich schon, bekommt die Kategorie eine neue
+  const oldId = kategorie.id;
+  if (to.subs.some(k => k.id === oldId)) kategorie.id = uid();
+  allTasks().forEach(t => {
+   if (t.cat === fromBereichId && t.area === oldId) { t.cat = toBereichId; t.area = kategorie.id; }
+  });
+ }
+ to.subs.splice(Math.min(index, to.subs.length), 0, kategorie);
+ state.openCat = toBereichId;
+ currentColumn = to.subs.indexOf(kategorie);
+ save();
+ render();
+ goToColumn(currentColumn);
+ toast(`„${esc(kategorie.name)}“ verschoben${to !== from ? ` nach ${esc(to.name)}` : ''}.`, true);
+}
+// Kategorie duplizieren: neue Kategorie „Name (Kopie)“ mit Kopien aller offenen To-Dos darin
+// (mit ihren Unter-To-Dos, Ketten und Listen; ohne „Heute“).
+function duplicateKategorie(fromBereichId, kategorieId, toBereichId, index) {
+ const from = getBereich(fromBereichId);
+ const to = getBereich(toBereichId);
+ const kategorie = from.subs.find(k => k.id === kategorieId);
+ undoSnapshot = snapshot();
+ const copy = { id: uid(), name: `${kategorie.name} (Kopie)` };
+ const originals = allTasks().filter(t => !t.done && isIn(t, fromBereichId, kategorieId));
+ const newIds = new Map(originals.map(t => [t.id, uid()]));
+ originals.forEach(t => {
+  const c = JSON.parse(JSON.stringify(t));
+  c.id = newIds.get(t.id);
+  c.needs = t.needs.filter(x => newIds.has(x)).map(x => newIds.get(x));
+  c.soft = t.soft.filter(x => newIds.has(x)).map(x => newIds.get(x));
+  delete c.today; delete c.todayOrder; delete c.todayBy;
+  c.created = Date.now();
+  if (Array.isArray(c.list)) c.list = c.list.map(item => ({ ...item, id: uid() }));
+  // Wurzeln (gehören zu keinem anderen kopierten To-Do) kommen fest in die neue Kategorie
+  const isRoot = !originals.some(o => o.needs.includes(t.id) || o.soft.includes(t.id));
+  if (isRoot || t.cat === fromBereichId) { c.cat = toBereichId; c.area = copy.id; }
+  state.tasks[c.id] = c;
+ });
+ to.subs.splice(Math.min(index, to.subs.length), 0, copy);
+ state.openCat = toBereichId;
+ currentColumn = to.subs.indexOf(copy);
+ save();
+ render();
+ goToColumn(currentColumn);
+ const n = originals.length;
+ toast(`„${esc(copy.name)}“ angelegt${n ? ` – mit ${n} To-Do${pluralS(n)}` : ''}.`, true);
+}
+// Kategorie anlegen (ohne kategorieId) oder bearbeiten: Name, Verschieben, Duplizieren, Löschen
 async function kategorieDialog(bereichId, kategorieId) {
  const bereich = getBereich(bereichId);
  if (!bereich) return;
@@ -2320,24 +2408,36 @@ async function kategorieDialog(bereichId, kategorieId) {
  const firstHint = !kategorie && !bereich.subs.length && allTasks().some(t => isIn(t, bereichId))
   ? `<p class="prehint">Was schon in ${esc(bereich.name)} liegt, kommt erst mal in diese erste Kategorie.</p>`
   : '';
- // Knöpfe „← Nach links“ / „Nach rechts →“ (nicht am Rand)
- const orderButtons = kategorie && bereich.subs.length > 1
-  ? `<div class="subpos"><span class="lbl">Reihenfolge</span>${bereich.subs[0] !== kategorie ? buttonHtml('left', '← Nach links') : ''}`
-   + `${bereich.subs.at(-1) !== kategorie ? buttonHtml('right', 'Nach rechts →') : ''}</div>`
+ const actions = kategorie
+  ? `<div class="subpos">${buttonHtml('move', 'Verschieben …')}${buttonHtml('dup', 'Duplizieren …')}</div>`
   : '';
  const r = await modal(`<h2>${kategorie ? 'Kategorie bearbeiten' : 'Neue Kategorie'}</h2><p>in ${esc(bereich.name)}</p>
   <input class="field" name="name" value="${esc(kategorie ? kategorie.name : '')}" placeholder="z. B. Akquise" autocomplete="off" aria-label="Name">
   ${firstHint}
-  ${orderButtons}
+  ${actions}
   <div class="btns">${kategorie ? buttonHtml('del', 'Löschen', 'ghost') : buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', kategorie ? 'Fertig' : 'Anlegen', 'pri')}</div>`);
- if (r.v === 'left' || r.v === 'right') {
-  // Umsortieren; ein geänderter Name wird dabei mit übernommen
-  undoSnapshot = snapshot();
-  if (r.vals.name) kategorie.name = r.vals.name;
-  moveKategorie(bereichId, kategorieId, bereich.subs.indexOf(kategorie) + (r.v === 'right' ? 1 : -1), true);
+ // Ein geänderter Name gilt auch beim Verschieben und Duplizieren
+ const renameFirst = () => {
+  if (kategorie && r.vals.name && r.vals.name !== kategorie.name) { kategorie.name = r.vals.name; save(); }
+ };
+ if (r.v === 'move' || r.v === 'dup') {
+  const moving = r.v === 'move';
+  const index = bereich.subs.indexOf(kategorie);
+  const target = await askKategorieTarget(moving ? `„${esc(r.vals.name || kategorie.name)}“ verschieben` : `„${esc(r.vals.name || kategorie.name)}“ duplizieren`,
+   bereichId, kategorie, moving ? index : index + 1);
+  if (!target) return;
+  const before = snapshot();
+  renameFirst();
+  if (moving) moveKategorieTo(bereichId, kategorieId, target.bereichId, target.index);
+  else duplicateKategorie(bereichId, kategorieId, target.bereichId, target.index);
+  undoSnapshot = before;
   return;
  }
  if (r.v === 'del') {
+  const count = allTasks().filter(t => !t.done && isIn(t, bereichId, kategorieId)).length;
+  const rest = bereich.subs.find(k => k !== kategorie);
+  if (!await confirmDelete(`Kategorie „${esc(kategorie.name)}“ löschen?`,
+   count === 1 ? `Das offene To-Do darin bleibt und liegt danach in ${esc(rest ? rest.name : bereich.name)}.` : count ? `Die ${count} offenen To-Dos darin bleiben und liegen danach in ${esc(rest ? rest.name : bereich.name)}.` : 'Sie ist leer.')) return;
   undoSnapshot = snapshot();
   const index = bereich.subs.indexOf(kategorie);
   bereich.subs.splice(index, 1);

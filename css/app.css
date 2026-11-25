@@ -473,3 +473,6 @@ details.blsec .bempty{padding:6px 8px 12px}
 /* Version C: Frage neben dem „+“ zwischen den To-Dos (nur beim Drüberfahren, am Handy nicht) */
 .ins em{position:absolute;left:calc(50% + 15px);top:50%;transform:translateY(-50%);font-style:normal;font-size:11.5px;font-weight:600;line-height:1;white-space:nowrap;padding:3px 7px;border-radius:8px;color:color-mix(in srgb,var(--c) 70%,var(--ink));background:color-mix(in srgb,var(--c) 12%,var(--card));pointer-events:none}
 @media(hover:none){.ins em{display:none}}
+
+/* Version C: roter Knopf in der Sicherheitsfrage „… löschen?“ */
+.btn.pri.danger{background:#c8463b;color:#fff}

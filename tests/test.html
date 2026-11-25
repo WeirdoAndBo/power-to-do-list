@@ -617,11 +617,63 @@ test('Kategorie-Spalte mit Pfeiltaste verschieben (mit Rückgängig)', async () 
  await click('#undo');
  expect(saved().cats[0].subs.map(k => k.id).join() === 'akq,fin,orga', 'Rückgängig hat die Reihenfolge nicht zurückgesetzt');
 });
-test('Kategorie im Popup „Nach links“ verschieben', async () => {
+test('Kategorie im Popup verschieben: Position in diesem Bereich', async () => {
  await click('[data-act="editsub"][data-s="orga"]');
- expect(modalOpen() && $('#modal [data-v="left"]'), 'Knopf „Nach links“ fehlt');
- await click('#modal [data-v="left"]');
+ expect(modalOpen() && $('#modal [data-v="move"]') && $('#modal [data-v="dup"]'), 'Knöpfe „Verschieben“ und „Duplizieren“ fehlen');
+ await click('#modal [data-v="move"]');
+ expect($('#modal [name=tcat]') && $('#modal [name=tpos]'), 'Auswahl Bereich und Position fehlt');
+ $('#modal [name=tpos]').value = '1';   // nach „Akquise“
+ await click('#modal [data-v="ok"]');
  expect(saved().cats[0].subs.map(k => k.id).join() === 'akq,orga,fin', 'Reihenfolge ist nicht Akquise, Orga, Finanzen');
+});
+test('Kategorie in einen anderen Bereich verschieben: ihre To-Dos kommen mit (mit Rückgängig)', async () => {
+ const inFin = Object.values(saved().tasks).filter(t => t.area === 'fin').map(t => t.id);
+ await click('[data-act="editsub"][data-s="fin"]');
+ await click('#modal [data-v="move"]');
+ const select = $('#modal [name=tcat]');
+ select.value = 'privat';
+ select.dispatchEvent(new Event('change', { bubbles: true }));
+ expect($$('#modal [name=tpos] option').length === 3, 'Positionen passen nicht zum Bereich Privat');
+ $('#modal [name=tpos]').value = '0';
+ await click('#modal [data-v="ok"]');
+ const cats = saved().cats;
+ expect(!cats[0].subs.some(k => k.id === 'fin') && cats[1].subs[0].id === 'fin', 'Finanzen steht nicht ganz vorne in Privat');
+ expect(inFin.every(id => saved().tasks[id].cat === 'privat'), 'To-Dos sind nicht mitgekommen');
+ await click('#undo');
+ expect(saved().cats[0].subs.some(k => k.id === 'fin'), 'Rückgängig holt die Kategorie nicht zurück');
+});
+test('Kategorie duplizieren: Kopie mit ihren offenen To-Dos', async () => {
+ const before = Object.keys(saved().tasks).length;
+ const open = Object.values(saved().tasks).filter(t => !t.done && t.area === 'akq').length;
+ await click('[data-act="editsub"][data-s="akq"]');
+ await click('#modal [data-v="dup"]');
+ await click('#modal [data-v="ok"]');
+ const subs = saved().cats[0].subs;
+ const copy = subs.find(k => k.name === 'Akquise (Kopie)');
+ expect(copy && subs[subs.indexOf(copy) - 1].id === 'akq', 'Kopie steht nicht direkt nach Akquise');
+ expect(Object.keys(saved().tasks).length > before && Object.values(saved().tasks).filter(t => t.area === copy.id).length >= open, 'To-Dos wurden nicht mitkopiert');
+ await click('#undo');
+ expect(!saved().cats[0].subs.some(k => k.name === 'Akquise (Kopie)') && Object.keys(saved().tasks).length === before, 'Rückgängig entfernt die Kopie nicht');
+});
+test('Kategorie löschen nur nach Sicherheitsfrage', async () => {
+ await click('[data-act="editsub"][data-s="orga"]');
+ await click('#modal [data-v="del"]');
+ expect(modalOpen() && $('#modal .btn.danger'), 'Sicherheitsfrage erscheint nicht');
+ await click('#modal [data-v=""]');
+ expect(saved().cats[0].subs.some(k => k.id === 'orga'), 'Abbrechen hat trotzdem gelöscht');
+ await click('[data-act="editsub"][data-s="orga"]');
+ await click('#modal [data-v="del"]');
+ await click('#modal [data-v="yes"]');
+ expect(!saved().cats[0].subs.some(k => k.id === 'orga'), 'Kategorie wurde nicht gelöscht');
+ await click('#undo');
+ expect(saved().cats[0].subs.some(k => k.id === 'orga'), 'Rückgängig holt die Kategorie nicht zurück');
+});
+test('Bereich löschen nur nach Sicherheitsfrage', async () => {
+ await click('[data-act="editcat"][data-id="arbeit"]');
+ await click('#modal [data-v="del"]');
+ expect(modalOpen() && $('#modal .btn.danger'), 'Sicherheitsfrage erscheint nicht');
+ await click('#modal [data-v=""]');
+ expect(saved().cats.some(b => b.id === 'arbeit'), 'Abbrechen hat trotzdem gelöscht');
 });
 let backup;
 test('Sicherung speichern erzeugt eine gültige Datei', async () => {
