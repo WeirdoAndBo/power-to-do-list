@@ -215,19 +215,17 @@ details.done[open] summary::before,details.bl[open] summary::before{transform:ro
 /* Version C: Ziele in der Übersicht sind dieselben Karten (.card) wie mit Schalter „Machbar“ an */
 .tree>li.card{margin-bottom:10px}
 .tree>li.card:hover{transform:none}
-/* Vorher-To-Dos auf der Ziel-Karte: immer nur eine Ebene, in voller Breite, ohne Einrücken.
-   Zeilen durch feine Linien getrennt. „2 ›“ (.drill) führt eine Ebene tiefer, .crumbs zurück. */
-.tree ul.flat{margin:4px -4px 0;padding:0;border:0}
-.flat>li{border-top:1px solid var(--line)}
-.flat>li:first-child{border-top:0}
-.flatempty{padding:10px 8px;font-size:14px;color:var(--mute)}
-.drill{flex:none;display:inline-flex;align-items:center;gap:0;min-width:40px;height:30px;padding:0 2px 0 8px;border-radius:15px;background:color-mix(in srgb,var(--c) 12%,var(--soft));font-size:13px;font-weight:600;color:color-mix(in srgb,var(--c) 60%,var(--ink))}
-.drill:hover{background:color-mix(in srgb,var(--c) 22%,var(--soft))}
-.drill svg{width:16px;height:16px}
-.crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px;margin:10px 0 2px;padding:6px 8px;border-radius:12px;background:color-mix(in srgb,var(--c) 8%,var(--soft));font-size:13px;color:var(--mute)}
-.crumbs button{max-width:100%;padding:2px 4px;border-radius:6px;color:color-mix(in srgb,var(--c) 60%,var(--ink));text-align:left;overflow-wrap:anywhere}
-.crumbs button:hover{background:var(--card)}
-.crumbs b{color:var(--ink);font-weight:600;overflow-wrap:anywhere}
+/* Vorher-To-Dos auf der Ziel-Karte: flach, ohne Einrücken, jede Zeile in voller Breite.
+   Die Ebene zeigen Punkte (.lvl) und die Linie links: je tiefer, desto heller. */
+.tree .tcard ul{margin:0;padding:0;border:0}
+.tree .tcard>ul{margin:6px -4px 0}
+.tcard li>.row{border-left:3px solid color-mix(in srgb,var(--c) var(--lv,100%),transparent);border-top:1px solid var(--line);padding-left:2px}
+.tcard>ul>li:first-child>.row{border-top:0}
+.tcard li[data-l="2"]>.row{--lv:60%}
+.tcard li[data-l="3"]>.row{--lv:35%}
+.tcard li[data-l]:not([data-l="1"]):not([data-l="2"]):not([data-l="3"])>.row{--lv:18%}
+.lvl{flex:none;min-width:12px;font-size:12px;letter-spacing:-1px;line-height:1;color:color-mix(in srgb,var(--c) 75%,var(--ink));text-align:center}
+.lvl{display:none}.tcard .lvl{display:block}
 .tcard .pbar{margin:10px 0 2px 38px}
 /* Knopf „3 Vorher-To-Dos“ auf einer Ziel-Karte: klappt die Vorher-To-Dos auf und zu */
 .ttog{display:flex;align-items:center;gap:4px;min-height:32px;margin:6px 0 0 30px;padding:2px 10px 2px 4px;border-radius:12px;font-size:13px;color:var(--mute)}
