@@ -318,3 +318,18 @@ body{font-size:15px}
 .row.inbl>.t{opacity:1;color:color-mix(in srgb,var(--ink) 72%,transparent)}
 .cat .tree .today.tmini span{display:none}.cat .tree .today.tmini{padding:0 7px}
 header{position:relative}.vtag{position:absolute;top:6px;left:0}
+
+/* Kategorie-Spalten umsortieren: Griff im Spaltenkopf, Kante zeigt die Zielstelle */
+.colhead .colgrip{margin:0 -4px 0 -2px;width:22px;height:36px;flex:none;display:grid;place-items:center;color:var(--mute);opacity:.3;cursor:grab;touch-action:none;border-radius:8px}
+.colgrip svg{width:8px;height:14px}
+.col:hover .colgrip{opacity:.7}
+.colgrip:hover,.colgrip:focus-visible{opacity:1;background:color-mix(in srgb,var(--c) 14%,transparent)}
+@media(hover:none){.colhead .colgrip{opacity:.45;position:relative}.colgrip::before{content:'';position:absolute;inset:-4px -8px}}
+body.coldrag{user-select:none;-webkit-user-select:none;cursor:grabbing}
+body.coldrag .cat .cols{scroll-snap-type:none!important}
+.cat .col.lift{opacity:.45}
+.cat .col.dropl{box-shadow:inset 4px 0 0 var(--c),inset 0 0 0 1px color-mix(in srgb,var(--c) 18%,transparent)}
+.cat .col.dropr{box-shadow:inset -4px 0 0 var(--c),inset 0 0 0 1px color-mix(in srgb,var(--c) 18%,transparent)}
+.colghost{padding:10px 16px;background:var(--card);font-weight:700;font-size:15px;border-left:4px solid var(--c);max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.subpos{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px}
+.subpos .lbl{margin:0 auto 0 0}

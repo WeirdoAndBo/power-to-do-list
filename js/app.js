@@ -24,7 +24,7 @@
 const KEY='powerliste-b-v1';
 // Versionen: APP_VERSION = Stand der App (siehe auch sw.js), FORMAT = Version des gespeicherten Datenformats.
 // FORMAT nur erhöhen, wenn sich die Datenstruktur ändert, und dann in migrate() nachziehen.
-const APP_VERSION='1.0.1';
+const APP_VERSION='1.0.2';
 const FORMAT=1;
 const FILE_APP='power-liste';
 // Farben, die beim Anlegen eines Bereichs zur Auswahl stehen.
@@ -214,7 +214,7 @@ function catOpen(c){const subs=subsOf(c);
  return`<section class="cat open" style="--c:${c.color}" aria-label="${esc(c.name)}">
  <div class="cathead"><button class="ct" data-act="opencat" data-cat="${c.id}" aria-expanded="true" title="Zuklappen"><i></i>${esc(c.name)} <small>${counts(c)}</small>${CHEV}</button>${c.id?`<button class="iconbtn" data-act="editcat" data-id="${c.id}" aria-label="Bereich ${esc(c.name)} bearbeiten">${PEN}</button>`:''}</div>
  ${c.id?`<nav class="tabs subtabs" aria-label="Kategorien von ${esc(c.name)}">${c.subs.map((x,i)=>`<button class="tab" data-act="gocol" data-i="${i}" data-drop="zone" data-cat="${c.id}" data-area="${x.id}" style="--c:${c.color}" aria-current="${i===curCol}"><i></i>${esc(x.name)}</button>`).join('')}<button class="tab new" data-act="newsub" data-id="${c.id}">+ Kategorie</button></nav>`:''}
- <div class="cols" id="cols">${subs.map(x=>`<section class="col" aria-label="${esc(x.name)}">${c.subs.length?`<div class="colhead"><h2>${esc(x.name)}</h2><button class="iconbtn" data-act="editsub" data-id="${c.id}" data-s="${x.id}" aria-label="Kategorie ${esc(x.name)} umbenennen">${PEN}</button></div>`:''}${S.view==='baum'?colBaum(c,x):colJetzt(c,x)}</section>`).join('')}</div></section>`}
+ <div class="cols" id="cols">${subs.map(x=>`<section class="col" aria-label="${esc(x.name)}">${c.subs.length?`<div class="colhead">${c.subs.length>1?`<button class="colgrip" data-cat="${c.id}" data-s="${x.id}" aria-label="Kategorie ${esc(x.name)} verschieben, mit Pfeil links oder rechts" title="Ziehen, um die Reihenfolge zu ändern">${GRIP}</button>`:''}<h2>${esc(x.name)}</h2><button class="iconbtn" data-act="editsub" data-id="${c.id}" data-s="${x.id}" aria-label="Kategorie ${esc(x.name)} bearbeiten">${PEN}</button></div>`:''}${S.view==='baum'?colBaum(c,x):colJetzt(c,x)}</section>`).join('')}</div></section>`}
 let lastCat;
 // render: baut die ganze Seite aus S neu auf. Nach jeder Änderung an S aufrufen (nach save()).
 function render(){
@@ -331,6 +331,32 @@ document.addEventListener('pointerdown',e=>{
   if(d.drop==='cat'){const c=C(d.cat);moveTo(id,{cat:d.cat,area:c&&c.subs.length?c.subs[0].id:''})}
   else moveTo(id,{cat:d.cat,area:d.area,bl:d.bl===undefined?undefined:d.bl==='1'})};
  addEventListener('pointermove',move);addEventListener('pointerup',up);addEventListener('pointercancel',up)});
+// Kategorie-Spalten am Griff im Spaltenkopf ziehen (Maus/Finger). Eine farbige Kante zeigt, wo die Spalte landet.
+// Erreicht der Zeiger den Rand der Spalten, wird automatisch seitlich gescrollt. Tastatur: Griff fokussieren, Pfeil links/rechts.
+document.addEventListener('pointerdown',e=>{
+ const g=e.target.closest&&e.target.closest('.colgrip');if(!g||!$('#modal').hidden)return;e.preventDefault();
+ const el=$('#cols'),src=g.closest('.col'),cols=[...el.children],from=cols.indexOf(src),sid=g.dataset.s,cid=g.dataset.cat;
+ const gh=document.createElement('div');gh.className='colghost dragghost';gh.textContent=src.querySelector('h2').textContent;
+ gh.style.setProperty('--c',getComputedStyle(src).getPropertyValue('--c'));
+ const x0=e.clientX,y0=e.clientY;let moved=false,to=from,px=x0,py=y0,raf=0;
+ // mark: Ziel-Position aus der Zeigerposition bestimmen und die Kante anzeigen (i = Spalte, vor der eingefügt wird)
+ const mark=()=>{cols.forEach(c=>c.classList.remove('dropl','dropr'));
+  let i=cols.findIndex(c=>{const b=c.getBoundingClientRect();return px<b.left+b.width/2});if(i<0)i=cols.length;
+  to=i>from?i-1:i;if(to===from)return;if(i<cols.length)cols[i].classList.add('dropl');else cols[cols.length-1].classList.add('dropr')};
+ // tick: seitliches Mitscrollen, je näher am Rand, desto schneller
+ const tick=()=>{const b=el.getBoundingClientRect(),z=Math.min(60,b.width/6);let v=0;
+  if(px<b.left+z)v=(px-b.left-z)/z;else if(px>b.right-z)v=(px-b.right+z)/z;
+  if(v){el.scrollLeft+=Math.max(-1,Math.min(1,v))*12;mark()}raf=requestAnimationFrame(tick)};
+ const move=ev=>{px=ev.clientX;py=ev.clientY;
+  if(!moved){if(Math.hypot(px-x0,py-y0)<6)return;moved=true;document.body.append(gh);src.classList.add('lift');document.body.classList.add('coldrag');raf=requestAnimationFrame(tick)}
+  gh.style.left=Math.max(4,Math.min(px-24,innerWidth-gh.offsetWidth-4))+'px';gh.style.top=py-20+'px';mark()};
+ const up=ev=>{removeEventListener('pointermove',move);removeEventListener('pointerup',up);removeEventListener('pointercancel',up);cancelAnimationFrame(raf);
+  gh.remove();src.classList.remove('lift');document.body.classList.remove('coldrag');cols.forEach(c=>c.classList.remove('dropl','dropr'));
+  if(!moved)return;noClick=Date.now()+350;if(ev.type==='pointercancel')return;moveSub(cid,sid,to)};
+ addEventListener('pointermove',move);addEventListener('pointerup',up);addEventListener('pointercancel',up)});
+document.addEventListener('keydown',e=>{const g=e.target.closest&&e.target.closest('.colgrip');if(!g||!$('#modal').hidden||(e.key!=='ArrowLeft'&&e.key!=='ArrowRight'))return;e.preventDefault();
+ const{cat,s}=g.dataset,c=C(cat);if(!c)return;moveSub(cat,s,c.subs.findIndex(x=>x.id===s)+(e.key==='ArrowRight'?1:-1));
+ document.querySelector(`.colgrip[data-cat="${cat}"][data-s="${s}"]`)?.focus({preventScroll:true})});
 // Bei einem Ziel: „Was gehört dazu?“ (ein Ziel ist ein Zustand, erreicht, wenn alle To-Dos erledigt sind). Bei einem To-Do: die eine Vorher-Frage der ganzen App.
 const preBlock=()=>`<label class="lbl only-goal">Was gehört dazu? Welche To-Dos braucht es, damit das Ziel erreicht ist?</label><label class="lbl only-sub">Muss etwas anderes vorher passieren?</label><div class="prelist"></div><button type="button" class="link preadd" data-row="add"><span class="only-goal">+ To-Do</span><span class="only-sub">+ Vorher-To-Do</span></button><p class="prehint"><span class="only-goal">Das Ziel ist erreicht, wenn alles davon erledigt ist. </span>Darf leer bleiben. Ziehen am Griff oder ↳: ein Eintrag muss vor dem darüber passieren.</p>`;
 // createPre: legt die im Popup eingetippten Vorher-To-Dos an (Einrückung = eine Ebene tiefer)
@@ -478,11 +504,21 @@ async function subDialog(cid,sid){const c=C(cid);if(!c)return;const x=sid?c.subs
  const r=await modal(`<h2>${x?'Kategorie bearbeiten':'Neue Kategorie'}</h2><p>in ${esc(c.name)}</p>
   <input class="field" name="name" value="${esc(x?x.name:'')}" placeholder="z. B. Akquise" autocomplete="off" aria-label="Name">
   ${!x&&!c.subs.length&&all().some(t=>inCol(t,cid))?`<p class="prehint">Was schon in ${esc(c.name)} liegt, kommt erst mal in diese erste Kategorie.</p>`:''}
+  ${x&&c.subs.length>1?`<div class="subpos"><span class="lbl">Reihenfolge</span>${c.subs[0]!==x?btn('left','← Nach links'):''}${c.subs.at(-1)!==x?btn('right','Nach rechts →'):''}</div>`:''}
   <div class="btns">${x?btn('del','Löschen','ghost'):btn('','Abbrechen','ghost')}${btn('ok',x?'Fertig':'Anlegen','pri')}</div>`);
+ if(r.v==='left'||r.v==='right'){undoSnap=snap();if(r.vals.name)x.name=r.vals.name;moveSub(cid,sid,c.subs.indexOf(x)+(r.v==='right'?1:-1),true);return}
  if(r.v==='del'){undoSnap=snap();const i=c.subs.indexOf(x);c.subs.splice(i,1);all().forEach(t=>{if(t.area===sid)t.area=null});curCol=Math.max(0,i-1);save();render();toast(`Kategorie gelöscht. Die To-Dos liegen jetzt in ${esc(c.subs[0]?c.subs[0].name:c.name)}.`,true);return}
  if(r.v!=='ok'||!r.vals.name)return;undoSnap=snap();
  if(x)x.name=r.vals.name;else{c.subs.push({id:uid(),name:r.vals.name});curCol=c.subs.length-1;S.openCat=cid}
  save();render();if(!x)goCol(curCol)}
+// moveSub: Kategorie sid im Bereich cid an Stelle „to“ setzen. Die Reihenfolge der Spalten ist einfach
+// die Reihenfolge in c.subs und wird damit wie alles andere gespeichert und in der Sicherung mitgenommen.
+function moveSub(cid,sid,to,hasSnap){const c=C(cid);if(!c)return;const i=c.subs.findIndex(x=>x.id===sid);
+ to=Math.max(0,Math.min(to,c.subs.length-1));if(i<0||(i===to&&!hasSnap))return;
+ if(!hasSnap)undoSnap=snap();const[x]=c.subs.splice(i,1);c.subs.splice(to,0,x);S.openCat=cid;curCol=to;save();render();
+ // Die verschobene Spalte sichtbar halten
+ const el=$('#cols'),col=el&&el.children[to];if(col){const l=col.offsetLeft-el.offsetLeft;if(l<el.scrollLeft||l+col.offsetWidth>el.scrollLeft+el.clientWidth+2)goCol(to)}
+ if(i!==to)toast(`„${esc(x.name)}“ verschoben.`,true)}
 /* Zeitnah ⇄ Backlog und Verschieben. Geht ein To-Do ins Backlog, fragt die App einmal, ob die ganze Kette mitkommt. */
 async function moveTo(id,{cat,area,bl}){
  const t=T(id);if(!t)return;const before=snap(),msgs=[];
