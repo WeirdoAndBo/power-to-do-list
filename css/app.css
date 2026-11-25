@@ -78,6 +78,13 @@ header{padding:28px 0 6px;display:flex;align-items:center;gap:12px;flex-wrap:wra
 .colhead{display:flex;align-items:center;gap:10px;margin:2px 4px 8px}
 .colhead h2{margin:0;font-size:17px;display:flex;align-items:center;gap:10px}
 .colhead button{margin-left:auto}
+/* Griff zum Umsortieren der Kategorie-Spalten (im Spaltenkopf) */
+.colhead .colgrip{margin:0 -4px 0 -2px;width:22px;height:36px;flex:none;display:grid;place-items:center;color:var(--mute);opacity:.3;cursor:grab;touch-action:none;border-radius:8px}
+.colgrip svg{width:8px;height:14px}
+.col:hover .colgrip{opacity:.7}
+.colgrip:hover,.colgrip:focus-visible{opacity:1;background:color-mix(in srgb,var(--c) 14%,transparent)}
+/* Touch-Geräte: deutlicher sichtbar und größere Fläche zum Anfassen */
+@media(hover:none){.colhead .colgrip{opacity:.45;position:relative}.colgrip::before{content:'';position:absolute;inset:-4px -8px}}
 /* Desktop: Spalten nebeneinander mit sinnvoller Mindestbreite. Passen nicht alle hin, wird seitlich gewischt/gescrollt.
    Die Register braucht man dann nur, wenn nicht alle Spalten sichtbar sind (Klasse ovf, setzt app.js). */
 @media(min-width:700px){.cols{scroll-snap-type:x proximity;flex-wrap:nowrap}.cat .col{flex:1 0 300px;max-width:440px}.cat .col:only-child{max-width:600px}
@@ -301,3 +308,16 @@ body.dnd .catbar[data-drop],body.dnd .subtabs .tab[data-drop],body.dnd .zone{out
 body.dnd .over{background:color-mix(in srgb,var(--c) 22%,var(--card))!important;outline:2.5px solid var(--c)!important}
 .dragghost{position:fixed;z-index:60;pointer-events:none;opacity:.93;transform:rotate(1.5deg);box-shadow:0 16px 40px rgb(0 0 0/.25)!important;border-radius:16px}
 .src-drag{opacity:.3}
+
+/* ---------- Kategorie-Spalten umsortieren (Klassen setzt app.js) ----------
+   body.coldrag = es wird gerade eine Spalte gezogen, .lift = die gezogene Spalte,
+   .dropl/.dropr = farbige Kante links/rechts an der Zielstelle, .colghost = Namensschild am Finger */
+body.coldrag{user-select:none;-webkit-user-select:none;cursor:grabbing}
+body.coldrag .cat .cols{scroll-snap-type:none!important}
+.cat .col.lift{opacity:.45}
+.cat .col.dropl{box-shadow:inset 4px 0 0 var(--c),inset 0 0 0 1px color-mix(in srgb,var(--c) 18%,transparent)}
+.cat .col.dropr{box-shadow:inset -4px 0 0 var(--c),inset 0 0 0 1px color-mix(in srgb,var(--c) 18%,transparent)}
+.colghost{padding:10px 16px;background:var(--card);font-weight:700;font-size:15px;border-left:4px solid var(--c);max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* „Reihenfolge: ← Nach links / Nach rechts →“ im Popup „Kategorie bearbeiten“ */
+.subpos{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px}
+.subpos .lbl{margin:0 auto 0 0}

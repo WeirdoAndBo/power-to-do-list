@@ -34,7 +34,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.3';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -128,28 +128,10 @@ function seed() {
  const task = (id, title, extra = {}) => ({
   id, t: title, needs: [], soft: [], done: false, goal: false, cat: null, prio: 0, created: now, doneAt: null, ...extra
  });
+ // Startzustand: nur je eine Beispielkarte in der ersten Kategorie jedes Bereichs.
  const list = [
-  task('g1', 'Stellen anschreiben für Kundenakquise', { goal: true, cat: 'arbeit', area: 'akq', needs: ['a', 'b'] }),
-  task('a', 'Liste an Stellen anlegen', { needs: ['c', 'desk'] }),
-  task('c', 'Ort festlegen, wo die Liste entsteht', { today: true }),
-  task('b', 'Text überlegen', { soft: ['ex'] }),
-  task('ex', 'Zwei Beispiel-Anschreiben ansehen'),
-  task('g2', 'Newsletter starten', { goal: true, cat: 'arbeit', area: 'akq', needs: ['n1'], backlog: true }),
-  task('n1', 'Thema der ersten Ausgabe festlegen', { backlog: true }),
-  task('g5', 'Rechnungen für November schreiben', { goal: true, cat: 'arbeit', area: 'fin', needs: ['r1'] }),
-  task('r1', 'Stunden aus dem Kalender zusammenzählen'),
-  task('g6', 'Steuerunterlagen 2025 sortieren', { goal: true, cat: 'arbeit', area: 'fin', backlog: true }),
-  task('g8', 'Mails auf null bringen', { goal: true, cat: 'arbeit', area: 'orga' }),
-  task('g7', 'Ablagesystem für Projekte überlegen', { goal: true, cat: 'arbeit', area: 'orga', backlog: true }),
-  task('desk', 'Schreibtisch freiräumen'),
-  task('g3', 'Keller entrümpeln', { goal: true, cat: 'privat', area: 'haus', needs: ['k1', 'k2'] }),
-  task('k1', 'Sperrmüll-Termin holen', { today: true }),
-  task('k2', 'Kisten besorgen', { done: true, doneAt: now - 24 * ONE_HOUR }),
-  task('g9', 'Zahnarzttermin ausmachen', { goal: true, cat: 'privat', area: 'ges' }),
-  task('g10', 'Neue Laufschuhe aussuchen', { goal: true, cat: 'privat', area: 'ges', backlog: true }),
-  task('g4', 'Ein Bild malen', { goal: true, cat: 'hobby', needs: ['desk', 'f1'] }),
-  task('f1', 'Farben besorgen'),
-  task('g11', 'Gitarre wieder stimmen', { goal: true, cat: 'hobby', backlog: true })
+  task('bsp1', 'Beispiel To-Do', { goal: true, cat: 'arbeit', area: 'verw' }),
+  task('bsp2', 'Beispiel To-Do', { goal: true, cat: 'privat', area: 'hobso' })
  ];
  const tasks = {};
  list.forEach(t => { tasks[t.id] = t; });
@@ -161,10 +143,9 @@ function seed() {
   tasks,
   cats: [ // Bereiche, jeweils mit ihren Kategorien (subs)
    { id: 'arbeit', name: 'Arbeit', color: '#5b8def',
-     subs: [{ id: 'akq', name: 'Akquise' }, { id: 'fin', name: 'Finanzen' }, { id: 'orga', name: 'Orga' }] },
+     subs: [{ id: 'verw', name: 'Verwaltung' }, { id: 'akq', name: 'Akquise & Marketing' }, { id: 'daily', name: 'Daily business' }] },
    { id: 'privat', name: 'Privat', color: '#e0a03a',
-     subs: [{ id: 'haus', name: 'Haushalt' }, { id: 'ges', name: 'Gesundheit' }] },
-   { id: 'hobby', name: 'Hobby', color: '#9b7fd1', subs: [] }
+     subs: [{ id: 'hobso', name: 'Hobby & Sozial' }, { id: 'alltag', name: 'Alltag & Lebensorga' }, { id: 'proj', name: 'Projekte' }] }
   ],
   openCat: 'arbeit',
   view: 'jetzt',
@@ -643,9 +624,14 @@ function bereichOpenHtml(bereich) {
    + `<button class="tab new" data-act="newsub" data-id="${bereich.id}">+ Kategorie</button></nav>`
   : '';
  const columns = columnsOf(bereich).map(kategorie => {
+  // Griff zum Umsortieren der Spalten, nur wenn es mehr als eine Kategorie gibt
+  const columnGrip = bereich.subs.length > 1
+   ? `<button class="colgrip" data-cat="${bereich.id}" data-s="${kategorie.id}" aria-label="Kategorie ${esc(kategorie.name)} verschieben, mit Pfeil links oder rechts"`
+    + ` title="Ziehen, um die Reihenfolge zu ändern">${ICON_GRIP}</button>`
+   : '';
   const columnHead = bereich.subs.length
-   ? `<div class="colhead"><h2>${esc(kategorie.name)}</h2><button class="iconbtn" data-act="editsub" data-id="${bereich.id}" data-s="${kategorie.id}"`
-    + ` aria-label="Kategorie ${esc(kategorie.name)} umbenennen">${ICON_PEN}</button></div>`
+   ? `<div class="colhead">${columnGrip}<h2>${esc(kategorie.name)}</h2><button class="iconbtn" data-act="editsub" data-id="${bereich.id}" data-s="${kategorie.id}"`
+    + ` aria-label="Kategorie ${esc(kategorie.name)} bearbeiten">${ICON_PEN}</button></div>`
    : '';
   const content = state.view === 'baum' ? uebersichtColumnHtml(bereich, kategorie) : machbarColumnHtml(bereich, kategorie);
   return `<section class="col" aria-label="${esc(kategorie.name)}">${columnHead}${content}</section>`;
@@ -1092,6 +1078,95 @@ document.addEventListener('pointerdown', event => {
  trackPointer(onMove, onUp);
 });
 
+// 4) Kategorie-Spalten am Griff im Spaltenkopf ziehen. Eine farbige Kante zeigt, wo die Spalte landet.
+//    Erreicht der Zeiger den Rand der Spalten, wird automatisch seitlich gescrollt.
+document.addEventListener('pointerdown', event => {
+ const grip = event.target.closest && event.target.closest('.colgrip');
+ if (!grip || !$('#modal').hidden) return;
+ event.preventDefault();
+ const cols = $('#cols');
+ const source = grip.closest('.col');
+ const columns = [...cols.children];
+ const from = columns.indexOf(source);
+ const kategorieId = grip.dataset.s;
+ const bereichId = grip.dataset.cat;
+ // „Geist“: ein Schild mit dem Namen der Spalte, das dem Zeiger folgt
+ const ghost = document.createElement('div');
+ ghost.className = 'colghost dragghost';
+ ghost.textContent = source.querySelector('h2').textContent;
+ ghost.style.setProperty('--c', getComputedStyle(source).getPropertyValue('--c'));
+ const startX = event.clientX;
+ const startY = event.clientY;
+ let moved = false;
+ let to = from;              // Zielstelle
+ let pointerX = startX;
+ let pointerY = startY;
+ let frame = 0;              // für requestAnimationFrame
+ // Zielstelle aus der Zeigerposition bestimmen und die Kante anzeigen
+ const markTarget = () => {
+  columns.forEach(c => c.classList.remove('dropl', 'dropr'));
+  let before = columns.findIndex(c => {
+   const box = c.getBoundingClientRect();
+   return pointerX < box.left + box.width / 2;
+  });
+  if (before < 0) before = columns.length;   // hinter die letzte Spalte
+  to = before > from ? before - 1 : before;
+  if (to === from) return;
+  if (before < columns.length) columns[before].classList.add('dropl');
+  else columns[columns.length - 1].classList.add('dropr');
+ };
+ // Seitliches Mitscrollen am Rand, je näher am Rand, desto schneller
+ const scrollAtEdge = () => {
+  const box = cols.getBoundingClientRect();
+  const zone = Math.min(60, box.width / 6);
+  let speed = 0;
+  if (pointerX < box.left + zone) speed = (pointerX - box.left - zone) / zone;
+  else if (pointerX > box.right - zone) speed = (pointerX - box.right + zone) / zone;
+  if (speed) {
+   cols.scrollLeft += Math.max(-1, Math.min(1, speed)) * 12;
+   markTarget();
+  }
+  frame = requestAnimationFrame(scrollAtEdge);
+ };
+ trackPointer(moveEvent => {
+  pointerX = moveEvent.clientX;
+  pointerY = moveEvent.clientY;
+  if (!moved) {
+   if (Math.hypot(pointerX - startX, pointerY - startY) < 6) return;
+   moved = true;
+   document.body.append(ghost);
+   source.classList.add('lift');
+   document.body.classList.add('coldrag');
+   frame = requestAnimationFrame(scrollAtEdge);
+  }
+  ghost.style.left = Math.max(4, Math.min(pointerX - 24, innerWidth - ghost.offsetWidth - 4)) + 'px';
+  ghost.style.top = pointerY - 20 + 'px';
+  markTarget();
+ }, upEvent => {
+  cancelAnimationFrame(frame);
+  ghost.remove();
+  source.classList.remove('lift');
+  document.body.classList.remove('coldrag');
+  columns.forEach(c => c.classList.remove('dropl', 'dropr'));
+  if (!moved) return;
+  ignoreClicksUntil = Date.now() + 350;
+  if (upEvent.type === 'pointercancel') return;
+  moveKategorie(bereichId, kategorieId, to);
+ });
+});
+// Tastatur: Griff im Spaltenkopf fokussieren, Pfeil links/rechts verschiebt die Spalte
+document.addEventListener('keydown', event => {
+ const grip = event.target.closest && event.target.closest('.colgrip');
+ if (!grip || !$('#modal').hidden || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+ event.preventDefault();
+ const { cat: bereichId, s: kategorieId } = grip.dataset;
+ const bereich = getBereich(bereichId);
+ if (!bereich) return;
+ const index = bereich.subs.findIndex(k => k.id === kategorieId);
+ moveKategorie(bereichId, kategorieId, index + (event.key === 'ArrowRight' ? 1 : -1));
+ document.querySelector(`.colgrip[data-cat="${bereichId}"][data-s="${kategorieId}"]`)?.focus({ preventScroll: true });
+});
+
 /* ---------- Abläufe (Dialoge) ---------- */
 // Abhaken oder wieder öffnen. Danach fragt die App für jedes To-Do, das dadurch frei wird: „Jetzt machen?“
 async function toggleDone(id) {
@@ -1429,10 +1504,23 @@ async function kategorieDialog(bereichId, kategorieId) {
  const firstHint = !kategorie && !bereich.subs.length && allTasks().some(t => isIn(t, bereichId))
   ? `<p class="prehint">Was schon in ${esc(bereich.name)} liegt, kommt erst mal in diese erste Kategorie.</p>`
   : '';
+ // Knöpfe „← Nach links“ / „Nach rechts →“ (nicht am Rand)
+ const orderButtons = kategorie && bereich.subs.length > 1
+  ? `<div class="subpos"><span class="lbl">Reihenfolge</span>${bereich.subs[0] !== kategorie ? buttonHtml('left', '← Nach links') : ''}`
+   + `${bereich.subs.at(-1) !== kategorie ? buttonHtml('right', 'Nach rechts →') : ''}</div>`
+  : '';
  const r = await modal(`<h2>${kategorie ? 'Kategorie bearbeiten' : 'Neue Kategorie'}</h2><p>in ${esc(bereich.name)}</p>
   <input class="field" name="name" value="${esc(kategorie ? kategorie.name : '')}" placeholder="z. B. Akquise" autocomplete="off" aria-label="Name">
   ${firstHint}
+  ${orderButtons}
   <div class="btns">${kategorie ? buttonHtml('del', 'Löschen', 'ghost') : buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', kategorie ? 'Fertig' : 'Anlegen', 'pri')}</div>`);
+ if (r.v === 'left' || r.v === 'right') {
+  // Umsortieren; ein geänderter Name wird dabei mit übernommen
+  undoSnapshot = snapshot();
+  if (r.vals.name) kategorie.name = r.vals.name;
+  moveKategorie(bereichId, kategorieId, bereich.subs.indexOf(kategorie) + (r.v === 'right' ? 1 : -1), true);
+  return;
+ }
  if (r.v === 'del') {
   undoSnapshot = snapshot();
   const index = bereich.subs.indexOf(kategorie);
@@ -1456,6 +1544,31 @@ async function kategorieDialog(bereichId, kategorieId) {
  save();
  render();
  if (!kategorie) goToColumn(currentColumn);
+}
+// Setzt eine Kategorie an Stelle `to` (0 = ganz links). Die Reihenfolge der Spalten ist einfach die
+// Reihenfolge in bereich.subs und wird damit gespeichert und in der Sicherung mitgenommen.
+// hasSnapshot = true: undoSnapshot wurde schon gesetzt (aus dem Popup), dann auch ohne Bewegung speichern.
+function moveKategorie(bereichId, kategorieId, to, hasSnapshot) {
+ const bereich = getBereich(bereichId);
+ if (!bereich) return;
+ const from = bereich.subs.findIndex(k => k.id === kategorieId);
+ to = Math.max(0, Math.min(to, bereich.subs.length - 1));
+ if (from < 0 || (from === to && !hasSnapshot)) return;
+ if (!hasSnapshot) undoSnapshot = snapshot();
+ const [kategorie] = bereich.subs.splice(from, 1);
+ bereich.subs.splice(to, 0, kategorie);
+ state.openCat = bereichId;
+ currentColumn = to;
+ save();
+ render();
+ // Die verschobene Spalte sichtbar halten
+ const cols = $('#cols');
+ const column = cols && cols.children[to];
+ if (column) {
+  const left = column.offsetLeft - cols.offsetLeft;
+  if (left < cols.scrollLeft || left + column.offsetWidth > cols.scrollLeft + cols.clientWidth + 2) goToColumn(to);
+ }
+ if (from !== to) toast(`„${esc(kategorie.name)}“ verschoben.`, true);
 }
 /* Zeitnah ⇄ Backlog und Verschieben in einen anderen Bereich / eine andere Kategorie.
    cat/area = neuer Ort (undefined = Ort nicht ändern), bl = true ins Backlog, false nach Zeitnah

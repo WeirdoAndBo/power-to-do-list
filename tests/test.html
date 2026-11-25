@@ -64,15 +64,47 @@ async function loadApp() {
  doc = frame.contentDocument;
  await sleep(100);
 }
-// Lädt die App mit Beispieldaten und schaltet Animationen aus (damit der Test nicht warten muss)
+// Testdaten: eine feste Liste mit Zielen, Vorher-To-Dos, Backlog und Erledigtem.
+// Animationen sind aus, damit der Test nicht warten muss.
+function testData() {
+ const now = Date.now();
+ const shift = 4 * 60 * 60 * 1000; // Tag beginnt um 4 Uhr, wie in der App
+ const midnight = new Date(now - shift); midnight.setHours(0, 0, 0, 0);
+ const task = (id, title, extra = {}) => ({ id, t: title, needs: [], soft: [], done: false, goal: false, cat: null, prio: 0, created: now, doneAt: null, ...extra });
+ const list = [
+  task('g1', 'Stellen anschreiben für Kundenakquise', { goal: true, cat: 'arbeit', area: 'akq', needs: ['a', 'b'] }),
+  task('a', 'Liste an Stellen anlegen', { needs: ['c', 'desk'] }),
+  task('c', 'Ort festlegen, wo die Liste entsteht', { today: true }),
+  task('b', 'Text überlegen', { soft: ['ex'] }),
+  task('ex', 'Zwei Beispiel-Anschreiben ansehen'),
+  task('g2', 'Newsletter starten', { goal: true, cat: 'arbeit', area: 'akq', needs: ['n1'], backlog: true }),
+  task('n1', 'Thema der ersten Ausgabe festlegen', { backlog: true }),
+  task('g5', 'Rechnungen für November schreiben', { goal: true, cat: 'arbeit', area: 'fin', needs: ['r1'] }),
+  task('r1', 'Stunden aus dem Kalender zusammenzählen'),
+  task('g8', 'Mails auf null bringen', { goal: true, cat: 'arbeit', area: 'orga' }),
+  task('desk', 'Schreibtisch freiräumen'),
+  task('g3', 'Keller entrümpeln', { goal: true, cat: 'privat', area: 'haus', needs: ['k1', 'k2'] }),
+  task('k1', 'Sperrmüll-Termin holen', { today: true }),
+  task('k2', 'Kisten besorgen', { done: true, doneAt: now - 864e5 }),
+  task('g4', 'Ein Bild malen', { goal: true, cat: 'hobby', needs: ['desk', 'f1'] }),
+  task('f1', 'Farben besorgen')
+ ];
+ const tasks = {};
+ list.forEach(t => { tasks[t.id] = t; });
+ return {
+  name: 'Testliste', tasks,
+  cats: [
+   { id: 'arbeit', name: 'Arbeit', color: '#5b8def', subs: [{ id: 'akq', name: 'Akquise' }, { id: 'fin', name: 'Finanzen' }, { id: 'orga', name: 'Orga' }] },
+   { id: 'privat', name: 'Privat', color: '#e0a03a', subs: [{ id: 'haus', name: 'Haushalt' }, { id: 'ges', name: 'Gesundheit' }] },
+   { id: 'hobby', name: 'Hobby', color: '#9b7fd1', subs: [] }
+  ],
+  openCat: 'arbeit', view: 'jetzt', inbox: [], anim: false, day: midnight.getTime() + shift, format: 1
+ };
+}
+// Lädt die App mit den Testdaten
 async function freshApp() {
- win && win.localStorage.removeItem(KEY);
- localStorage.removeItem(KEY);
+ localStorage.setItem(KEY, JSON.stringify(testData()));
  await loadApp();
- await click('[data-act="menu"]');
- const anim = $('#modal [name=anim]');
- if (anim.checked) anim.checked = false;
- await click('#modal [data-v="ok"]');
 }
 // Eine Sicherungsdatei „hochladen“, als hätte man sie in der Dateiauswahl gewählt
 async function importText(text, name = 'sicherung.json') {
@@ -87,11 +119,16 @@ async function importText(text, name = 'sicherung.json') {
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
-test('App startet mit Beispieldaten und zeigt drei Tabs', async () => {
- await freshApp();
+test('Erster Start zeigt die Beispielkarte und drei Tabs', async () => {
+ localStorage.removeItem(KEY);
+ await loadApp();
  expect($$('[data-view]').length === 3, 'Es gibt nicht drei Tabs');
  expect($('#acc .cat.open'), 'Kein Bereich aufgeklappt');
- expect($$('#acc .card').length > 0, 'Keine Karten in „Machbar“');
+ expect($$('#acc .card').length > 0, 'Keine Karte in „Machbar“');
+});
+test('Testliste laden', async () => {
+ await freshApp();
+ expect($$('#acc .card').length > 3, 'Karten der Testliste fehlen');
  expect(saved().format === 1, 'Datenformat ist nicht 1');
 });
 test('Tabs Heute, Übersicht und Machbar wechseln', async () => {
@@ -175,6 +212,22 @@ test('Fokusmodus öffnen und mit Escape schließen', async () => {
  expect(!$('#focus').hidden, 'Fokusmodus ging nicht auf');
  await pressKey(doc.body, 'Escape');
  expect($('#focus').hidden, 'Fokusmodus ging nicht zu');
+});
+test('Kategorie-Spalte mit Pfeiltaste verschieben (mit Rückgängig)', async () => {
+ const grip = $('.colgrip[data-s="akq"]');
+ expect(grip, 'Griff im Spaltenkopf fehlt');
+ grip.focus();
+ await pressKey(grip, 'ArrowRight');
+ expect(saved().cats[0].subs.map(k => k.id).join() === 'fin,akq,orga', 'Reihenfolge ist nicht Finanzen, Akquise, Orga');
+ expect(toastText().includes('verschoben'), 'Hinweis „verschoben“ fehlt');
+ await click('#undo');
+ expect(saved().cats[0].subs.map(k => k.id).join() === 'akq,fin,orga', 'Rückgängig hat die Reihenfolge nicht zurückgesetzt');
+});
+test('Kategorie im Popup „Nach links“ verschieben', async () => {
+ await click('[data-act="editsub"][data-s="orga"]');
+ expect(modalOpen() && $('#modal [data-v="left"]'), 'Knopf „Nach links“ fehlt');
+ await click('#modal [data-v="left"]');
+ expect(saved().cats[0].subs.map(k => k.id).join() === 'akq,orga,fin', 'Reihenfolge ist nicht Akquise, Orga, Finanzen');
 });
 let backup;
 test('Sicherung speichern erzeugt eine gültige Datei', async () => {
