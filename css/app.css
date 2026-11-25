@@ -200,8 +200,11 @@ details.done[open] summary::before,details.bl[open] summary::before{transform:ro
 .tree,.tree ul{list-style:none;margin:0;padding:0}
 .tree>li{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:8px 8px 8px 10px;margin-bottom:10px}
 .tree ul{margin-left:22px;padding-left:12px;border-left:1.5px solid var(--line)}
-.row{display:flex;align-items:center;gap:4px;min-height:46px}
-.row .t{flex:1;min-width:0;text-align:left;padding:6px 4px;border-radius:8px;line-height:1.35;font-size:15px;overflow-wrap:break-word;hyphens:auto}
+@media(max-width:600px){.tree ul{margin-left:14px;padding-left:8px}}
+.row{display:flex;align-items:center;gap:4px;min-height:46px;flex-wrap:wrap}
+/* Knöpfe rechts in einer Zeile. Bleiben unter ca. 6em Platz für den Titel, rutschen sie in die nächste Zeile. */
+.row .racts{display:flex;align-items:center;gap:2px;margin-left:auto;flex:none}
+.row .t{flex:1 1 6em;min-width:0;text-align:left;padding:6px 4px;border-radius:8px;line-height:1.35;font-size:15px;overflow-wrap:break-word;hyphens:auto}
 .row .t:hover{background:var(--soft)}
 .tree>li>.row .t{font-weight:600;font-size:16px}
 .row.isdone .t{color:var(--mute);text-decoration:line-through}
@@ -210,8 +213,7 @@ details.done[open] summary::before,details.bl[open] summary::before{transform:ro
 .row .tag{flex:none;font-size:12px;color:var(--mute);background:var(--soft);border-radius:10px;padding:1px 8px}
 .tag.bl{background:color-mix(in srgb,var(--c) 14%,var(--soft))}
 .row .t .tag.bl{display:inline-block;vertical-align:2px;margin-left:4px;font-weight:500;font-size:11px;padding:0 7px}
-/* Knöpfe im Baum erst beim Drüberfahren deutlich. Im Baum etwas schmaler, damit der Titel Platz behält.
-   Unter-To-Dos haben keinen Papierkorb: Löschen über Tippen auf den Titel → „Bearbeiten“ → „Löschen“. */
+/* Knöpfe im Baum erst beim Drüberfahren deutlich. Im Baum etwas schmaler, damit der Titel Platz behält. */
 .tree .mini{width:28px;opacity:.4;transition:opacity .15s}.tree .row:hover .mini,.tree .mini:focus-visible,.tree .chev{opacity:1}
 @media(hover:none){.tree .mini{opacity:.6}}
 .tree .row{gap:2px}
@@ -341,3 +343,11 @@ body.coldrag .cat .cols{scroll-snap-type:none!important}
 /* „Reihenfolge: ← Nach links / Nach rechts →“ im Popup „Kategorie bearbeiten“ */
 .subpos{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px}
 .subpos .lbl{margin:0 auto 0 0}
+
+/* ---------- Übersicht: Ablageziele für Ziel-Karten (Zeitnah, Backlog) ----------
+   Ein leerer Backlog (.isempty) erscheint nur, während man zieht. */
+.tzone{border-radius:18px;min-height:20px}
+.tzone.isempty{display:none}
+body.dnd .tzone.isempty{display:block;padding:4px 6px 8px}
+.tzone[data-bl="1"]{margin-top:22px}.tzone[data-bl="1"] .blhead{margin-top:0}
+.brow .mini.del{width:28px}

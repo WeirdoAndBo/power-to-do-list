@@ -57,6 +57,26 @@ async function pressKey(el, key) {
  await sleep(60);
 }
 function expect(cond, text) { if (!cond) throw new Error(text); }
+// Zieht ein Element am Griff zu den Bildschirm-Koordinaten (x, y), wie mit Maus oder Finger.
+// Danach kurz warten: direkt nach dem Ziehen ignoriert die App Klicks.
+async function dragTo(grip, x, y) {
+ const target = typeof x === 'function' ? x : () => [x, y];
+ // Ziel in den sichtbaren Bereich holen (elementFromPoint findet nur Sichtbares)
+ grip.scrollIntoView({ block: 'nearest' });
+ const wanted = target()[1];
+ if (wanted < 60 || wanted > win.innerHeight - 60) win.scrollBy(0, wanted - 120);
+ const from = grip.getBoundingClientRect();
+ [x, y] = target();
+ const sx = from.x + from.width / 2;
+ const sy = from.y + from.height / 2;
+ grip.dispatchEvent(new win.PointerEvent('pointerdown', { bubbles: true, clientX: sx, clientY: sy, pointerId: 1 }));
+ const move = (mx, my) => win.dispatchEvent(new win.PointerEvent('pointermove', { bubbles: true, clientX: mx, clientY: my, pointerId: 1 }));
+ move(sx, sy + 10);
+ move(x, y);
+ win.dispatchEvent(new win.PointerEvent('pointerup', { bubbles: true, clientX: x, clientY: y, pointerId: 1 }));
+ await sleep(450);
+}
+
 async function loadApp() {
  frame.src = '../index.html?test=' + Date.now();
  await new Promise(r => frame.onload = r);
@@ -323,6 +343,79 @@ test('Übersicht: Unter-To-Do per Ziehen nach oben verschieben', async () => {
  await sleep(60);
  expect(saved().tasks.g1.needs.join() === 'a,b', 'Reihenfolge ist nach dem Ziehen nicht „a, b“');
  await sleep(400); // direkt nach dem Ziehen ignoriert die App Klicks kurz
+ await click('[data-view="jetzt"]');
+});
+test('Löschen: Papierkorb an Unter-To-Dos in der Übersicht und im Backlog', async () => {
+ await click('[data-view="baum"]');
+ const del = $('.tree li[data-tid="b"] > .row [data-act="del"]');
+ expect(del, 'Papierkorb am Unter-To-Do fehlt');
+ await click(del);
+ expect(!saved().tasks.b, '„b“ wurde nicht gelöscht');
+ expect(!saved().tasks.g1.needs.includes('b'), '„b“ hängt noch am Ziel');
+ await click('#undo');
+ expect(saved().tasks.b && saved().tasks.g1.needs.includes('b'), '„b“ ist nach Rückgängig nicht zurück');
+ await click('[data-view="jetzt"]');
+ $('#cols details.bl').open = true;
+ expect($('#cols .brow [data-act="del"]'), 'Papierkorb im Backlog fehlt');
+});
+test('Machbar: Karte per Ziehen an eine andere Stelle', async () => {
+ await click('[data-view="jetzt"]');
+ const ids = () => $$('#cols > .col:first-child .list.zone > .card').map(c => c.dataset.id);
+ const before = ids();
+ expect(before.length >= 2, 'Zu wenige Karten zum Umsortieren');
+ const last = before[before.length - 1];
+ await dragTo($(`.card[data-id="${last}"] .mgrip`), () => {
+  const first = $(`.card[data-id="${before[0]}"]`).getBoundingClientRect();
+  return [first.x + 40, first.y + 6];
+ });
+ expect(ids()[0] === last, 'Gezogene Karte steht nicht oben, sondern: ' + ids().join(', '));
+ expect(toastText().includes('Reihenfolge'), 'Hinweis „Reihenfolge geändert“ fehlt');
+ await click('#undo');
+ expect(ids().join() === before.join(), 'Rückgängig hat die Reihenfolge nicht zurückgesetzt');
+});
+test('Übersicht: Ziel-Karte in andere Kategorie ziehen und dort umsortieren', async () => {
+ await click('[data-view="baum"]');
+ const grip = $('.tree li[data-tid="g1"] > .chead .mgrip');
+ expect(grip, 'Griff auf der Ziel-Karte fehlt');
+ await dragTo(grip, () => {
+  const tab = $('.tab[data-area="fin"]').getBoundingClientRect();
+  return [tab.x + 10, tab.y + tab.height / 2];
+ });
+ expect(saved().tasks.g1.area === 'fin', 'Ziel liegt nicht in „Finanzen“');
+ await click('.tab[data-area="fin"]');
+ const order = () => $$('#cols > .col:nth-child(2) .tzone[data-bl="0"] .tree > li').map(li => li.dataset.tid);
+ expect(order().includes('g1') && order().includes('g5'), 'Finanzen zeigt nicht beide Ziele: ' + order().join(', '));
+ const wasFirst = order()[0];
+ const other = wasFirst === 'g1' ? 'g5' : 'g1';
+ await dragTo($(`.tree li[data-tid="${other}"] > .chead .mgrip`), () => {
+  const top = $(`.tree li[data-tid="${wasFirst}"]`).getBoundingClientRect();
+  return [top.x + 40, top.y + 6];
+ });
+ expect(order()[0] === other, 'Ziel-Karte steht nach dem Ziehen nicht oben: ' + order().join(', '));
+ await click('#undo');
+ await click('.tree li[data-tid="g1"] > .chead [data-act="move"]');
+ expect(modalOpen(), 'Menü „Verschieben“ auf der Ziel-Karte geht nicht auf');
+ await click('#modal [data-v=""]');
+ // zurück nach Akquise
+ const s = saved(); s.tasks.g1.area = 'akq'; win.localStorage.setItem(KEY, JSON.stringify(s));
+ await loadApp();
+});
+test('Übersicht: Unter-To-Do in eine andere Karte ziehen', async () => {
+ await click('[data-view="baum"]');
+ if (!$('.tree li[data-tid="g2"] > .row .chev[aria-expanded="true"]')) await click('.tree li[data-tid="g2"] > .row .chev');
+ if (!$('.tree li[data-tid="g1"] > .row .chev[aria-expanded="true"]')) await click('.tree li[data-tid="g1"] > .row .chev');
+ const grip = $('.tree li[data-tid="n1"] > .row .tgrip');
+ expect(grip, 'Griff an „n1“ fehlt');
+ await dragTo(grip, () => {
+  const firstChild = $('.tree li[data-tid="g1"] > ul > li > .row').getBoundingClientRect();
+  const goalRow = $('.tree li[data-tid="g1"] > .row').getBoundingClientRect();
+  return [goalRow.x + 40, firstChild.top + 2];
+ });
+ const s = saved();
+ expect(s.tasks.g1.needs[0] === 'n1', '„n1“ hängt nicht vorne an „g1“: ' + s.tasks.g1.needs.join(', '));
+ expect(!s.tasks.g2.needs.includes('n1'), '„n1“ hängt noch an „g2“');
+ await click('#undo');
+ expect(saved().tasks.g2.needs.includes('n1'), 'Rückgängig hat „n1“ nicht zurückgehängt');
  await click('[data-view="jetzt"]');
 });
 test('Kategorie-Spalte mit Pfeiltaste verschieben (mit Rückgängig)', async () => {
