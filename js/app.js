@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.15-c';
+const APP_VERSION = '1.0.16-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -623,16 +623,20 @@ function backlogSectionHtml(bereich, kategorie, count, inner) {
   + `<summary class="zlabel">Backlog · ${count}</summary>${inner}</details>`;
 }
 // Unsichtbarer Streifen zwischen den Karten einer Spalte: neues To-Do ganz oben (eigene Karte) an dieser Stelle.
+// Version C: Die Frage aus dem Eingabefeld steht beim Drüberfahren klein neben dem „+“ (insertLabelHtml).
+const ROOT_QUESTION = 'Neues To-Do';
+const insertQuestion = parent => parent && parent.goal ? 'Was gehört dazu?' : 'Was muss vorher passieren?';
+const insertLabelHtml = question => `<span aria-hidden="true">+</span><em aria-hidden="true">${esc(question)}</em>`;
 function insertRootHtml(bereich, kategorie, afterId, tag = 'div', backlog = false) {
  return `<${tag} class="insroot"><button class="ins" data-act="insroot" data-cat="${bereich.id}" data-area="${kategorie.id}" data-bl="${backlog ? 1 : 0}" data-after="${afterId || ''}"`
-  + ` style="--c:${bereich.color}" aria-label="Hier ein neues To-Do in ${esc(kategorie.name || bereich.name)} anlegen" title="Hier einfügen"><span aria-hidden="true">+</span></button></${tag}>`;
+  + ` style="--c:${bereich.color}" aria-label="Hier ein neues To-Do in ${esc(kategorie.name || bereich.name)} anlegen">${insertLabelHtml(ROOT_QUESTION)}</button></${tag}>`;
 }
 // Unsichtbarer Streifen zwischen To-Dos. Mit der Maus darüber erscheint „+“; Klick = hier ein neues To-Do eintippen.
 // parentId = das To-Do, vor dem das neue kommt; afterId = steht danach direkt hinter diesem (leer = ganz vorn).
 // intoId = zwischen parentId und sein einziges Vorher-To-Do intoId (Kette): das neue kommt mitten in die Kette.
 function insertHtml(parentId, afterId, color, cls = '', intoId = '') {
  return `<button class="ins${cls}" data-act="ins" data-p="${parentId}" data-after="${afterId || ''}"${intoId ? ` data-into="${intoId}"` : ''} style="--c:${color}"`
-  + ` aria-label="Hier ein neues To-Do einfügen" title="Hier einfügen"><span aria-hidden="true">+</span></button>`;
+  + ` aria-label="Hier einfügen: ${esc(insertQuestion(getTask(parentId)))}">${insertLabelHtml(insertQuestion(getTask(parentId)))}</button>`;
 }
 // Kleiner Papierkorb-Knopf für Listenzeilen (Erledigt, Heute geschafft, Danach dran)
 function deleteMiniHtml(task) {
@@ -1181,7 +1185,7 @@ function refreshNewRows(list) {
   b.dataset.nlevel = level;
   b.style.setProperty('--l', level);
   b.setAttribute('aria-label', 'Hier ein Unter-To-Do einfügen');
-  b.innerHTML = '<span aria-hidden="true">+</span>';
+  b.innerHTML = insertLabelHtml('Unter-To-Do');
   return b;
  };
  list.prepend(strip(0));
@@ -1826,7 +1830,7 @@ function startInsert(button) {
  const box = document.createElement('div');
  box.className = 'insrow';
  box.style.setProperty('--c', button.style.getPropertyValue('--c'));
- box.innerHTML = `<input class="tinput" placeholder="${parent.goal ? 'Was gehört dazu?' : 'Was muss vorher passieren?'}" aria-label="Neues To-Do" autocomplete="off">`;
+ box.innerHTML = `<input class="tinput" placeholder="${insertQuestion(parent)}" aria-label="Neues To-Do" autocomplete="off">`;
  button.replaceWith(box);
  const input = box.querySelector('input');
  input.focus();
@@ -1880,7 +1884,7 @@ function startInsertRoot(button) {
  const box = document.createElement('div');
  box.className = 'insrow insrowroot';
  box.style.setProperty('--c', button.style.getPropertyValue('--c'));
- box.innerHTML = '<input class="tinput" placeholder="Neues To-Do" aria-label="Neues To-Do" autocomplete="off">';
+ box.innerHTML = `<input class="tinput" placeholder="${ROOT_QUESTION}" aria-label="Neues To-Do" autocomplete="off">`;
  button.replaceWith(box);
  const input = box.querySelector('input');
  input.focus();

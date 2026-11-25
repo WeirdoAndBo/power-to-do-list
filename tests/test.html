@@ -491,9 +491,11 @@ test('Ein Pfeil im Kartenkopf klappt alle Ebenen auf und zu', async () => {
 test('„+“ zwischen To-Dos: neues To-Do an genau dieser Stelle eintippen', async () => {
  const ins = $('.ins[data-p="g1"][data-after="a"]');
  expect(ins, 'Einfüge-Streifen zwischen „a“ und „b“ fehlt');
+ const question = ins.querySelector('em') && ins.querySelector('em').textContent;
  await click(ins);
  const input = $('.insrow .tinput');
  expect(input && doc.activeElement === input, 'Eingabefeld erscheint nicht');
+ expect(question && input.placeholder === question, 'Frage am „+“ passt nicht zur Frage im Eingabefeld');
  input.value = 'Dazwischen';
  await pressKey(input, 'Enter');
  const created = Object.values(saved().tasks).find(t => t.t === 'Dazwischen');
