@@ -199,7 +199,7 @@ details.done[open] summary::before,details.bl[open] summary::before{transform:ro
 .tree>li{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:8px 8px 8px 10px;margin-bottom:10px}
 .tree ul{margin-left:22px;padding-left:12px;border-left:1.5px solid var(--line)}
 .row{display:flex;align-items:center;gap:4px;min-height:46px}
-.row .t{flex:1;text-align:left;padding:6px 4px;border-radius:8px;line-height:1.35;font-size:15px}
+.row .t{flex:1;min-width:0;text-align:left;padding:6px 4px;border-radius:8px;line-height:1.35;font-size:15px;overflow-wrap:break-word;hyphens:auto}
 .row .t:hover{background:var(--soft)}
 .tree>li>.row .t{font-weight:600;font-size:16px}
 .row.isdone .t{color:var(--mute);text-decoration:line-through}
@@ -208,11 +208,22 @@ details.done[open] summary::before,details.bl[open] summary::before{transform:ro
 .row .tag{flex:none;font-size:12px;color:var(--mute);background:var(--soft);border-radius:10px;padding:1px 8px}
 .tag.bl{background:color-mix(in srgb,var(--c) 14%,var(--soft))}
 .row .t .tag.bl{display:inline-block;vertical-align:2px;margin-left:4px;font-weight:500;font-size:11px;padding:0 7px}
-/* Knöpfe im Baum erst beim Drüberfahren deutlich. Der Papierkorb hätte hier keinen Platz:
-   Löschen geht in der Übersicht über Tippen auf den Titel → „Bearbeiten“ → „Löschen“. */
-.tree .mini{opacity:.4;transition:opacity .15s}.tree .row:hover .mini,.tree .mini:focus-visible,.tree .chev{opacity:1}
+/* Knöpfe im Baum erst beim Drüberfahren deutlich. Im Baum etwas schmaler, damit der Titel Platz behält.
+   Unter-To-Dos haben keinen Papierkorb: Löschen über Tippen auf den Titel → „Bearbeiten“ → „Löschen“. */
+.tree .mini{width:28px;opacity:.4;transition:opacity .15s}.tree .row:hover .mini,.tree .mini:focus-visible,.tree .chev{opacity:1}
 @media(hover:none){.tree .mini{opacity:.6}}
-.tree .mini.del{display:none}
+.tree .row{gap:2px}
+/* Kopf einer Ziel-Karte in der Übersicht (wie .chead auf Karten in „Machbar“) */
+.tree>li>.chead{margin:-8px -8px 4px -10px;border-radius:18px 18px 0 0}
+/* Griff an Unter-To-Dos: ziehen zum Umsortieren */
+.tree .tgrip{width:18px;margin-left:-4px}
+.tree .row:hover>.tgrip{opacity:.8}
+@media(hover:none){.tree .tgrip{opacity:.6}}
+/* Beim Ziehen: gezogenes To-Do blass, farbige Linie zeigt Stelle und Ebene */
+body.treedrag{user-select:none;-webkit-user-select:none;cursor:grabbing}
+.tree li.tdrag{opacity:.35}
+.treeline{position:fixed;z-index:59;height:3px;border-radius:2px;background:var(--c);pointer-events:none;box-shadow:0 0 0 2px var(--card)}
+.treeline::before{content:'';position:absolute;left:-5px;top:-3.5px;width:10px;height:10px;border-radius:50%;background:var(--c)}
 /* Fortschrittsbalken unter einem Ziel */
 .pbar{height:4px;border-radius:2px;background:var(--soft);margin:2px 8px 6px 40px;overflow:hidden}.pbar i{display:block;height:100%;background:var(--c);border-radius:2px;transition:width .5s}
 /* Ziele im Backlog: blasser, mit gestrichelter Linie darüber */

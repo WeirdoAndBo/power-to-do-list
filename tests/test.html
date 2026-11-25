@@ -252,6 +252,58 @@ test('Löschen in der Übersicht über „Bearbeiten“', async () => {
  expect(saved().tasks.g8, '„g8“ ist nach Rückgängig nicht zurück');
  await click('[data-view="jetzt"]');
 });
+test('Übersicht: Ziel-Karte hat Kopf mit Heute, Bearbeiten und Löschen', async () => {
+ await click('[data-view="baum"]');
+ const head = $('.tree li[data-tid="g1"] > .chead');
+ expect(head, 'Kopfbereich auf der Karte fehlt');
+ expect(head.querySelector('[data-act="today"]') && head.querySelector('[data-act="edit"]') && head.querySelector('[data-act="del"]'), 'Heute, Bearbeiten oder Löschen fehlt im Kopf');
+ await click(head.querySelector('[data-act="today"]'));
+ expect(saved().tasks.g1.today, 'Heute-Schalter im Kopf hat nicht geschaltet');
+ await click('.tree li[data-tid="g1"] > .chead [data-act="today"]');
+ expect(!saved().tasks.g1.today, 'Heute-Schalter ging nicht wieder aus');
+ await click('.tree li[data-tid="g8"] > .chead [data-act="del"]');
+ expect(!saved().tasks.g8, '„g8“ wurde nicht gelöscht');
+ await click('#undo');
+ expect(saved().tasks.g8, '„g8“ ist nach Rückgängig nicht zurück');
+});
+test('Übersicht: Unter-To-Dos mit Pfeiltasten umsortieren und einrücken', async () => {
+ await click('.tree li[data-tid="g1"] > .row .chev');
+ let grip = $('.tree li[data-tid="b"] > .row .tgrip');
+ expect(grip, 'Griff am Unter-To-Do fehlt');
+ expect(!$('.tree li[data-tid="g1"] > .row .tgrip'), 'Ziel ganz oben darf keinen Griff haben');
+ grip.focus();
+ await pressKey(grip, 'ArrowUp');
+ expect(saved().tasks.g1.needs.join() === 'b,a', 'Reihenfolge ist nicht „b, a“');
+ grip = $('.tree li[data-tid="a"] > .row .tgrip');
+ await pressKey(grip, 'ArrowRight');
+ let s = saved();
+ expect(s.tasks.g1.needs.join() === 'b' && s.tasks.b.needs.includes('a'), '„a“ kommt nicht vor „b“');
+ grip = $('.tree li[data-tid="a"] > .row .tgrip');
+ expect(doc.activeElement === grip, 'Griff hat nach dem Verschieben den Fokus verloren');
+ await pressKey(grip, 'ArrowLeft');
+ s = saved();
+ expect(s.tasks.g1.needs.join() === 'b,a' && !s.tasks.b.needs.includes('a'), '„a“ ist nicht wieder eine Ebene höher');
+ grip = $('.tree li[data-tid="a"] > .row .tgrip');
+ await pressKey(grip, 'ArrowUp');
+ expect(saved().tasks.g1.needs.join() === 'a,b', 'Reihenfolge ist nicht „a, b“');
+ await click('#undo');
+ expect(saved().tasks.g1.needs.join() === 'b,a', 'Rückgängig hat die Reihenfolge nicht zurückgesetzt');
+});
+test('Übersicht: Unter-To-Do per Ziehen nach oben verschieben', async () => {
+ const grip = $('.tree li[data-tid="a"] > .row .tgrip');
+ const target = $('.tree li[data-tid="b"] > .row').getBoundingClientRect();
+ const from = grip.getBoundingClientRect();
+ const pointer = (type, x, y) => grip.dispatchEvent(new win.PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId: 1 }));
+ pointer('pointerdown', from.x + 5, from.y + 5);
+ const move = (x, y) => win.dispatchEvent(new win.PointerEvent('pointermove', { bubbles: true, clientX: x, clientY: y, pointerId: 1 }));
+ move(from.x + 5, from.y - 10);
+ move(from.x + 5, target.top + 4);
+ win.dispatchEvent(new win.PointerEvent('pointerup', { bubbles: true, clientX: from.x + 5, clientY: target.top + 4, pointerId: 1 }));
+ await sleep(60);
+ expect(saved().tasks.g1.needs.join() === 'a,b', 'Reihenfolge ist nach dem Ziehen nicht „a, b“');
+ await sleep(400); // direkt nach dem Ziehen ignoriert die App Klicks kurz
+ await click('[data-view="jetzt"]');
+});
 test('Kategorie-Spalte mit Pfeiltaste verschieben (mit Rückgängig)', async () => {
  const grip = $('.colgrip[data-s="akq"]');
  expect(grip, 'Griff im Spaltenkopf fehlt');

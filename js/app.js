@@ -34,7 +34,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.4';
+const APP_VERSION = '1.0.5';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -523,8 +523,11 @@ function machbarColumnHtml(bereich, kategorie) {
   + `<summary>Backlog · ${backlogAll.length}</summary>${backlogHtml}</details>${doneBoxHtml(done, bereich.color)}`;
 }
 // Tab „Übersicht“: ein Knoten im Baum, ruft sich für seine Vorher-To-Dos selbst auf.
-// path = Weg im Baum (für auf/zu), level = Tiefe (0 = Ziel ganz oben), viaSoft = hängt über „hilft nur“ dran
-function treeNodeHtml(task, color, path, level, viaSoft) {
+// path = Weg im Baum (für auf/zu), level = Tiefe (0 = Ziel ganz oben), viaSoft = hängt über „hilft nur“ dran,
+// parentId = das To-Do darüber in dieser Karte (nur dann gibt es den Griff zum Umsortieren).
+// Ein Ziel ganz oben (level 0) ist eine Karte mit Kopf wie in „Machbar“: Heute-Schalter, Bearbeiten, Löschen.
+// Unter-To-Dos haben keinen Papierkorb (kein Platz): Löschen über Tippen auf den Titel → „Bearbeiten“ → „Löschen“.
+function treeNodeHtml(task, color, path, level, viaSoft, parentId = null) {
  const children = [
   ...task.needs.map(id => [getTask(id), 0]),
   ...task.soft.map(id => [getTask(id), 1])
@@ -533,26 +536,36 @@ function treeNodeHtml(task, color, path, level, viaSoft) {
  const isOpen = treeOpen.has(key) ? treeOpen.get(key) : level > 0;
  const title = esc(task.t);
  const inBacklog = task.backlog && !task.done;
+ const isCard = level === 0;
  let toggle = '<span class="mini"></span>';
  if (children.length) {
   const label = isOpen ? 'Zuklappen' : (level === 0 ? 'Alles aufklappen' : 'Aufklappen');
   const tip = level === 0 ? (isOpen ? 'Alles zuklappen' : 'Alles aufklappen') : '';
   toggle = `<button class="mini chev" data-act="tog" data-k="${esc(key)}" data-l="${level}" aria-expanded="${isOpen}" aria-label="${label}" title="${tip}">${ICON_CHEVRON}</button>`;
  }
- const row = `<div class="row${task.done ? ' isdone' : ''}${inBacklog ? ' inbl' : ''}">${checkButtonHtml(task, color)}`
+ const head = isCard
+  ? `<div class="chead">${task.done ? '' : todaySwitchHtml(task)}<span class="sp"></span>`
+   + `<button class="hbtn" data-act="edit" data-id="${task.id}" aria-label="${title} bearbeiten" title="Bearbeiten">${ICON_PEN}</button>`
+   + `<button class="hbtn" data-act="del" data-id="${task.id}" aria-label="${title} löschen" title="Löschen">${ICON_TRASH}</button></div>`
+  : '';
+ const grip = parentId
+  ? `<button class="cgrip tgrip" aria-label="${title} umsortieren (Pfeiltasten: hoch/runter = Reihenfolge, rechts/links = Ebene)"`
+   + ` title="Ziehen: hoch/runter = Reihenfolge, nach rechts = kommt vor das To-Do darüber">${ICON_GRIP}</button>`
+  : '';
+ const row = `<div class="row${task.done ? ' isdone' : ''}${inBacklog ? ' inbl' : ''}">${grip}${checkButtonHtml(task, color)}`
   + `<button class="t" data-act="edit" data-id="${task.id}">${title}${inBacklog ? ' <span class="tag bl" title="Liegt im Backlog">Backlog</span>' : ''}</button>`
   + `${viaSoft ? '<span class="tag">hilft</span>' : ''}
- ${task.done ? '' : todaySwitchHtml(task, 1)}`
+ ${task.done || isCard ? '' : todaySwitchHtml(task, 1)}`
   + `<button class="mini" data-act="addsub" data-id="${task.id}" aria-label="Vorher-To-Do für ${title} hinzufügen" title="Hier etwas davor einfügen">+</button>`
-  + `<button class="mini del" data-act="del" data-id="${task.id}" aria-label="${title} löschen" title="Löschen">${ICON_TRASH}</button>
+  + `
  ${toggle}</div>`;
  const progressBar = level === 0 && !task.done
   ? `<div class="pbar" aria-hidden="true"><i style="width:${progress(task)}%"></i></div>`
   : '';
  const childList = children.length && isOpen
-  ? `<ul>${children.map(([child, soft]) => treeNodeHtml(child, color, key, level + 1, soft)).join('')}</ul>`
+  ? `<ul>${children.map(([child, soft]) => treeNodeHtml(child, color, key, level + 1, soft, task.id)).join('')}</ul>`
   : '';
- return `<li>${row}
+ return `<li data-tid="${task.id}" data-k="${esc(key)}" data-l="${level}" style="--c:${color}">${head}${row}
  ${progressBar}
  ${childList}</li>`;
 }
@@ -1174,6 +1187,147 @@ document.addEventListener('keydown', event => {
  const index = bereich.subs.findIndex(k => k.id === kategorieId);
  moveKategorie(bereichId, kategorieId, index + (event.key === 'ArrowRight' ? 1 : -1));
  document.querySelector(`.colgrip[data-cat="${bereichId}"][data-s="${kategorieId}"]`)?.focus({ preventScroll: true });
+});
+
+// 5) Tab „Übersicht“: Unter-To-Dos innerhalb einer Karte am Griff umsortieren – wie die Vorher-Liste
+//    im Popup: hoch/runter = Reihenfolge, nach rechts = kommt vor das To-Do darüber (eine Ebene tiefer),
+//    nach links = eine Ebene höher. Eine farbige Linie zeigt, wo und auf welcher Ebene es landet.
+const TREE_INDENT = 34;   // so weit ist eine Ebene im Baum eingerückt (margin + padding von .tree ul)
+// Das To-Do darüber in der Karte (li-Element) bzw. dessen ID
+const treeParentLi = li => li.parentElement.closest('li');
+// Wo das gezogene To-Do landen würde. rows = sichtbare Zeilen der Karte ohne das gezogene (mit Unterbaum),
+// y = Zeiger, wantedLevel = gewünschte Ebene. Gibt { level, parentLi, afterLi, lineY } zurück.
+function treeDropTarget(rows, y, wantedLevel) {
+ let index = rows.findIndex((r, i) => i > 0 && y < r.box.top + r.box.height / 2);
+ if (index < 0) index = rows.length;
+ const above = rows[index - 1];
+ const below = rows[index];
+ const level = Math.max(1, below ? below.level : 1, Math.min(wantedLevel, above.level + 1));
+ let parentLi = null;
+ let afterLi = null;
+ for (let i = index - 1; i >= 0; i--) {
+  if (rows[i].level === level && !afterLi) afterLi = rows[i].li;
+  if (rows[i].level === level - 1) { parentLi = rows[i].li; break; }
+ }
+ const lineY = below ? below.box.top : above.li.getBoundingClientRect().bottom;
+ return { level, parentLi, afterLi, lineY };
+}
+// Hängt das To-Do `id` von oldParentId nach newParentId um, direkt hinter afterId
+// (null = ganz nach vorn, undefined = ans Ende). Die Art (geht sonst nicht / hilft nur) bleibt.
+// Gibt false zurück, wenn es nicht geht (es würde vor sich selbst kommen).
+function moveInTree(id, oldParentId, newParentId, afterId) {
+ const oldParent = getTask(oldParentId);
+ const newParent = getTask(newParentId);
+ if (!oldParent || !newParent) return false;
+ if (newParentId === id || taskAndAllBefore(id).has(newParentId)) return false;
+ const kind = oldParent.soft.includes(id) ? 'soft' : 'needs';
+ oldParent[kind] = oldParent[kind].filter(x => x !== id);
+ // Hing es schon auf anderem Weg am neuen To-Do, bleibt diese Verbindung, nur die Stelle ändert sich
+ const otherKind = kind === 'soft' ? 'needs' : 'soft';
+ const target = newParent[otherKind].includes(id) ? otherKind : kind;
+ const list = newParent[target].filter(x => x !== id);
+ let at = list.length;
+ if (afterId === null) at = 0;
+ else if (afterId !== undefined) {
+  const i = list.indexOf(afterId);
+  if (i >= 0) at = i + 1;
+  else if (target === 'soft' && newParent.needs.includes(afterId)) at = 0; // „hilft nur“ steht immer hinter den anderen
+ }
+ list.splice(at, 0, id);
+ newParent[target] = list;
+ if (target === 'needs') getTask(id).prio = Math.max(getTask(id).prio, newParent.prio + 1);
+ return true;
+}
+// Umhängen ausführen, neuen Ast aufklappen, speichern und Hinweis zeigen
+function applyTreeMove(id, oldParentId, newParentLi, afterId, quiet) {
+ const before = snapshot();
+ const newParentId = newParentLi.dataset.tid;
+ if (!moveInTree(id, oldParentId, newParentId, afterId)) {
+  toast('Geht nicht: Das kommt schon vor diesem To-Do.');
+  return null;
+ }
+ if (snapshot() === before) return null;
+ treeOpen.set(newParentLi.dataset.k, true);
+ undoSnapshot = before;
+ save();
+ render();
+ if (!quiet) toast(oldParentId === newParentId ? 'Reihenfolge geändert.' : `Kommt jetzt vor „${esc(getTask(newParentId).t)}“.`, true);
+ return newParentLi.dataset.k + '/' + id;
+}
+document.addEventListener('pointerdown', event => {
+ const grip = event.target.closest && event.target.closest('.tree .tgrip');
+ if (!grip || !$('#modal').hidden) return;
+ event.preventDefault();
+ const li = grip.closest('li');
+ const card = li.closest('.tree > li');
+ const id = li.dataset.tid;
+ const oldParentId = treeParentLi(li).dataset.tid;
+ const startLevel = +li.dataset.l;
+ // Alle sichtbaren Zeilen der Karte, ohne das gezogene To-Do und seinen Unterbaum
+ const rows = [card, ...card.querySelectorAll('li')]
+  .filter(x => x !== li && !li.contains(x))
+  .map(x => ({ li: x, level: +x.dataset.l, row: x.querySelector(':scope > .row') }));
+ const line = document.createElement('div');
+ line.className = 'treeline';
+ line.style.setProperty('--c', card.style.getPropertyValue('--c'));
+ const ghost = document.createElement('div');
+ ghost.className = 'colghost dragghost';
+ ghost.textContent = getTask(id).t;
+ ghost.style.setProperty('--c', card.style.getPropertyValue('--c'));
+ const startX = event.clientX;
+ const startY = event.clientY;
+ let moved = false;
+ let drop = null;
+ trackPointer(moveEvent => {
+  if (!moved) {
+   if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 6) return;
+   moved = true;
+   li.classList.add('tdrag');
+   document.body.append(line, ghost);
+   document.body.classList.add('treedrag');
+  }
+  ghost.style.left = Math.max(4, Math.min(moveEvent.clientX - 24, innerWidth - ghost.offsetWidth - 4)) + 'px';
+  ghost.style.top = moveEvent.clientY - 20 + 'px';
+  const wanted = startLevel + Math.round((moveEvent.clientX - startX) / 26);
+  rows.forEach(r => { r.box = r.row.getBoundingClientRect(); });  // jedes Mal neu, falls die Seite gescrollt hat
+  drop = treeDropTarget(rows, moveEvent.clientY, wanted);
+  const cardBox = card.getBoundingClientRect();
+  const left = cardBox.left + 10 + drop.level * TREE_INDENT;
+  Object.assign(line.style, { left: left + 'px', width: Math.max(40, cardBox.right - 10 - left) + 'px', top: drop.lineY - 1 + 'px' });
+  if (moveEvent.clientY < 50) scrollBy(0, -14);
+  else if (moveEvent.clientY > innerHeight - 50) scrollBy(0, 14);
+ }, upEvent => {
+  line.remove();
+  ghost.remove();
+  li.classList.remove('tdrag');
+  document.body.classList.remove('treedrag');
+  if (!moved) return;
+  ignoreClicksUntil = Date.now() + 350;
+  if (upEvent.type === 'pointercancel' || !drop || !drop.parentLi) return;
+  applyTreeMove(id, oldParentId, drop.parentLi, drop.afterLi ? drop.afterLi.dataset.tid : null);
+ });
+});
+// Tastatur am Griff: hoch/runter = Reihenfolge, rechts = kommt vor das To-Do darüber, links = eine Ebene höher
+document.addEventListener('keydown', event => {
+ const grip = event.target.closest && event.target.closest('.tree .tgrip');
+ if (!grip || !$('#modal').hidden || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+ event.preventDefault();
+ const li = grip.closest('li');
+ const parentLi = treeParentLi(li);
+ const id = li.dataset.tid;
+ const previous = li.previousElementSibling;
+ const next = li.nextElementSibling;
+ let newKey = null;
+ if (event.key === 'ArrowUp' && previous) {
+  newKey = applyTreeMove(id, parentLi.dataset.tid, parentLi, previous.previousElementSibling ? previous.previousElementSibling.dataset.tid : null, true);
+ } else if (event.key === 'ArrowDown' && next) {
+  newKey = applyTreeMove(id, parentLi.dataset.tid, parentLi, next.dataset.tid, true);
+ } else if (event.key === 'ArrowRight' && previous) {
+  newKey = applyTreeMove(id, parentLi.dataset.tid, previous, undefined, true);
+ } else if (event.key === 'ArrowLeft' && +li.dataset.l > 1) {
+  newKey = applyTreeMove(id, parentLi.dataset.tid, treeParentLi(parentLi), parentLi.dataset.tid, true);
+ }
+ if (newKey) document.querySelector(`.tree li[data-k="${CSS.escape(newKey)}"] > .row .tgrip`)?.focus();
 });
 
 /* ---------- Abläufe (Dialoge) ---------- */
