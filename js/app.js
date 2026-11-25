@@ -17,7 +17,8 @@
      task.cat / task.area = eigener Bereich / eigene Kategorie eines To-Dos (IDs)
      task.needs           = Vorher-To-Dos „geht sonst nicht“ (sperren)
      task.soft            = Vorher-To-Dos „würde nur helfen“ (sperren nicht)
-     state.view           = 'heute' (Tab Heute), 'jetzt' (Tab Machbar), 'baum' (Tab Übersicht)
+     state.view           = 'heute' (Tab Heute), 'baum' (Tab Übersicht), 'jetzt' (Übersicht mit Schalter „Machbar“ an)
+     state.machbar        = Schalter „Machbar“ an/aus (merkt ihn sich auch, während „Heute“ offen ist)
      state.openCat        = ID des aufgeklappten Bereichs
 
    Aufbau der Datei (Abschnitte mit „----------“ markiert):
@@ -34,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.6';
+const APP_VERSION = '1.0.7-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -150,6 +151,7 @@ function seed() {
   ],
   openCat: 'arbeit',
   view: 'jetzt',
+  machbar: true,
   inbox: [],
   anim,
   day: dayStart(),
@@ -162,6 +164,9 @@ function migrate(data) {
  data.inbox = data.inbox || [];
  data.cats.forEach(bereich => { bereich.subs = bereich.subs || []; });
  if (data.openCat === undefined) data.openCat = data.cats[0] ? data.cats[0].id : null;
+ // Version C: „Machbar“ ist kein eigener Tab mehr, sondern ein Schalter in der Übersicht.
+ // Wer bisher im Tab „Machbar“ war (view 'jetzt'), landet in der Übersicht mit Schalter an.
+ if (typeof data.machbar !== 'boolean') data.machbar = data.view === 'jetzt';
  Object.values(data.tasks).forEach(task => {
   task.needs = task.needs || [];
   task.soft = task.soft || [];
@@ -499,7 +504,7 @@ function backlogRowHtml(task, color) {
   + `<button class="mini" data-act="tozeit" data-id="${task.id}" title="Nach Zeitnah holen" aria-label="${title} nach Zeitnah holen">↑</button>`
   + `<button class="mini" data-act="move" data-id="${task.id}" aria-label="${title} verschieben" title="Verschieben nach …">${ICON_DOTS}</button></div>`;
 }
-// Tab „Machbar“: eine Kategorie-Spalte mit Zeitnah (nicht gesperrt), Backlog und Erledigt
+// Schalter „Machbar“ an: eine Kategorie-Spalte mit Zeitnah (nicht gesperrt), Backlog und Erledigt
 function machbarColumnHtml(bereich, kategorie) {
  const here = task => isIn(task, bereich.id, kategorie.id);
  const doable = allTasks().filter(t => !t.done && !t.backlog && !openNeeds(t).length && here(t)).sort(byPrio);
@@ -570,7 +575,7 @@ function treeNodeHtml(task, color, path, level, viaSoft, parentId = null) {
  ${progressBar}
  ${childList}</li>`;
 }
-// Tab „Übersicht“: eine Kategorie-Spalte mit den Zielen als Wurzeln
+// Schalter „Machbar“ aus: eine Kategorie-Spalte mit den Zielen als Wurzeln
 function uebersichtColumnHtml(bereich, kategorie) {
  const inThisBereich = t => bereich.id ? t.cat === bereich.id : !t.cat || !getBereich(t.cat);
  const roots = allTasks().filter(t => (t.goal || !parentsOf(t.id).length) && inThisBereich(t)
@@ -599,7 +604,7 @@ function heuteViewHtml() {
  const waiting = allTasks().filter(t => t.today && !t.done && openNeeds(t).length).sort(byPrio);
  const doneToday = allTasks().filter(t => t.today && t.done && t.doneAt >= dayStart()).sort((a, b) => b.doneAt - a.doneAt);
  const date = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
- const emptyText = waiting.length ? 'Gerade ist nichts frei.' : 'Noch nichts für heute.<br>Hake in „Machbar“ bei einer Karte „Heute“ an.';
+ const emptyText = waiting.length ? 'Gerade ist nichts frei.' : 'Noch nichts für heute.<br>Hake in der Übersicht bei einem To-Do „Heute“ an.';
  const freeHtml = free.length
   ? free.map(t => cardHtml(t, colorOf(t), { grip: true })).join('')
   : `<div class="empty">${emptyText}</div>`;
@@ -623,12 +628,20 @@ function bereichCountsText(bereich) {
  const open = allTasks().filter(t => !t.done && isIn(t, bereich.id));
  const soon = open.filter(t => !t.backlog).length;
  const inBacklog = open.length - soon;
- return `${soon} zeitnah${inBacklog ? ` · ${inBacklog} im Backlog` : ''}`;
+ // &nbsp; = geschütztes Leerzeichen: „2 im Backlog“ bricht auf dem Handy nicht mitten durch
+ return `${soon}&nbsp;zeitnah${inBacklog ? ` · ${inBacklog}&nbsp;im&nbsp;Backlog` : ''}`;
 }
 // Bereich zugeklappt: eine Leiste
 function bereichBarHtml(bereich) {
  return `<button class="catbar" data-act="opencat" data-cat="${bereich.id}" data-drop="cat" style="--c:${bereich.color}" aria-expanded="false">`
   + `<b>${esc(bereich.name)}</b><small>${bereichCountsText(bereich)}</small>${ICON_CHEVRON}</button>`;
+}
+// Schalter „Machbar“ im Kopf eines aufgeklappten Bereichs. An = nur To-Dos, die man jetzt tun kann.
+// Gilt für alle Bereiche gleich (bleibt an, wenn man einen anderen Bereich aufklappt).
+function machbarSwitchHtml(bereich) {
+ const on = state.view === 'jetzt';
+ return `<button class="mswitch" role="switch" aria-checked="${on}" data-act="machbar" style="--c:${bereich.color}"`
+  + ` title="${on ? 'Wieder alles zeigen' : 'Nur zeigen, was du jetzt tun kannst'}"><span>Machbar</span><i></i></button>`;
 }
 // Bereich aufgeklappt: Kopf, Kategorie-Navigation (kleine Knöpfe) und die Spalten nebeneinander
 function bereichOpenHtml(bereich) {
@@ -637,7 +650,7 @@ function bereichOpenHtml(bereich) {
   ? `<button class="iconbtn" data-act="editcat" data-id="${bereich.id}" aria-label="Bereich ${name} bearbeiten">${ICON_PEN}</button>`
   : '';
  const head = `<div class="cathead"><button class="ct" data-act="opencat" data-cat="${bereich.id}" aria-expanded="true" title="Zuklappen">`
-  + `<i></i>${name} <small>${bereichCountsText(bereich)}</small>${ICON_CHEVRON}</button>${editButton}</div>`;
+  + `<i></i>${name} <small>${bereichCountsText(bereich)}</small>${ICON_CHEVRON}</button>${machbarSwitchHtml(bereich)}${editButton}</div>`;
  const tabs = bereich.id
   ? `<nav class="subtabs" aria-label="Kategorien von ${name}">`
    + bereich.subs.map((k, i) => `<button class="tab" data-act="gocol" data-i="${i}" data-drop="zone" data-cat="${bereich.id}" data-area="${k.id}"`
@@ -670,7 +683,8 @@ function render() {
  const nameField = $('#name');
  if (document.activeElement !== nameField) nameField.value = state.name;
  document.title = state.name || 'Meine Liste';
- document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', b.dataset.view === state.view));
+ // Tab „Übersicht“ ist gedrückt, egal ob der Schalter „Machbar“ an oder aus ist
+ document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', b.dataset.view === (state.view === 'heute' ? 'heute' : 'baum')));
  $('#inboxSlot').innerHTML = state.inbox.length
   ? `<button class="inbox" data-act="inbox">Später einsortieren · <b>${state.inbox.length}</b></button>`
   : '';
@@ -680,7 +694,7 @@ function render() {
   if (!$('#focus').hidden) renderFocus();
   return;
  }
- // Machbar oder Übersicht: Bereiche untereinander, einer davon aufgeklappt
+ // Übersicht (Schalter „Machbar“ an oder aus): Bereiche untereinander, einer davon aufgeklappt
  const bereiche = visibleBereiche();
  if (state.openCat !== null && !bereiche.some(b => b.id === state.openCat)) {
   state.openCat = bereiche[0] ? bereiche[0].id : null;
@@ -1995,6 +2009,14 @@ function toggleToday(id, button) {
  }
  render();
 }
+// Schalter „Machbar“ an/aus
+function setMachbar(on) {
+ state.machbar = on;
+ state.view = on ? 'jetzt' : 'baum';
+ save();
+ render();
+ document.querySelector('.mswitch')?.focus();
+}
 // Bereich auf-/zuklappen
 function toggleBereich(bereichId) {
  state.openCat = state.openCat === bereichId ? null : bereichId;
@@ -2019,7 +2041,8 @@ document.addEventListener('click', event => {
  if (event.target.closest('details.chain')) return;
  const viewButton = event.target.closest('[data-view]');
  if (viewButton) {
-  state.view = viewButton.dataset.view;
+  // „Übersicht“ öffnet sich so, wie der Schalter „Machbar“ zuletzt stand
+  state.view = viewButton.dataset.view === 'heute' ? 'heute' : (state.machbar ? 'jetzt' : 'baum');
   save();
   render();
   return;
@@ -2041,6 +2064,7 @@ document.addEventListener('click', event => {
   case 'edit': editTask(id); break;
   case 'inbox': sortInbox(); break;
   case 'menu': settingsDialog(); break;
+  case 'machbar': setMachbar(state.view !== 'jetzt'); break;
   case 'gocol': goToColumn(+button.dataset.i, true); break;
   case 'newcat': bereichDialog(); break;
   case 'editcat': bereichDialog(id); break;
@@ -2075,7 +2099,7 @@ $('#name').addEventListener('keydown', event => { if (event.key === 'Enter') eve
 state = load();
 const hadOpenToday = startNewDayIfNeeded();
 render();
-if (hadOpenToday) toast('Guten Morgen. „Heute“ ist wieder leer – Offenes steht weiter in „Machbar“.');
+if (hadOpenToday) toast('Guten Morgen. „Heute“ ist wieder leer – Offenes steht weiter in der Übersicht.');
 // Beim Zurückkehren zur App (z. B. am nächsten Morgen) prüfen, ob ein neuer Tag begonnen hat
 document.addEventListener('visibilitychange', () => {
  if (document.visibilityState === 'visible' && startNewDayIfNeeded()) {

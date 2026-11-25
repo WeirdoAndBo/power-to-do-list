@@ -37,7 +37,7 @@ button{cursor:pointer;border:0;background:none;padding:0}
 /* Einstellung „Sanfte Animationen“ aus */
 .noanim *,.noanim *::before{transition:none!important;animation:none!important}
 
-/* ---------- Kopf: Name der Liste, Einstellungen, Umschalter Übersicht/Machbar/Heute ---------- */
+/* ---------- Kopf: Name der Liste, Einstellungen, Umschalter Übersicht/Heute ---------- */
 header{padding:28px 0 6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .name{flex:1 1 240px;font-size:clamp(28px,5vw,40px);font-weight:700;letter-spacing:-.01em;border:0;background:transparent;padding:4px 8px;margin-left:-8px;border-radius:12px;line-height:1.1}
 .name:hover{background:var(--soft)}.name:focus{outline:none;background:var(--card);box-shadow:var(--shadow)}
@@ -64,6 +64,19 @@ header{padding:28px 0 6px;display:flex;align-items:center;gap:12px;flex-wrap:wra
 .cathead .ct i{width:12px;height:12px;border-radius:50%;background:var(--c);flex:none}
 .cathead .ct small{color:var(--mute);font-size:14px;font-weight:500}
 .cathead .ct svg{transform:rotate(90deg);color:var(--mute);margin-left:auto}
+/* Schalter „Machbar“ im Kopf des Bereichs (Version C): an = nur To-Dos zeigen, die man jetzt tun kann */
+.mswitch{flex:none;display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 8px 0 12px;border-radius:18px;background:var(--card);box-shadow:var(--shadow);font-size:14px;font-weight:600;color:var(--mute)}
+.mswitch i{width:34px;height:20px;border-radius:10px;background:color-mix(in srgb,var(--mute) 45%,transparent);position:relative;display:block;transition:background .2s}
+.mswitch i::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgb(0 0 0/.25);transition:transform .2s}
+.mswitch[aria-checked=true]{background:color-mix(in srgb,var(--c) 16%,var(--card));color:var(--ink)}
+.mswitch[aria-checked=true] i{background:var(--c)}.mswitch[aria-checked=true] i::after{transform:translateX(14px)}
+/* Handy: neben dem Schalter ist wenig Platz, deshalb steht „9 zeitnah · 2 im Backlog“ unter dem Namen */
+@media(max-width:600px){
+ .cathead .ct{display:grid;grid-template-columns:auto 1fr auto;column-gap:8px;row-gap:0;min-width:0}
+ .cathead .ct small{grid-column:2/4;grid-row:2;font-size:13px;line-height:1.3}
+ .mswitch{padding:0 6px 0 10px;gap:6px}
+ .cathead .ct svg{grid-column:3;grid-row:1}
+}
 /* Kategorie-Navigation: kleine Knöpfe über den Spalten, immer alle sichtbar (brechen in mehrere Zeilen um).
    Klick springt zur Spalte, die kurz aufleuchtet (Klasse .jump, setzt app.js). */
 .subtabs{display:flex;flex-wrap:wrap;gap:6px;padding:2px 2px 12px}

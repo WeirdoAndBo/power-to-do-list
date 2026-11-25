@@ -6,12 +6,12 @@ Eine ruhige To-do-App für neurodivergente Menschen. Große Ziele werden in klei
 - Installierbar als App (PWA) und voll offline nutzbar.
 - Kein Konto, kein Tracking, keine externen Abhängigkeiten. Alle Daten bleiben im Browser des Geräts (localStorage).
 
-Dies ist **Version B** des Prototyps: Bereiche liegen übereinander wie ein Akkordeon, Kategorien sind Spalten zum Wischen, und jede Kategorie trennt „Zeitnah“ und „Backlog“.
+Dies ist **Version C** (Experiment, baut auf Version B 1.0.6 auf): Bereiche liegen übereinander wie ein Akkordeon, Kategorien sind Spalten zum Wischen, und jede Kategorie trennt „Zeitnah“ und „Backlog“. Neu in Version C: „Machbar“ ist kein eigener Tab mehr, sondern ein Schalter im Kopf jedes Bereichs der Übersicht. Es gibt nur noch die Tabs Übersicht und Heute.
 
 ## So funktioniert die App
 
-- **Übersicht**: Baum mit dem Ziel oben und aufklappbaren Unter-To-dos. Der Ort, um in Ruhe alles systematisch zu erfassen; Machbar und Heute sind dann zum Umsetzen.
-- **Machbar**: pro Bereich und Kategorie die To-dos, die gerade nicht blockiert sind. Darunter der Backlog für alles, was gerade nicht dran ist, und das Erledigte.
+- **Übersicht**: Baum mit dem Ziel oben und aufklappbaren Unter-To-dos. Der Ort, um in Ruhe alles systematisch zu erfassen.
+- **Schalter „Machbar“** (im Kopf des aufgeklappten Bereichs): An = pro Kategorie nur die To-dos, die gerade nicht blockiert sind, als Karten; darunter der Backlog und das Erledigte. Aus = wieder der ganze Baum. Der Schalter gilt für alle Bereiche und bleibt so, auch nach einem Wechsel zu „Heute“.
 - **Heute**: nur die To-dos, die du für heute markiert hast. Die Reihenfolge lässt sich per Griff ziehen (oder Pfeiltasten). Jeden Morgen ab 4 Uhr wird „Heute“ geleert; Offenes geht nicht verloren.
 - **Kategorie-Navigation**: Über den Spalten eines Bereichs stehen alle Kategorien als kleine Knöpfe. Ein Klick springt zur Spalte, sie leuchtet kurz auf.
 - **Fokusmodus**: Ein Tipp auf eine Karte öffnet sie im Vollbild. Dort kann man schnell ein neues To-do notieren und „später einsortieren“.

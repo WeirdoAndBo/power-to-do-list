@@ -57,6 +57,13 @@ async function pressKey(el, key) {
  await sleep(60);
 }
 function expect(cond, text) { if (!cond) throw new Error(text); }
+// Version C: Übersicht öffnen und den Schalter „Machbar“ an (true) oder aus (false) stellen
+async function zeige(machbar) {
+ await click('.switch [data-view="baum"]');
+ const sw = $('.mswitch');
+ if (!sw) throw new Error('Schalter „Machbar“ fehlt');
+ if ((sw.getAttribute('aria-checked') === 'true') !== machbar) await click(sw);
+}
 async function loadApp() {
  frame.src = '../index.html?test=' + Date.now();
  await new Promise(r => frame.onload = r);
@@ -119,10 +126,11 @@ async function importText(text, name = 'sicherung.json') {
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
-test('Erster Start zeigt die Beispielkarte und drei Tabs', async () => {
+test('Erster Start zeigt die Beispielkarte, zwei Tabs und Machbar an', async () => {
  localStorage.removeItem(KEY);
  await loadApp();
- expect($$('[data-view]').length === 3, 'Es gibt nicht drei Tabs');
+ expect($$('[data-view]').length === 2, 'Es gibt nicht zwei Tabs');
+ expect($('.cat.open .mswitch[aria-checked="true"]'), 'Schalter „Machbar“ ist beim ersten Start nicht an');
  expect($('#acc .cat.open'), 'Kein Bereich aufgeklappt');
  expect($$('#acc .card').length > 0, 'Keine Karte in „Machbar“');
 });
@@ -131,17 +139,35 @@ test('Testliste laden', async () => {
  expect($$('#acc .card').length > 3, 'Karten der Testliste fehlen');
  expect(saved().format === 1, 'Datenformat ist nicht 1');
 });
-test('Tabs Übersicht, Machbar und Heute wechseln', async () => {
+test('Alte Daten aus dem Tab „Machbar“ öffnen die Übersicht mit Schalter an', async () => {
+ expect($('[data-view="baum"]').getAttribute('aria-pressed') === 'true', 'Tab „Übersicht“ ist nicht gedrückt');
+ expect($('.mswitch').getAttribute('aria-checked') === 'true', 'Schalter „Machbar“ ist nicht an');
+ expect($('#acc .card') && !$('#acc .tree'), 'Es werden nicht die machbaren Karten gezeigt');
+});
+test('Übersicht und Heute wechseln, Schalter „Machbar“ an und aus', async () => {
  await click('[data-view="heute"]');
  expect($('#daylist'), 'Heute-Liste fehlt');
+ expect(!$('.mswitch'), 'Schalter „Machbar“ darf in Heute nicht stehen');
  await click('[data-view="baum"]');
- expect($('#acc .tree'), 'Baum in der Übersicht fehlt');
- await click('[data-view="jetzt"]');
- expect($('#acc .card'), 'Karten in Machbar fehlen');
+ expect($('.mswitch[aria-checked="true"]') && $('#acc .card'), 'Nach Heute ist der Schalter „Machbar“ nicht mehr an');
+ await click('.mswitch');
+ expect($('#acc .tree') && $('.mswitch').getAttribute('aria-checked') === 'false', 'Schalter aus zeigt nicht wieder alles');
+ expect(saved().machbar === false && saved().view === 'baum', 'Schalter aus wurde nicht gespeichert');
+ await click('[data-view="heute"]');
+ await click('[data-view="baum"]');
+ expect($('#acc .tree'), 'Nach Heute ist der Schalter „Machbar“ nicht mehr aus');
+ await click('.mswitch');
+ expect($('#acc .card') && !$('#acc .tree'), 'Schalter an zeigt nicht nur das Machbare');
 });
-test('Reihenfolge der Tabs: Übersicht, Machbar, Heute', async () => {
+test('Schalter „Machbar“ bleibt an, wenn man einen anderen Bereich aufklappt', async () => {
+ await click('.catbar[data-cat="privat"]');
+ expect($('.cat.open .mswitch[aria-checked="true"]'), 'Schalter ist im anderen Bereich nicht an');
+ expect($('#acc .card[data-id="k1"]'), 'Machbare Karte in Privat fehlt');
+ await click('.catbar[data-cat="arbeit"]');
+});
+test('Reihenfolge der Tabs: Übersicht, Heute', async () => {
  const order = $$('[data-view]').map(b => b.dataset.view).join(',');
- expect(order === 'baum,jetzt,heute', 'Reihenfolge ist ' + order);
+ expect(order === 'baum,heute', 'Reihenfolge ist ' + order);
 });
 test('Kategorie-Navigation: alle Kategorien sichtbar, Klick springt zur Spalte', async () => {
  const tabs = $$('.subtabs .tab[data-i]');
@@ -208,7 +234,7 @@ test('Reihenfolge in Heute mit Pfeiltaste ändern', async () => {
  expect(order.every((n, i) => n === i + 1), 'Reihenfolge wurde nicht gespeichert');
 });
 test('Heute-Schalter aus nimmt Mitgenommene wieder raus', async () => {
- await click('[data-view="jetzt"]');
+ await zeige(true);
  await click('.card[data-id="b"] [data-act="today"]');
  expect(!saved().tasks.ex.today, '„ex“ ist noch in Heute');
 });
@@ -261,20 +287,20 @@ test('Löschen in „Heute geschafft“', async () => {
  await click(row);
  expect(!saved().tasks.k1, '„k1“ wurde nicht gelöscht');
  await click('#undo');
- await click('[data-view="jetzt"]');
+ await zeige(true);
 });
 test('Löschen in der Übersicht über „Bearbeiten“', async () => {
- await click('[data-view="baum"]');
+ await zeige(false);
  await click('.tree [data-act="edit"][data-id="g8"]');
  await click('#modal [data-v="del"]');
  await click('#modal [data-v="ok"]');
  expect(!saved().tasks.g8, '„g8“ wurde nicht gelöscht');
  await click('#undo');
  expect(saved().tasks.g8, '„g8“ ist nach Rückgängig nicht zurück');
- await click('[data-view="jetzt"]');
+ await zeige(true);
 });
 test('Übersicht: Ziel-Karte hat Kopf mit Heute, Bearbeiten und Löschen', async () => {
- await click('[data-view="baum"]');
+ await zeige(false);
  const head = $('.tree li[data-tid="g1"] > .chead');
  expect(head, 'Kopfbereich auf der Karte fehlt');
  expect(head.querySelector('[data-act="today"]') && head.querySelector('[data-act="edit"]') && head.querySelector('[data-act="del"]'), 'Heute, Bearbeiten oder Löschen fehlt im Kopf');
@@ -323,7 +349,7 @@ test('Übersicht: Unter-To-Do per Ziehen nach oben verschieben', async () => {
  await sleep(60);
  expect(saved().tasks.g1.needs.join() === 'a,b', 'Reihenfolge ist nach dem Ziehen nicht „a, b“');
  await sleep(400); // direkt nach dem Ziehen ignoriert die App Klicks kurz
- await click('[data-view="jetzt"]');
+ await zeige(true);
 });
 test('Kategorie-Spalte mit Pfeiltaste verschieben (mit Rückgängig)', async () => {
  const grip = $('.colgrip[data-s="akq"]');
