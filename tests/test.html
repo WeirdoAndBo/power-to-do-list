@@ -521,6 +521,18 @@ test('Ketten: verbunden und nicht eingerückt, nur das letzte Glied kräftig; Pa
  expect(!rowOf('a').classList.contains('down') && !rowOf('c').classList.contains('up'), 'Parallele To-Dos sind mit Strich verbunden');
  expect(rowOf('c').getBoundingClientRect().left > rowOf('a').getBoundingClientRect().left + 5, 'Parallele To-Dos sind nicht eingerückt');
 });
+test('Ein Glied mitten aus einer Kette löschen: der Rest der Kette bleibt', async () => {
+ // g1 → b → ex (ex „hilft nur“ für b). b löschen: ex hängt danach direkt an g1, nichts anderes geht verloren.
+ const before = Object.keys(saved().tasks).length;
+ await click('.tree li[data-tid="b"] > .row [data-act="del"]');
+ const tasks = saved().tasks;
+ expect(!tasks.b && tasks.ex, '„ex“ wurde mit gelöscht');
+ expect(Object.keys(tasks).length === before - 1, 'Es wurde mehr als ein To-Do gelöscht');
+ expect(tasks.g1.needs.includes('ex') || tasks.g1.soft.includes('ex'), '„ex“ hängt nicht mehr an „g1“');
+ expect(toastText().includes('gelöscht') && !toastText().includes('Unter-To-Do'), 'Hinweis spricht von mitgelöschten Unter-To-Dos');
+ await click('#undo');
+ expect(saved().tasks.b && saved().tasks.b.soft.includes('ex'), 'Rückgängig stellt die Kette nicht wieder her');
+});
 test('„+“ zwischen zwei Kettengliedern fügt mitten in die Kette ein', async () => {
  await click('.ins[data-p="b"][data-into="ex"]');
  const input = $('.insrow .tinput');

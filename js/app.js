@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.14-c';
+const APP_VERSION = '1.0.15-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -2224,8 +2224,32 @@ function deleteWithUndo(id) {
  const alsoGone = [...idsBefore].filter(x => !state.tasks[x]).length - 1;
  toast(`„${esc(task.t)}“ gelöscht${alsoGone > 0 ? ` – mit ${alsoGone} Unter-To-Do${pluralS(alsoGone)}` : ''}.`, true);
 }
-// Löscht das To-Do und alle Vorher-To-Dos, die danach zu nichts mehr gehören (und keine Ziele sind)
+// Version C: Ein Unter-To-Do mitten aus einer Kette löschen, ohne den Rest zu verlieren. Seine Vorher-To-Dos
+// rücken an seine Stelle (A → B → C, B löschen: A → C). „hilft nur“ bleibt „hilft nur“, wenn eine der beiden
+// Verbindungen „hilft nur“ war.
+function bridgeOver(id) {
+ const task = getTask(id);
+ if (!task) return;
+ parentsOf(id).forEach(parent => {
+  const kind = parent.needs.includes(id) ? 'needs' : 'soft';
+  const list = parent[kind];
+  const fill = [
+   ...task.needs.map(child => [child, kind]),
+   ...task.soft.map(child => [child, 'soft'])
+  ].filter(([child]) => child !== parent.id && !parent.needs.includes(child) && !parent.soft.includes(child)
+    && !taskAndAllBefore(child).has(parent.id));
+  const here = fill.filter(([, k]) => k === kind).map(([child]) => child);
+  list.splice(list.indexOf(id), 1, ...here);
+  if (kind === 'needs') fill.filter(([, k]) => k === 'soft').forEach(([child]) => parent.soft.push(child));
+  here.forEach(child => {
+   if (kind === 'needs' && getTask(child)) getTask(child).prio = Math.max(getTask(child).prio, parent.prio + 1);
+  });
+ });
+}
+// Löscht das To-Do und alle Vorher-To-Dos, die danach zu nichts mehr gehören (und keine Ziele sind).
+// Hängt das To-Do an einem anderen (Unter-To-Do), bleiben seine Vorher-To-Dos erhalten (bridgeOver).
 function deleteTask(id) {
+ if (parentsOf(id).length) bridgeOver(id);
  const remove = removeId => {
   delete state.tasks[removeId];
   allTasks().forEach(t => {
