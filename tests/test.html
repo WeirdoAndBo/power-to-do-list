@@ -213,6 +213,45 @@ test('Fokusmodus öffnen und mit Escape schließen', async () => {
  await pressKey(doc.body, 'Escape');
  expect($('#focus').hidden, 'Fokusmodus ging nicht zu');
 });
+test('„+ Neues To-Do“ in einer Spalte legt es in dieser Kategorie an', async () => {
+ await click('[data-act="addhere"][data-cat="arbeit"][data-area="fin"]');
+ expect(modalOpen(), 'Popup ging nicht auf');
+ expect($('#modal [name=place]').value === 'arbeit|fin', 'Ort ist nicht mit Arbeit · Finanzen vorbelegt');
+ await type('#modal [name=text]', 'Neu in Finanzen');
+ await click('#modal [data-v="ok"]');
+ const created = Object.values(saved().tasks).find(t => t.t === 'Neu in Finanzen');
+ expect(created && created.cat === 'arbeit' && created.area === 'fin', 'To-Do liegt nicht in Arbeit · Finanzen');
+ expect($(`#acc .card[data-id="${created.id}"]`).closest('.col').getAttribute('aria-label') === 'Finanzen', 'Karte steht nicht in der Spalte Finanzen');
+});
+test('Löschen im Fokusmodus (mit Rückgängig)', async () => {
+ await click('.card[data-id="ex"] h3');
+ await click('#focus [data-act="del"]');
+ expect($('#focus').hidden, 'Fokusmodus ist noch offen');
+ expect(!saved().tasks.ex, '„ex“ wurde nicht gelöscht');
+ await click('#undo');
+ expect(saved().tasks.ex, '„ex“ ist nach Rückgängig nicht zurück');
+});
+test('Löschen in „Heute geschafft“', async () => {
+ await click('[data-view="heute"]');
+ await click('#daylist .card[data-id="k1"] .check');
+ if (modalOpen()) await click('#modal [data-v=""]');
+ const row = $('#acc .drow [data-act="del"][data-id="k1"]');
+ expect(row, 'Papierkorb in „Heute geschafft“ fehlt');
+ await click(row);
+ expect(!saved().tasks.k1, '„k1“ wurde nicht gelöscht');
+ await click('#undo');
+ await click('[data-view="jetzt"]');
+});
+test('Löschen in der Übersicht über „Bearbeiten“', async () => {
+ await click('[data-view="baum"]');
+ await click('.tree [data-act="edit"][data-id="g8"]');
+ await click('#modal [data-v="del"]');
+ await click('#modal [data-v="ok"]');
+ expect(!saved().tasks.g8, '„g8“ wurde nicht gelöscht');
+ await click('#undo');
+ expect(saved().tasks.g8, '„g8“ ist nach Rückgängig nicht zurück');
+ await click('[data-view="jetzt"]');
+});
 test('Kategorie-Spalte mit Pfeiltaste verschieben (mit Rückgängig)', async () => {
  const grip = $('.colgrip[data-s="akq"]');
  expect(grip, 'Griff im Spaltenkopf fehlt');

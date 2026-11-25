@@ -107,8 +107,8 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | Fokusmodus                             | `openFocus`, `renderFocus`, `closeFocus`       |
 | Popup und Hinweis unten                | `modal`, `buttonHtml`, `toast`                 |
 | Abhaken                                | `toggleDone`                                   |
-| Neues To-Do / Ziel                     | `addTask`, `quickNote`, `askBefore`, `createPreTasks` |
-| Bearbeiten, Löschen                    | `editTask`, `deleteTask`, `deleteWithUndo`     |
+| Neues To-Do / Ziel                     | `addTask`, `quickNote`, `askBefore`, `createPreTasks`; „+ Neues To-Do“ in jeder Spalte = `data-act="addhere"` |
+| Bearbeiten, Löschen                    | `editTask`, `deleteTask`, `deleteWithUndo`; Papierkorb-Knöpfe: `data-act="del"`, kleine Variante `deleteMiniHtml` |
 | Verschieben, Backlog                   | `moveTo`, `moveMenu`, Ziehen am Griff (`.mgrip`, Abschnitt „Ziehen“) |
 | Einstellungen                          | `settingsDialog`                               |
 | Sicherung speichern/laden              | `exportData`, `readBackup`, `importFile`       |
@@ -125,6 +125,8 @@ if (r.v === 'ok') { /* r.vals.text benutzen */ }
 ```
 
 **Rückgängig:** Vor einer Änderung `undoSnapshot = snapshot()` setzen, danach `toast('Text', true)` aufrufen. Der Knopf „Rückgängig“ stellt dann den alten Stand her.
+
+**Löschen:** geht überall mit dem Papierkorb (`data-act="del"` → `deleteWithUndo`): auf Karten, in „Erledigt“, in „Heute geschafft“ und „Danach dran“ und oben im Fokusmodus. In der Übersicht ist dafür in den Zeilen kein Platz; dort über Tippen auf den Titel → „Bearbeiten“ → „Löschen“. Vorher-To-Dos, die danach zu nichts mehr gehören, verschwinden mit (`deleteTask`).
 
 **Sicherheit:** Texte, die Nutzer*innen eingeben, immer mit `esc(...)` ins HTML einsetzen, nie direkt.
 
@@ -153,7 +155,7 @@ Die eigenen Daten im Browser zurücksetzen: Entwicklertools → „Anwendung“ 
 
 ## Testen
 
-**Selbsttest (automatisch):** Die App lokal starten (siehe oben) und <http://localhost:8000/tests/test.html> öffnen, dann „Test starten“. Die Seite klickt die App in einem Rahmen durch: anlegen, abhaken, Rückgängig, Heute-Schalter, Reihenfolge in Heute, Backlog, Löschen, Fokusmodus, Sicherung speichern und laden (auch alte und kaputte Dateien). Grün = in Ordnung, rot = mit Grund, was nicht geklappt hat. Die eigene Liste wird vorher gesichert und danach wiederhergestellt. Den Tab während des Tests nicht schließen.
+**Selbsttest (automatisch):** Die App lokal starten (siehe oben) und <http://localhost:8000/tests/test.html> öffnen, dann „Test starten“. Die Seite klickt die App in einem Rahmen durch: anlegen (auch mit „+“ in einer Spalte), abhaken, Rückgängig, Heute-Schalter, Reihenfolge in Heute, Spalten umsortieren, Backlog, Löschen (in Machbar, Heute, Fokusmodus und Übersicht), Fokusmodus, Sicherung speichern und laden (auch alte und kaputte Dateien). Grün = in Ordnung, rot = mit Grund, was nicht geklappt hat. Die eigene Liste wird vorher gesichert und danach wiederhergestellt. Den Tab während des Tests nicht schließen.
 
 Einen neuen Test ergänzen: in `tests/test.html` einen Block `test('Name', async () => { … })` hinzufügen. Mit `click('css-selektor')` klicken, mit `saved()` den gespeicherten Zustand lesen, mit `expect(bedingung, 'Fehlertext')` prüfen.
 
