@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.11-c';
+const APP_VERSION = '1.0.12-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -496,8 +496,9 @@ function taskActionsHtml(task) {
 }
 // Unsichtbarer Streifen zwischen To-Dos. Mit der Maus darüber erscheint „+“; Klick = hier ein neues To-Do eintippen.
 // parentId = das To-Do, vor dem das neue kommt; afterId = steht danach direkt hinter diesem (leer = ganz vorn).
-function insertHtml(parentId, afterId, color, cls = '') {
- return `<button class="ins${cls}" data-act="ins" data-p="${parentId}" data-after="${afterId || ''}" style="--c:${color}"`
+// intoId = zwischen parentId und sein einziges Vorher-To-Do intoId (Kette): das neue kommt mitten in die Kette.
+function insertHtml(parentId, afterId, color, cls = '', intoId = '') {
+ return `<button class="ins${cls}" data-act="ins" data-p="${parentId}" data-after="${afterId || ''}"${intoId ? ` data-into="${intoId}"` : ''} style="--c:${color}"`
   + ` aria-label="Hier ein neues To-Do einfügen" title="Hier einfügen"><span aria-hidden="true">+</span></button>`;
 }
 // Kleiner Papierkorb-Knopf für Listenzeilen (Erledigt, Heute geschafft, Danach dran)
@@ -551,7 +552,8 @@ function machbarColumnHtml(bereich, kategorie) {
 // Ein Ziel ganz oben (level 0) ist dieselbe Karte wie mit Schalter „Machbar“ an (cardHtml), darunter
 // Fortschritt und die aufklappbaren Vorher-To-Dos.
 // Unter-To-Dos haben keinen Papierkorb (kein Platz): Löschen über Tippen auf den Titel → „Bearbeiten“ → „Löschen“.
-function treeNodeHtml(task, color, path, level, viaSoft, parentId = null, inCard = false) {
+// linked = hängt als einziges Vorher-To-Do am To-Do darüber: Teil einer Kette (Strich nach oben, nicht eingerückt).
+function treeNodeHtml(task, color, path, level, viaSoft, parentId = null, inCard = false, linked = false) {
  const children = [
   ...task.needs.map(id => [getTask(id), 0]),
   ...task.soft.map(id => [getTask(id), 1])
@@ -592,17 +594,26 @@ function treeNodeHtml(task, color, path, level, viaSoft, parentId = null, inCard
  const grip = parentId
   ? `<button class="cgrip tgrip" aria-label="${title} umsortieren (Pfeiltasten: hoch/runter = Reihenfolge, rechts/links = Ebene)">${ICON_GRIP}</button>`
   : '';
- const row = `<div class="row${task.done ? ' isdone' : ''}${inBacklog ? ' inbl' : ''}">${grip}${checkButtonHtml(task, color)}`
+ // Version C: Ketten. Hat ein To-Do genau EIN Vorher-To-Do, steht dieses direkt darunter, nicht eingerückt und mit
+ // einem Strich verbunden (.down / .up). Nur das letzte Glied einer Kette (das, womit man anfängt) ist kräftig,
+ // die anderen leicht ausgegraut. Mehrere Vorher-To-Dos sind parallel: eingerückt, ohne Strich.
+ const chainDown = inCard && children.length === 1;
+ const chainClass = `${chainDown ? ' down' : ''}${linked ? ' up' : ''}${linked && viaSoft ? ' upsoft' : ''}`;
+ const row = `<div class="row${task.done ? ' isdone' : ''}${inBacklog ? ' inbl' : ''}${chainClass}">${grip}${checkButtonHtml(task, color)}`
   + `<span class="tw">${titleHtml(task)}${inBacklog ? ' <span class="tag bl" title="Liegt im Backlog">Backlog</span>' : ''}</span>`
   + `${viaSoft ? '<span class="tag">hilft</span>' : ''}
  ${task.done ? '' : todaySwitchHtml(task, 1)}${inCard ? taskActionsHtml(task) : ''}${toggle}</div>`;
  const childList = children.length && isOpen
-  ? `<ul data-act="none">${children.map(([child, soft]) => treeNodeHtml(child, color, key, level + 1, soft, task.id, inCard)).join('')}</ul>`
+  ? `<ul data-act="none"${chainDown ? ' class="chainul"' : ''}>${children.map(([child, soft]) => treeNodeHtml(child, color, key, level + 1, soft, task.id, inCard, chainDown)).join('')}</ul>`
   : '';
  // Einfüge-Streifen: direkt unter der Zeile = kommt als Erstes vor dieses To-Do (eine Ebene tiefer),
  // ganz am Ende = kommt danach auf derselben Ebene
- const insertFirst = inCard && !task.done ? insertHtml(task.id, '', color, ' deeper') : '';
- const insertAfter = inCard && parentId ? insertHtml(parentId, task.id, color) : '';
+ // In einer Kette: der Streifen zwischen zwei Gliedern fügt mitten in die Kette ein
+ const insertFirst = !inCard || task.done ? ''
+  : chainDown ? insertHtml(task.id, '', color, ' inchain', children[0][0].id)
+  : insertHtml(task.id, '', color, ' deeper');
+ // Innerhalb einer Kette kein eigener „danach“-Streifen (sonst stapeln sich leere Streifen am Kettenende)
+ const insertAfter = inCard && parentId && !linked ? insertHtml(parentId, task.id, color) : '';
  return `<li data-tid="${task.id}" data-k="${esc(key)}" data-l="${level}" style="--c:${color}">${row}
  ${insertFirst}${childList}${insertAfter}</li>`;
 }
@@ -1492,6 +1503,7 @@ function startInsert(button) {
  const parent = getTask(button.dataset.p);
  if (!parent) return;
  const afterId = button.dataset.after || null;
+ const intoId = button.dataset.into || null;
  const box = document.createElement('div');
  box.className = 'insrow';
  box.style.setProperty('--c', button.style.getPropertyValue('--c'));
@@ -1508,9 +1520,15 @@ function startInsert(button) {
   undoSnapshot = snapshot();
   const task = createTask(text, { backlog: !!parent.backlog });
   // In „hilft nur“ einfügen, wenn das To-Do davor dort steht; sonst bei „geht sonst nicht“
-  const kind = afterId && parent.soft.includes(afterId) ? 'soft' : 'needs';
+  const kind = (afterId && parent.soft.includes(afterId)) || (intoId && parent.soft.includes(intoId)) ? 'soft' : 'needs';
   const list = parent[kind];
-  list.splice(afterId ? list.indexOf(afterId) + 1 : 0, 0, task.id);
+  if (intoId && list.includes(intoId)) {
+   // Kette A → B wird zu A → neu → B
+   list.splice(list.indexOf(intoId), 1, task.id);
+   task[kind].push(intoId);
+  } else {
+   list.splice(afterId ? list.indexOf(afterId) + 1 : 0, 0, task.id);
+  }
   if (kind === 'needs') {
    task.prio = Math.max(task.prio, parent.prio + 1);
    if (parent.today) task.today = true;
@@ -1521,7 +1539,9 @@ function startInsert(button) {
   render();
   toast(`„${esc(text)}“ eingefügt.`, true);
   // Gleich weiter: nächstes Feld direkt dahinter
-  document.querySelector(`.ins[data-p="${parent.id}"][data-after="${task.id}"]`)?.click();
+  (intoId
+   ? document.querySelector(`.ins[data-p="${task.id}"][data-into="${intoId}"]`)
+   : document.querySelector(`.ins[data-p="${parent.id}"][data-after="${task.id}"]`))?.click();
  };
  input.addEventListener('keydown', event => {
   event.stopPropagation();

@@ -408,3 +408,16 @@ body.dnd .ins,body.treedrag .ins{display:none}
 .insrow .tinput{margin:0;padding:6px 8px}
 /* Ohne Maus (Handy): Streifen etwas höher und ganz leicht sichtbar */
 @media(hover:none){.ins{height:20px;margin:-2px 0;opacity:.35}.ins::before{opacity:.4}.ins span{width:18px;height:18px;margin:-9px 0 0 -9px;line-height:18px;font-size:14px}}
+/* Version C: Ketten. Hat ein To-Do genau ein Vorher-To-Do, steht das direkt darunter (nicht eingerückt)
+   und ist mit einem Strich zwischen den Häkchen verbunden. .down = hat ein Glied darunter (leicht ausgegraut),
+   .up = hängt am Glied darüber. Das letzte Glied (ohne .down) ist kräftig: damit fängt man an.
+   „hilft nur“ = gestrichelter Strich. Parallele To-Dos: eingerückt mit senkrechter Linie, ohne Strich. */
+.tree .tcard ul.chainul{margin-left:0;padding-left:0;border-left:0}
+.tcard .row{position:relative}
+.tcard .row.down::after,.tcard .row.up::before{content:'';position:absolute;left:11px;width:2px;background:color-mix(in srgb,var(--c) 55%,transparent);border-radius:1px}
+.tcard .row.down::after{top:calc(50% + 14px);bottom:-9px}
+.tcard .row.up::before{top:-9px;bottom:calc(50% + 14px)}
+.tcard .row.upsoft::before{background:none;border-left:2px dashed color-mix(in srgb,var(--c) 55%,transparent);width:0}
+.tcard .row.down>.check,.tcard .row.down>.tw,.tcard .row.down>.tag{opacity:.5;transition:opacity .15s}
+.tcard .row.down:hover>.check,.tcard .row.down:hover>.tw{opacity:.85}
+.ins.inchain{width:calc(100% - 30px);margin-left:30px}

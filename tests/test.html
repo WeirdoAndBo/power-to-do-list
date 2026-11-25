@@ -443,6 +443,34 @@ test('„+“ zwischen To-Dos: neues To-Do an genau dieser Stelle eintippen', as
  expect(!saved().tasks[created.id], 'Rückgängig hat das Einfügen nicht zurückgenommen');
  await zeige(true);
 });
+test('Ketten: verbunden und nicht eingerückt, nur das letzte Glied kräftig; Paralleles ohne Strich', async () => {
+ await zeige(false);
+ const tog = $('.tree li.card[data-id="g1"] > .chead .cardtog');
+ if (tog.getAttribute('aria-expanded') !== 'true') await click(tog);
+ const rowOf = id => $(`.tree li[data-tid="${id}"] > .row`);
+ // b hat genau ein Vorher-To-Do (ex, „hilft nur“): Kette
+ expect(rowOf('b').classList.contains('down') && rowOf('ex').classList.contains('up'), '„b“ und „ex“ sind nicht als Kette verbunden');
+ expect(rowOf('ex').classList.contains('upsoft'), '„hilft nur“ ist nicht gestrichelt markiert');
+ expect(Math.abs(rowOf('b').getBoundingClientRect().left - rowOf('ex').getBoundingClientRect().left) < 2, 'Kettenglied ist eingerückt');
+ expect(+win.getComputedStyle(rowOf('b').querySelector('.tw')).opacity < 0.8 && +win.getComputedStyle(rowOf('ex').querySelector('.tw')).opacity === 1, 'Nur das letzte Glied soll kräftig sein');
+ // a hat zwei Vorher-To-Dos (c, desk): parallel, eingerückt, kein Strich
+ expect(!rowOf('a').classList.contains('down') && !rowOf('c').classList.contains('up'), 'Parallele To-Dos sind mit Strich verbunden');
+ expect(rowOf('c').getBoundingClientRect().left > rowOf('a').getBoundingClientRect().left + 5, 'Parallele To-Dos sind nicht eingerückt');
+});
+test('„+“ zwischen zwei Kettengliedern fügt mitten in die Kette ein', async () => {
+ await click('.ins[data-p="b"][data-into="ex"]');
+ const input = $('.insrow .tinput');
+ expect(input, 'Eingabefeld erscheint nicht');
+ input.value = 'Mittendrin';
+ await pressKey(input, 'Enter');
+ const created = Object.values(saved().tasks).find(t => t.t === 'Mittendrin');
+ expect(created, 'Neues To-Do wurde nicht angelegt');
+ expect(saved().tasks.b.soft.join() === created.id && created.soft.join() === 'ex', 'Kette ist nicht b → neu → ex');
+ if ($('.insrow .tinput')) await pressKey($('.insrow .tinput'), 'Escape');
+ await click('#undo');
+ expect(saved().tasks.b.soft.join() === 'ex', 'Rückgängig hat die Kette nicht wiederhergestellt');
+ await zeige(true);
+});
 test('Karte innerhalb der Kategorie an eine andere Stelle ziehen (Machbar an)', async () => {
  await click('.subtabs .tab[data-i="0"]');
  const ids = () => $$('.col[aria-label="Akquise"] .list.zone > .card').map(c => c.dataset.id);
