@@ -452,7 +452,7 @@ function checkButtonHtml(task, color) {
 }
 // Schalter „Heute“ auf Karten und (klein, mini = true) in der Übersicht
 function todaySwitchHtml(task, mini) {
- return `<button class="today sw${mini ? ' tmini' : ''}" role="switch" aria-checked="${!!task.today}"`
+ return `<button class="today${mini ? ' tmini' : ''}" role="switch" aria-checked="${!!task.today}"`
   + ` data-act="today" data-id="${task.id}" aria-label="${esc(task.t)}: für heute"`
   + ` title="Für heute – mit allen Vorher-To-Dos"><i></i><span>Heute</span></button>`;
 }
@@ -637,7 +637,7 @@ function bereichOpenHtml(bereich) {
  const head = `<div class="cathead"><button class="ct" data-act="opencat" data-cat="${bereich.id}" aria-expanded="true" title="Zuklappen">`
   + `<i></i>${name} <small>${bereichCountsText(bereich)}</small>${ICON_CHEVRON}</button>${editButton}</div>`;
  const tabs = bereich.id
-  ? `<nav class="tabs subtabs" aria-label="Kategorien von ${name}">`
+  ? `<nav class="subtabs" aria-label="Kategorien von ${name}">`
    + bereich.subs.map((k, i) => `<button class="tab" data-act="gocol" data-i="${i}" data-drop="zone" data-cat="${bereich.id}" data-area="${k.id}"`
     + ` style="--c:${bereich.color}" aria-current="${i === currentColumn}"><i></i>${esc(k.name)}</button>`).join('')
    + `<button class="tab new" data-act="newsub" data-id="${bereich.id}">+ Kategorie</button></nav>`
@@ -1394,7 +1394,7 @@ async function bereichDialog(id) {
   + `<input type="radio" name="color" value="${color}"${currentColor === color ? ' checked' : ''}></label>`).join('');
  const r = await modal(`<h2>${bereich ? 'Bereich bearbeiten' : 'Neuer Bereich'}</h2>
   <input class="field" name="name" value="${esc(bereich ? bereich.name : '')}" placeholder="z. B. Freund*innen" aria-label="Name" autocomplete="off">
-  <label class="lbl">Farbe</label><div class="sw">${colorChoices}</div>
+  <label class="lbl">Farbe</label><div class="swatches">${colorChoices}</div>
   <div class="btns">${bereich ? buttonHtml('del', 'Löschen', 'ghost') : buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', bereich ? 'Fertig' : 'Anlegen', 'pri')}</div>`);
  if (r.v === 'del') {
   // Die To-Dos bleiben, sie stehen danach unter „Ohne Bereich“ (oder erben vom Ziel)
