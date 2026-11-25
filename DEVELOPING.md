@@ -101,7 +101,7 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | Tab „Heute“                            | `heuteViewHtml`, `setToday`, `saveDayOrder`    |
 | Tab „Machbar“                          | `machbarColumnHtml`, `cardHtml`, `backlogRowHtml` |
 | Tab „Übersicht“                        | `uebersichtColumnHtml`, `treeNodeHtml`         |
-| Unter-To-Dos in der Übersicht umsortieren | `moveInTree`, `treeDropTarget`, `applyTreeMove`, Ziehen am Griff (`.tgrip`, Abschnitt „Ziehen“ Nr. 5), Pfeiltasten |
+| Unter-To-Dos in der Übersicht umsortieren (auch in andere Karten der Spalte) | `moveInTree`, `treeDropTarget`, `applyTreeMove`, Ziehen am Griff (`.tgrip`, Abschnitt „Ziehen“ Nr. 5), Pfeiltasten |
 | Bereiche und Kategorien (Akkordeon)    | `bereichBarHtml`, `bereichOpenHtml`, `bereichDialog`, `kategorieDialog` |
 | Kategorie-Navigation (Knöpfe über den Spalten) | `subtabs` in `bereichOpenHtml`, `goToColumn` (Sprung + Aufleuchten), `markCurrentTab` |
 | Kategorie-Spalten umsortieren          | `moveKategorie`, Ziehen am Griff (`.colgrip`, Abschnitt „Ziehen“), Pfeiltasten, „Nach links/rechts“ in `kategorieDialog` |
@@ -111,7 +111,7 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | Abhaken                                | `toggleDone`                                   |
 | Neues To-Do / Ziel                     | `addTask`, `quickNote`, `askBefore`, `createPreTasks`; „+ Neues To-Do“ in jeder Spalte = `data-act="addhere"` |
 | Bearbeiten, Löschen                    | `editTask`, `deleteTask`, `deleteWithUndo`; Papierkorb-Knöpfe: `data-act="del"`, kleine Variante `deleteMiniHtml` |
-| Verschieben, Backlog                   | `moveTo`, `moveMenu`, Ziehen am Griff (`.mgrip`, Abschnitt „Ziehen“) |
+| Verschieben, Backlog, Reihenfolge      | `moveTo`, `moveMenu`, `placeInOrder`; Ziehen am Griff (`.mgrip`, Abschnitt „Ziehen“ Nr. 3, gilt für Karten in „Machbar“ und Ziel-Karten in „Übersicht“). Umsortierbare Einträge haben `data-sort`, die Reihenfolge steckt in `prio` |
 | Einstellungen                          | `settingsDialog`                               |
 | Sicherung speichern/laden              | `exportData`, `readBackup`, `importFile`       |
 | Was ein Klick auslöst                  | großer `switch` im Abschnitt „Ereignisse“      |
@@ -128,7 +128,7 @@ if (r.v === 'ok') { /* r.vals.text benutzen */ }
 
 **Rückgängig:** Vor einer Änderung `undoSnapshot = snapshot()` setzen, danach `toast('Text', true)` aufrufen. Der Knopf „Rückgängig“ stellt dann den alten Stand her.
 
-**Löschen:** geht überall mit dem Papierkorb (`data-act="del"` → `deleteWithUndo`): auf Karten, in „Erledigt“, in „Heute geschafft“ und „Danach dran“ und oben im Fokusmodus. In der Übersicht ist dafür in den Zeilen kein Platz; dort über Tippen auf den Titel → „Bearbeiten“ → „Löschen“. Vorher-To-Dos, die danach zu nichts mehr gehören, verschwinden mit (`deleteTask`).
+**Löschen:** geht überall mit dem Papierkorb (`data-act="del"` → `deleteWithUndo`): auf Karten, im Backlog, in „Erledigt“, in „Heute geschafft“ und „Danach dran“, oben im Fokusmodus und in der Übersicht auf Ziel-Karten und an jedem Unter-To-Do. Vorher-To-Dos, die danach zu nichts mehr gehören, verschwinden mit (`deleteTask`).
 
 **Sicherheit:** Texte, die Nutzer*innen eingeben, immer mit `esc(...)` ins HTML einsetzen, nie direkt.
 
@@ -165,8 +165,8 @@ Einen neuen Test ergänzen: in `tests/test.html` einen Block `test('Name', async
 
 1. Alle drei Tabs ansehen: Übersicht, Machbar, Heute. Sieht alles aus wie vorher?
 2. In „Heute“ eine Karte am Griff ziehen und die Reihenfolge ändern.
-3. In „Machbar“ eine Karte am Griff ins Backlog, auf einen Knopf der Kategorie-Navigation und auf einen anderen Bereich ziehen.
-4. In der Übersicht Äste auf- und zuklappen. Ein Unter-To-Do am Griff hoch/runter ziehen (Reihenfolge) und nach rechts/links (Ebene). Die farbige Linie zeigt, wo es landet.
+3. In „Machbar“ und in der Übersicht eine Karte am Griff hoch/runter ziehen (Linie zeigt die Stelle), ins Backlog, auf einen Knopf der Kategorie-Navigation und auf einen anderen Bereich ziehen.
+4. In der Übersicht Äste auf- und zuklappen. Ein Unter-To-Do am Griff hoch/runter ziehen (Reihenfolge, auch in eine andere Karte) und nach rechts/links (Ebene). Die farbige Linie zeigt, wo es landet.
 5. Eine Kategorie-Spalte am Griff im Spaltenkopf ziehen (am Rand scrollt es seitlich mit). Nach dem Neuladen bleibt die Reihenfolge.
 6. Fenster schmal ziehen (Handy-Breite): nichts ragt seitlich heraus, Kategorien lassen sich wischen.
 7. Offline: Seite laden, dann in den Entwicklertools unter „Netzwerk“ auf „Offline“ stellen und neu laden. Die App muss erscheinen.
