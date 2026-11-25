@@ -102,7 +102,8 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | In welchem Bereich/welcher Kategorie   | `bereicheOf`, `kategorieIn`, `isIn`, `placeOf` |
 | Tab „Heute“                            | `heuteViewHtml`, `setToday`, `saveDayOrder`    |
 | Schalter „Machbar“                     | `machbarSwitchHtml`, `setMachbar`; Spalten: `machbarColumnHtml`, `cardHtml`, `backlogRowHtml` |
-| Tab „Übersicht“                        | `uebersichtColumnHtml`, `treeNodeHtml`         |
+| Karten ziehen (Reihenfolge, andere Kategorie) | Abschnitt „Ziehen“ Nr. 3 (`.mgrip`, `dropItems`), `dropCard` speichert die Reihenfolge über `prio` |
+| Übersicht mit Schalter aus             | `uebersichtColumnHtml`, `treeNodeHtml` (Ziel ganz oben = `cardHtml` mit `options.tree`) |
 | Unter-To-Dos in der Übersicht umsortieren | `moveInTree`, `treeDropTarget`, `applyTreeMove`, Ziehen am Griff (`.tgrip`, Abschnitt „Ziehen“ Nr. 5), Pfeiltasten |
 | Bereiche und Kategorien (Akkordeon)    | `bereichBarHtml`, `bereichOpenHtml`, `bereichDialog`, `kategorieDialog` |
 | Kategorie-Navigation (Knöpfe über den Spalten) | `subtabs` in `bereichOpenHtml`, `goToColumn` (Sprung + Aufleuchten), `markCurrentTab` |

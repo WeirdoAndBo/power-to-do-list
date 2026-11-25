@@ -12,6 +12,8 @@ Dies ist **Version C** (Experiment, baut auf Version B 1.0.6 auf): Bereiche lieg
 
 - **Übersicht**: Baum mit dem Ziel oben und aufklappbaren Unter-To-dos. Der Ort, um in Ruhe alles systematisch zu erfassen.
 - **Schalter „Machbar“** (im Kopf des aufgeklappten Bereichs): An = pro Kategorie nur die To-dos, die gerade nicht blockiert sind, als Karten; darunter der Backlog und das Erledigte. Aus = wieder der ganze Baum. Der Schalter gilt für alle Bereiche und bleibt so, auch nach einem Wechsel zu „Heute“.
+- **Karten**: sehen mit Schalter an und aus gleich aus (Kopf mit Griff, Heute, Bearbeiten, Verschieben, Löschen; darunter Häkchen und Titel). Mit Schalter aus zeigt die Ziel-Karte zusätzlich ihre Vorher-To-Dos zum Aufklappen.
+- **Ziehen**: Jede Karte lässt sich am Griff ziehen: an eine andere Stelle in derselben Kategorie (eine farbige Linie zeigt, wo sie landet), in eine andere Spalte, auf einen Knopf der Kategorie-Navigation, ins Backlog oder auf einen anderen Bereich.
 - **Heute**: nur die To-dos, die du für heute markiert hast. Die Reihenfolge lässt sich per Griff ziehen (oder Pfeiltasten). Jeden Morgen ab 4 Uhr wird „Heute“ geleert; Offenes geht nicht verloren.
 - **Kategorie-Navigation**: Über den Spalten eines Bereichs stehen alle Kategorien als kleine Knöpfe. Ein Klick springt zur Spalte, sie leuchtet kurz auf.
 - **Fokusmodus**: Ein Tipp auf eine Karte öffnet sie im Vollbild. Dort kann man schnell ein neues To-do notieren und „später einsortieren“.

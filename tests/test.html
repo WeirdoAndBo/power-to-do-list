@@ -314,7 +314,7 @@ test('Übersicht: Ziel-Karte hat Kopf mit Heute, Bearbeiten und Löschen', async
  expect(saved().tasks.g8, '„g8“ ist nach Rückgängig nicht zurück');
 });
 test('Übersicht: Unter-To-Dos mit Pfeiltasten umsortieren und einrücken', async () => {
- await click('.tree li[data-tid="g1"] > .row .chev');
+ await click('.tree li[data-tid="g1"] > .ttog');
  let grip = $('.tree li[data-tid="b"] > .row .tgrip');
  expect(grip, 'Griff am Unter-To-Do fehlt');
  expect(!$('.tree li[data-tid="g1"] > .row .tgrip'), 'Ziel ganz oben darf keinen Griff haben');
@@ -349,6 +349,66 @@ test('Übersicht: Unter-To-Do per Ziehen nach oben verschieben', async () => {
  await sleep(60);
  expect(saved().tasks.g1.needs.join() === 'a,b', 'Reihenfolge ist nach dem Ziehen nicht „a, b“');
  await sleep(400); // direkt nach dem Ziehen ignoriert die App Klicks kurz
+ await zeige(true);
+});
+// Zieht ein Element am Griff zu (x, y) – wie mit Maus oder Finger
+async function dragTo(grip, x, y) {
+ const from = grip.getBoundingClientRect();
+ const at = (type, px, py, target = win) => target.dispatchEvent(new win.PointerEvent(type, { bubbles: true, clientX: px, clientY: py, pointerId: 1 }));
+ at('pointerdown', from.x + 5, from.y + 5, grip);
+ at('pointermove', from.x + 5, from.y + 20);
+ at('pointermove', x, y);
+ at('pointerup', x, y);
+ await sleep(400); // direkt nach dem Ziehen ignoriert die App Klicks kurz
+}
+test('Karten sehen mit Schalter „Machbar“ an und aus gleich aus', async () => {
+ await zeige(false);
+ const goal = $('.tree li.card[data-id="g1"]');
+ expect(goal, 'Ziel ist in der Übersicht keine Karte');
+ const parts = el => ['.mgrip', '[data-act="today"]', '[data-act="edit"]', '[data-act="move"]', '[data-act="del"]', '.cbody .check', '.cbody h3', '.ask']
+  .filter(sel => el.querySelector(sel)).join();
+ const goalParts = parts(goal);
+ await zeige(true);
+ const cardParts = parts($('.list.zone > .card'));
+ expect(goalParts === cardParts, 'Aufbau unterschiedlich: ' + goalParts + ' / ' + cardParts);
+});
+test('Karte innerhalb der Kategorie an eine andere Stelle ziehen (Machbar an)', async () => {
+ await click('.subtabs .tab[data-i="0"]');
+ const ids = () => $$('.col[aria-label="Akquise"] .list.zone > .card').map(c => c.dataset.id);
+ const before = ids();
+ expect(before.length >= 2, 'Zu wenig Karten zum Umsortieren');
+ const last = before[before.length - 1];
+ const first = $(`.card[data-id="${before[0]}"]`).getBoundingClientRect();
+ await dragTo($(`.card[data-id="${last}"] .mgrip`), first.x + 40, first.y + 8);
+ expect(ids()[0] === last, 'Gezogene Karte steht nicht oben: ' + ids().join());
+ expect(toastText().includes('Reihenfolge'), 'Hinweis „Reihenfolge geändert“ fehlt');
+ await click('#undo');
+ expect(ids().join() === before.join(), 'Rückgängig hat die Reihenfolge nicht zurückgesetzt');
+});
+test('Ziel-Karte in eine andere Kategorie ziehen und dort einsortieren (Machbar aus)', async () => {
+ await zeige(false);
+ const tab = $('.subtabs .tab[data-area="fin"]').getBoundingClientRect();
+ await dragTo($('.tree li.card[data-id="g1"] .mgrip'), tab.x + 10, tab.y + 8);
+ expect(saved().tasks.g1.area === 'fin', 'Ziel liegt nicht in Finanzen');
+ await click('.subtabs .tab[data-area="fin"]');
+ await sleep(150);
+ const ids = () => $$('.col[aria-label="Finanzen"] .tree > li.card').map(c => c.dataset.id);
+ const before = ids();
+ expect(before.includes('g1') && before.length > 1, 'Ziel fehlt in der Spalte Finanzen');
+ const last = before[before.length - 1];
+ const top = $(`.tree li.card[data-id="${before[0]}"]`).getBoundingClientRect();
+ await dragTo($(`.tree li.card[data-id="${last}"] .mgrip`), top.x + 40, top.y + 8);
+ expect(ids()[0] === last, 'Ziel wurde nicht nach oben gezogen: ' + ids().join());
+ await click('#undo');
+ expect(ids().join() === before.join(), 'Rückgängig hat die Reihenfolge nicht zurückgesetzt');
+ await click('.tree li.card[data-id="g1"] [data-act="move"]');
+ $('#modal [data-pick=cat]').value = 'arbeit';
+ $('#modal [data-pick=cat]').dispatchEvent(new Event('change', { bubbles: true }));
+ $('#modal [data-pick=kat]').value = 'akq';
+ $('#modal [data-pick=kat]').dispatchEvent(new Event('change', { bubbles: true }));
+ await click('#modal [data-v="ok"]');
+ expect(saved().tasks.g1.area === 'akq', 'Zurückverschieben nach Akquise ging nicht');
+ await click('.subtabs .tab[data-i="0"]');
  await zeige(true);
 });
 test('Kategorie-Spalte mit Pfeiltaste verschieben (mit Rückgängig)', async () => {

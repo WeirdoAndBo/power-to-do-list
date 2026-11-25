@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.7-c';
+const APP_VERSION = '1.0.8-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -454,9 +454,13 @@ function chainBoxHtml(task) {
  return `<details class="chain" data-id="${task.id}"${openChains.has(task.id) ? ' open' : ''}>`
   + `<summary>${hint}</summary>${pathsHtml}</details>`;
 }
-// Karte. options.grip = Griff zum Sortieren (in „Heute“), options.move = Griff und Menü zum Verschieben (in „Machbar“).
+// Karte. options.grip = Griff zum Sortieren (in „Heute“), options.move = Griff und Menü zum Verschieben
+// (in der Übersicht, mit Schalter „Machbar“ an und aus).
 // Aufbau: Kopf mit Griff, Heute-Schalter, Bearbeiten/Verschieben/Löschen.
 // Darunter Häkchen + Titel, Ziel-Kette, „Erst noch: …“ und unten der Knopf „+ Vorher-To-Do“.
+// Version C: Dieselbe Karte steht auch in der Übersicht mit Schalter „Machbar“ aus. Dort kommen über
+// options.tree der Fortschritt und die aufklappbaren Vorher-To-Dos dazu, und die Karte ist ein <li> im Baum
+// (options.tag, options.attrs), damit das Umsortieren der Unter-To-Dos weiter funktioniert.
 function cardHtml(task, color, options = {}) {
  const title = esc(task.t);
  let grip = '';
@@ -474,14 +478,16 @@ function cardHtml(task, color, options = {}) {
  const waitingHtml = waiting.length
   ? `<p class="wait">Erst noch: ${waiting.map(id => esc(getTask(id).t)).join(', ')}</p>`
   : '';
- return `<article class="card" data-act="focus" data-id="${task.id}" style="--c:${color}" tabindex="0" aria-label="${title} – im Fokusmodus öffnen">
- <div class="chead">${grip}${todaySwitchHtml(task)}<span class="sp"></span>
+ const tag = options.tag || 'article';
+ return `<${tag} class="card${options.cls || ''}" data-act="focus" data-id="${task.id}" ${options.attrs || ''} style="--c:${color}" tabindex="0" aria-label="${title} – im Fokusmodus öffnen">
+ <div class="chead">${grip}${task.done ? '' : todaySwitchHtml(task)}<span class="sp"></span>
   <button class="hbtn" data-act="edit" data-id="${task.id}" aria-label="${title} bearbeiten" title="Bearbeiten">${ICON_PEN}</button>
   ${moveButton}
   <button class="hbtn" data-act="del" data-id="${task.id}" aria-label="${title} löschen" title="Löschen">${ICON_TRASH}</button></div>
  <div class="cbody">${checkButtonHtml(task, color)}<div class="ctext"><h3>${title}</h3>${chainBoxHtml(task)}
  ${waitingHtml}</div></div>
- <button class="ask" data-act="block" data-id="${task.id}"><b aria-hidden="true">+</b> ${task.goal ? 'To-Do' : 'Vorher-To-Do'}</button></article>`;
+ ${options.tree || ''}
+ <button class="ask" data-act="block" data-id="${task.id}"><b aria-hidden="true">+</b> ${task.goal ? 'To-Do' : 'Vorher-To-Do'}</button></${tag}>`;
 }
 // Kleiner Papierkorb-Knopf für Listenzeilen (Erledigt, Heute geschafft, Danach dran)
 function deleteMiniHtml(task) {
@@ -531,7 +537,8 @@ function machbarColumnHtml(bereich, kategorie) {
 // Tab „Übersicht“: ein Knoten im Baum, ruft sich für seine Vorher-To-Dos selbst auf.
 // path = Weg im Baum (für auf/zu), level = Tiefe (0 = Ziel ganz oben), viaSoft = hängt über „hilft nur“ dran,
 // parentId = das To-Do darüber in dieser Karte (nur dann gibt es den Griff zum Umsortieren).
-// Ein Ziel ganz oben (level 0) ist eine Karte mit Kopf wie in „Machbar“: Heute-Schalter, Bearbeiten, Löschen.
+// Ein Ziel ganz oben (level 0) ist dieselbe Karte wie mit Schalter „Machbar“ an (cardHtml), darunter
+// Fortschritt und die aufklappbaren Vorher-To-Dos.
 // Unter-To-Dos haben keinen Papierkorb (kein Platz): Löschen über Tippen auf den Titel → „Bearbeiten“ → „Löschen“.
 function treeNodeHtml(task, color, path, level, viaSoft, parentId = null) {
  const children = [
@@ -543,17 +550,28 @@ function treeNodeHtml(task, color, path, level, viaSoft, parentId = null) {
  const title = esc(task.t);
  const inBacklog = task.backlog && !task.done;
  const isCard = level === 0;
+ const childList = children.length && isOpen
+  ? `<ul data-act="none">${children.map(([child, soft]) => treeNodeHtml(child, color, key, level + 1, soft, task.id)).join('')}</ul>`
+  : '';
+ if (isCard) {
+  const open = children.filter(([child]) => !child.done).length;
+  const toggleCard = children.length
+   ? `<button class="ttog" data-act="tog" data-k="${esc(key)}" data-l="0" aria-expanded="${isOpen}">${ICON_CHEVRON}`
+    + `${isOpen ? 'Zuklappen' : `${children.length} Vorher-To-Do${pluralS(children.length)}${open < children.length ? ` · ${children.length - open} erledigt` : ''}`}</button>`
+   : '';
+  const bar = task.done ? '' : `<div class="pbar" data-act="none" aria-hidden="true"><i style="width:${progress(task)}%"></i></div>`;
+  return cardHtml(task, color, {
+   move: !task.done, tag: 'li', cls: ' tcard',
+   attrs: `data-tid="${task.id}" data-k="${esc(key)}" data-l="0"`,
+   tree: `${children.length ? bar : ''}${toggleCard}${childList}`
+  });
+ }
  let toggle = '<span class="mini"></span>';
  if (children.length) {
   const label = isOpen ? 'Zuklappen' : (level === 0 ? 'Alles aufklappen' : 'Aufklappen');
   const tip = level === 0 ? (isOpen ? 'Alles zuklappen' : 'Alles aufklappen') : '';
   toggle = `<button class="mini chev" data-act="tog" data-k="${esc(key)}" data-l="${level}" aria-expanded="${isOpen}" aria-label="${label}" title="${tip}">${ICON_CHEVRON}</button>`;
  }
- const head = isCard
-  ? `<div class="chead">${task.done ? '' : todaySwitchHtml(task)}<span class="sp"></span>`
-   + `<button class="hbtn" data-act="edit" data-id="${task.id}" aria-label="${title} bearbeiten" title="Bearbeiten">${ICON_PEN}</button>`
-   + `<button class="hbtn" data-act="del" data-id="${task.id}" aria-label="${title} löschen" title="Löschen">${ICON_TRASH}</button></div>`
-  : '';
  const grip = parentId
   ? `<button class="cgrip tgrip" aria-label="${title} umsortieren (Pfeiltasten: hoch/runter = Reihenfolge, rechts/links = Ebene)"`
    + ` title="Ziehen: hoch/runter = Reihenfolge, nach rechts = kommt vor das To-Do darüber">${ICON_GRIP}</button>`
@@ -561,18 +579,11 @@ function treeNodeHtml(task, color, path, level, viaSoft, parentId = null) {
  const row = `<div class="row${task.done ? ' isdone' : ''}${inBacklog ? ' inbl' : ''}">${grip}${checkButtonHtml(task, color)}`
   + `<button class="t" data-act="edit" data-id="${task.id}">${title}${inBacklog ? ' <span class="tag bl" title="Liegt im Backlog">Backlog</span>' : ''}</button>`
   + `${viaSoft ? '<span class="tag">hilft</span>' : ''}
- ${task.done || isCard ? '' : todaySwitchHtml(task, 1)}`
+ ${task.done ? '' : todaySwitchHtml(task, 1)}`
   + `<button class="mini" data-act="addsub" data-id="${task.id}" aria-label="Vorher-To-Do für ${title} hinzufügen" title="Hier etwas davor einfügen">+</button>`
   + `
  ${toggle}</div>`;
- const progressBar = level === 0 && !task.done
-  ? `<div class="pbar" aria-hidden="true"><i style="width:${progress(task)}%"></i></div>`
-  : '';
- const childList = children.length && isOpen
-  ? `<ul>${children.map(([child, soft]) => treeNodeHtml(child, color, key, level + 1, soft, task.id)).join('')}</ul>`
-  : '';
- return `<li data-tid="${task.id}" data-k="${esc(key)}" data-l="${level}" style="--c:${color}">${head}${row}
- ${progressBar}
+ return `<li data-tid="${task.id}" data-k="${esc(key)}" data-l="${level}" style="--c:${color}">${row}
  ${childList}</li>`;
 }
 // Schalter „Machbar“ aus: eine Kategorie-Spalte mit den Zielen als Wurzeln
@@ -585,16 +596,22 @@ function uebersichtColumnHtml(bereich, kategorie) {
  const done = roots.filter(t => t.done);
  const nodes = (tasks, level) => tasks.map(t => treeNodeHtml(t, bereich.color, bereich.id, level)).join('');
  const emptyText = backlog.length ? 'Gerade nichts zeitnah.' : `Noch kein Ziel in ${esc(kategorie.name || bereich.name)}.`;
+ // Ablageflächen fürs Ziehen von Karten (wie mit Schalter „Machbar“ an)
+ const dropTarget = `data-drop="zone" data-cat="${bereich.id}" data-area="${kategorie.id}"`;
  const soonHtml = soon.length
   ? `<ul class="tree">${nodes(soon, 0)}</ul>`
   : `<div class="empty" style="--c:${bereich.color}">${emptyText}</div>`;
- const backlogHtml = backlog.length
-  ? `<p class="zlabel blhead">Backlog · ${backlog.length}</p><ul class="tree bltree">${nodes(backlog, 0)}</ul>`
-  : '';
+ // Backlog: auch leer da (nur beim Ziehen sichtbar), damit man Karten hineinziehen kann
+ const backlogHtml = `<div class="zone tzone${backlog.length ? '' : ' tzempty'}" ${dropTarget} data-bl="1">`
+  + `<p class="zlabel blhead">Backlog · ${backlog.length}</p>`
+  + (backlog.length ? `<ul class="tree bltree">${nodes(backlog, 0)}</ul>` : '<p class="bempty">Hierher ziehen: gerade nicht dran.</p>')
+  + '</div>';
  const doneHtml = done.length
   ? `<details class="done"><summary>Erreichte Ziele · ${done.length}</summary><ul class="tree">${nodes(done, 1)}</ul></details>`
   : '';
- return `<p class="zlabel">Zeitnah</p>${soonHtml}
+ const addHereHtml = `<button class="coladd" data-act="addhere" data-cat="${bereich.id}" data-area="${kategorie.id}"`
+  + ` aria-label="Neues To-Do in ${esc(kategorie.name || bereich.name)}"><span aria-hidden="true">+</span> Neues To-Do</button>`;
+ return `<p class="zlabel">Zeitnah</p><div class="list zone tzone" ${dropTarget} data-bl="0">${soonHtml}</div>${addHereHtml}
  ${backlogHtml}${doneHtml}`;
 }
 // Tab „Heute“: freie To-Dos (ziehbar), „Danach dran“ (noch gesperrt) und „Heute geschafft“
@@ -1054,8 +1071,12 @@ document.addEventListener('keydown', event => {
  document.querySelector(`.cgrip[data-id="${cardEl.dataset.id}"]`)?.focus();
 });
 
-// 3) Tab „Machbar“: Karte oder Backlog-Zeile am Griff ziehen.
+// 3) Karte oder Backlog-Zeile am Griff ziehen (Übersicht, Schalter „Machbar“ an oder aus).
 //    Ablageziele (data-drop im HTML): Zeitnah, Backlog, Knöpfe der Kategorie-Navigation, Bereich-Leisten.
+//    In Zeitnah und Backlog zeigt eine farbige Linie, an welcher Stelle die Karte landet (Reihenfolge).
+// Karten bzw. Backlog-Zeilen, die direkt in dieser Ablagefläche liegen (ohne die gezogene)
+const dropItems = (zone, source) => [...zone.querySelectorAll('.card,.brow')]
+ .filter(el => el !== source && el.closest('[data-drop]') === zone);
 document.addEventListener('pointerdown', event => {
  const grip = event.target.closest('.mgrip');
  if (!grip || !$('#modal').hidden) return;
@@ -1066,6 +1087,8 @@ document.addEventListener('pointerdown', event => {
  // „Geist“: eine Kopie, die dem Zeiger folgt
  const ghost = source.cloneNode(true);
  ghost.classList.add('dragghost');
+ // Ziel-Karte aus der Übersicht: nur die Karte selbst mitnehmen, ohne die aufgeklappten Vorher-To-Dos
+ ghost.querySelectorAll(':scope > ul, :scope > .ttog').forEach(el => el.remove());
  Object.assign(ghost.style, { width: box.width + 'px', left: box.left + 'px', top: box.top + 'px', margin: 0 });
  const offsetX = event.clientX - box.left;
  const offsetY = event.clientY - box.top;
@@ -1073,7 +1096,11 @@ document.addEventListener('pointerdown', event => {
  const startY = event.clientY;
  let moved = false;
  let over = null;          // Ablageziel unter dem Zeiger
+ let beforeEl = null;      // Karte, vor der die gezogene landet (null = ans Ende)
  let lastEdgeScroll = 0;   // wann zuletzt am Rand zur nächsten Spalte gewischt wurde
+ const line = document.createElement('div');
+ line.className = 'treeline';
+ line.style.setProperty('--c', getComputedStyle(source).getPropertyValue('--c'));
 
  const onMove = moveEvent => {
   // Erst ab 6 px Bewegung zählt es als Ziehen (sonst ist es ein Klick)
@@ -1091,6 +1118,17 @@ document.addEventListener('pointerdown', event => {
    over?.classList.remove('over');
    over = target;
    over?.classList.add('over');
+  }
+  // Stelle in der Liste: Linie vor der Karte unter dem Zeiger bzw. hinter der letzten
+  const items = over && over.dataset.bl !== undefined ? dropItems(over, source) : [];
+  beforeEl = items.length ? itemBelow(items, source, moveEvent.clientY) : null;
+  if (items.length) {
+   const zoneBox = over.getBoundingClientRect();
+   const y = beforeEl ? beforeEl.getBoundingClientRect().top - 5 : items[items.length - 1].getBoundingClientRect().bottom + 5;
+   Object.assign(line.style, { left: zoneBox.left + 8 + 'px', width: zoneBox.width - 16 + 'px', top: y - 1 + 'px' });
+   if (!line.isConnected) document.body.append(line);
+  } else {
+   line.remove();
   }
   // Am linken/rechten Rand: zur Nachbarspalte wischen (höchstens alle 0,7 Sekunden)
   const cols = $('#cols');
@@ -1110,6 +1148,7 @@ document.addEventListener('pointerdown', event => {
  };
  const onUp = upEvent => {
   ghost.remove();
+  line.remove();
   source.classList.remove('src-drag');
   document.body.classList.remove('dnd');
   over?.classList.remove('over');
@@ -1121,8 +1160,14 @@ document.addEventListener('pointerdown', event => {
    // Auf eine Bereich-Leiste: in die erste Kategorie dieses Bereichs
    const bereich = getBereich(drop.cat);
    moveTo(id, { cat: drop.cat, area: bereich && bereich.subs.length ? bereich.subs[0].id : '' });
+  } else if (drop.bl !== undefined) {
+   // In Zeitnah oder Backlog einer Spalte: an die markierte Stelle
+   const order = dropItems(over, source).map(el => el.dataset.id);
+   const at = beforeEl ? order.indexOf(beforeEl.dataset.id) : order.length;
+   order.splice(at, 0, id);
+   dropCard(id, { cat: drop.cat, area: drop.area, bl: drop.bl === '1' }, order);
   } else {
-   moveTo(id, { cat: drop.cat, area: drop.area, bl: drop.bl === undefined ? undefined : drop.bl === '1' });
+   moveTo(id, { cat: drop.cat, area: drop.area });
   }
  };
  trackPointer(onMove, onUp);
@@ -1294,7 +1339,7 @@ document.addEventListener('pointerdown', event => {
  // Alle sichtbaren Zeilen der Karte, ohne das gezogene To-Do und seinen Unterbaum
  const rows = [card, ...card.querySelectorAll('li')]
   .filter(x => x !== li && !li.contains(x))
-  .map(x => ({ li: x, level: +x.dataset.l, row: x.querySelector(':scope > .row') }));
+  .map(x => ({ li: x, level: +x.dataset.l, row: x.querySelector(':scope > .row, :scope > .cbody') }));
  const line = document.createElement('div');
  line.className = 'treeline';
  line.style.setProperty('--c', card.style.getPropertyValue('--c'));
@@ -1780,7 +1825,7 @@ async function moveTo(id, { cat, area, bl }) {
  if (bl !== undefined && bl !== !!task.backlog) {
   if (bl) {
    const ids = await askWhatGoesToBacklog(task);
-   if (!ids) { state = JSON.parse(before); render(); return; } // abgebrochen: alles zurück
+   if (!ids) { state = JSON.parse(before); render(); return null; } // abgebrochen: alles zurück
    ids.forEach(otherId => {
     const other = getTask(otherId);
     other.backlog = true;
@@ -1794,11 +1839,28 @@ async function moveTo(id, { cat, area, bl }) {
    messages.push(ids.length > 1 ? `ist mit ${ids.length - 1} Vorher-To-Do${ids.length > 2 ? 's' : ''} zurück in Zeitnah` : 'ist zurück in Zeitnah');
   }
  }
- if (!messages.length) return;
+ if (!messages.length) return false;
  undoSnapshot = before;
  save();
  render();
  toast(`„${esc(task.t)}“ ${messages.join(' und ')}.`, true);
+ return true;
+}
+// Karte wurde abgelegt: an den neuen Ort (moveTo) und, falls order angegeben ist, in diese Reihenfolge.
+// order = IDs der Karten in der Ablagefläche von oben nach unten (mit der gezogenen). Die Reihenfolge wird
+// über prio gespeichert (höher = weiter oben), so wie überall sonst sortiert wird.
+async function dropCard(id, place, order) {
+ const before = snapshot();
+ // Liegt es schon hier (auch geerbt vom Ziel), bleibt der Ort, wie er ist – nur Zeitnah/Backlog und Reihenfolge zählen
+ if (isIn(getTask(id), place.cat, place.area)) place = { bl: place.bl };
+ const moved = await moveTo(id, place);
+ if (moved === null) return;
+ if (order) order.forEach((otherId, i) => { if (getTask(otherId)) getTask(otherId).prio = order.length - i; });
+ if (snapshot() === before) return;
+ undoSnapshot = before;
+ save();
+ render();
+ if (!moved) toast('Reihenfolge geändert.', true);
 }
 // Fragt, was mit ins Backlog kommt. Gibt die IDs zurück, oder null bei „Abbrechen“.
 async function askWhatGoesToBacklog(task) {
