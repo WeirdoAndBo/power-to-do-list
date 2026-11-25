@@ -24,7 +24,7 @@
 const KEY='powerliste-b-v1';
 // Versionen: APP_VERSION = Stand der App (siehe auch sw.js), FORMAT = Version des gespeicherten Datenformats.
 // FORMAT nur erhöhen, wenn sich die Datenstruktur ändert, und dann in migrate() nachziehen.
-const APP_VERSION='1.0.0';
+const APP_VERSION='1.0.1';
 const FORMAT=1;
 const FILE_APP='power-liste';
 // Farben, die beim Anlegen eines Bereichs zur Auswahl stehen.
@@ -63,30 +63,13 @@ function seed(){
 // cat/area (eigener Bereich/eigene Kategorie, sonst geerbt), prio (höher = weiter oben), created,
 // optional: today, todayBy (wer es nach „Heute“ mitgenommen hat), todayOrder (Reihenfolge in Heute), backlog
  const t=(id,title,o={})=>({id,t:title,needs:[],soft:[],done:false,goal:false,cat:null,prio:0,created:now,doneAt:null,...o});
+ // Startzustand: nur je eine Beispielkarte in der ersten Kategorie jedes Bereichs.
  const L=[
-  t('g1','Stellen anschreiben für Kundenakquise',{goal:true,cat:'arbeit',area:'akq',needs:['a','b']}),
-  t('a','Liste an Stellen anlegen',{needs:['c','desk']}),
-  t('c','Ort festlegen, wo die Liste entsteht',{today:true}),
-  t('b','Text überlegen',{soft:['ex']}),
-  t('ex','Zwei Beispiel-Anschreiben ansehen'),
-  t('g2','Newsletter starten',{goal:true,cat:'arbeit',area:'akq',needs:['n1'],backlog:true}),
-  t('n1','Thema der ersten Ausgabe festlegen',{backlog:true}),
-  t('g5','Rechnungen für November schreiben',{goal:true,cat:'arbeit',area:'fin',needs:['r1']}),
-  t('r1','Stunden aus dem Kalender zusammenzählen'),
-  t('g6','Steuerunterlagen 2025 sortieren',{goal:true,cat:'arbeit',area:'fin',backlog:true}),
-  t('g8','Mails auf null bringen',{goal:true,cat:'arbeit',area:'orga'}),
-  t('g7','Ablagesystem für Projekte überlegen',{goal:true,cat:'arbeit',area:'orga',backlog:true}),
-  t('desk','Schreibtisch freiräumen'),
-  t('g3','Keller entrümpeln',{goal:true,cat:'privat',area:'haus',needs:['k1','k2']}),
-  t('k1','Sperrmüll-Termin holen',{today:true}),t('k2','Kisten besorgen',{done:true,doneAt:now-864e5}),
-  t('g9','Zahnarzttermin ausmachen',{goal:true,cat:'privat',area:'ges'}),
-  t('g10','Neue Laufschuhe aussuchen',{goal:true,cat:'privat',area:'ges',backlog:true}),
-  t('g4','Ein Bild malen',{goal:true,cat:'hobby',needs:['desk','f1']}),
-  t('f1','Farben besorgen'),
-  t('g11','Gitarre wieder stimmen',{goal:true,cat:'hobby',backlog:true})];
+  t('bsp1','Beispiel To-Do',{goal:true,cat:'arbeit',area:'verw'}),
+  t('bsp2','Beispiel To-Do',{goal:true,cat:'privat',area:'hobso'})];
  const tasks={};L.forEach(x=>tasks[x.id]=x);
  let anim=true;try{anim=!matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){}
- return{name:'Meine Power-Liste',tasks,cats:[{id:'arbeit',name:'Arbeit',color:'#5b8def',subs:[{id:'akq',name:'Akquise'},{id:'fin',name:'Finanzen'},{id:'orga',name:'Orga'}]},{id:'privat',name:'Privat',color:'#e0a03a',subs:[{id:'haus',name:'Haushalt'},{id:'ges',name:'Gesundheit'}]},{id:'hobby',name:'Hobby',color:'#9b7fd1',subs:[]}],openCat:'arbeit',view:'jetzt',inbox:[],anim,day:dayStart(),format:FORMAT};
+ return{name:'Meine Power-Liste',tasks,cats:[{id:'arbeit',name:'Arbeit',color:'#5b8def',subs:[{id:'verw',name:'Verwaltung'},{id:'akq',name:'Akquise & Marketing'},{id:'daily',name:'Daily business'}]},{id:'privat',name:'Privat',color:'#e0a03a',subs:[{id:'hobso',name:'Hobby & Sozial'},{id:'alltag',name:'Alltag & Lebensorga'},{id:'proj',name:'Projekte'}]}],openCat:'arbeit',view:'jetzt',inbox:[],anim,day:dayStart(),format:FORMAT};
 }
 // Bringt gespeicherte oder importierte Daten auf das aktuelle Format. Daten ohne Formatnummer stammen aus dem Prototyp (= Format 1).
 function migrate(o){o.inbox=o.inbox||[];o.cats.forEach(c=>c.subs=c.subs||[]);if(o.openCat===undefined)o.openCat=o.cats[0]?o.cats[0].id:null;
