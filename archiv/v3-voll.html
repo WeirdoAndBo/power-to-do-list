@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Schritt für Schritt</title>
+<meta name="theme-color" content="#24496b">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+/* VOICE: ruhig, freundlich, wenig Text, keine Alarmfarben, keine Schimpf-Texte.
+   IDEA: ein Wegweiser – jeder Schritt zeigt, auf welches Ziel und welchen Bereich er einzahlt.
+   PICTURE: die Liste selbst; Ziel oben fest angeheftet; Bereiche als ruhige Kacheln.
+   COLOUR and TYPE: weiches Weiß, tiefes Blau als Akzent, gedämpfte Status- und Bereichsfarben; Systemschrift (offline).
+   LAYOUT: Ziel-Leiste oben, drei Ansichten als Tabs, große Klickflächen, eine Spalte. */
+:root{color-scheme:light dark;
+--bg:light-dark(#f7f8f7,#161a19);--panel:light-dark(#ffffff,#1f2423);--card:light-dark(#ffffff,#222827);
+--ink:light-dark(#1d2321,#e7ebe9);--mute:light-dark(#5b6461,#a3adaa);--line:light-dark(#dfe3e1,#36403d);
+--acc:light-dark(#24496b,#9cc3e6);--accInk:light-dark(#fff,#10202e);
+--ready:light-dark(#2c7a4f,#7fcf9f);--doing:light-dark(#2d64a0,#8fb9ea);--locked:light-dark(#7b8380,#8e9895);--stale:light-dark(#a8580f,#f0a45c);
+--readyBg:light-dark(#e8f4ec,#1d3326);--doingBg:light-dark(#e7eef8,#1c2b3d);--staleBg:light-dark(#fbefe2,#3a2a19);--lockedBg:light-dark(#f0f1f1,#262b2a)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow-x:clip}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer;min-height:48px;padding:10px 16px;border-radius:12px;border:1px solid var(--line);background:var(--panel)}
+button:hover{border-color:var(--mute)}
+button.pri{background:var(--acc);color:var(--accInk);border-color:var(--acc);font-weight:600}
+button.quiet{border-color:transparent;background:transparent;color:var(--mute)}
+button.small{min-height:40px;padding:6px 12px;font-size:15px}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+input,select{min-height:48px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);width:100%;font-size:17px}
+.wrap{max-width:1100px;margin:0 auto;padding:0 max(4vw,14px)}
+/* Ziel-Leiste */
+.goalbar{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line)}
+.goalbar .wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;padding-block:14px 12px;align-items:center}
+.glabel{font-size:14px;color:var(--mute);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--gc,var(--acc));flex:none}
+.goalbar h1{grid-column:1;margin:0;font-size:clamp(20px,3.2vw,28px);line-height:1.15;text-wrap:balance}
+.gtools{grid-column:2;grid-row:1/3;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.gtools select{width:auto;max-width:230px}
+.prog{grid-column:1/-1;display:flex;gap:12px;align-items:center;font-size:14px;color:var(--mute)}
+.bar{flex:1;height:10px;border-radius:6px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ready);border-radius:6px;transition:width .6s ease}
+nav.tabs{display:flex;gap:6px;padding-block:12px}
+nav.tabs button{flex:1;font-weight:600;color:var(--mute)}
+nav.tabs button[aria-current=page]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+main{padding-bottom:80px}
+h2{font-size:22px;margin:10px 0 2px}
+h3.sec{font-size:15px;color:var(--mute);font-weight:600;margin:22px 0 8px}
+.sub{color:var(--mute);margin:0 0 14px;font-size:15px}
+/* Bereiche */
+.areas{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin:8px 0 6px}
+.atile{display:block;text-align:left;border:1px solid var(--line);border-radius:12px;padding:10px 12px 10px 18px;background:var(--card);min-height:64px;position:relative}
+.atile::before{content:'';position:absolute;left:0;top:0;bottom:0;width:7px;border-radius:12px 0 0 12px;background:var(--c)}
+.atile b{display:block;font-size:16px}.atile small{display:block;color:var(--mute);font-size:13px;line-height:1.35}
+.atile.on{border:2px solid var(--c);background:color-mix(in srgb,var(--c) 12%,var(--card))}
+.atile .tag{font-size:12px;font-weight:600}
+.fzline{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:15px;color:var(--mute)}
+.scope{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 10px}
+.scope button[aria-pressed=true],.vswitch button[aria-pressed=true]{background:var(--acc);color:var(--accInk);border-color:var(--acc)}
+/* Karten */
+.list{display:grid;gap:12px}
+.card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px 14px 24px;transition:opacity .3s}
+.card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:9px;border-radius:14px 0 0 14px;background:var(--cat,var(--line))}
+.card h3{margin:6px 0 4px;font-size:19px;line-height:1.3}
+.card.big{padding:18px 20px 18px 28px}.card.big h3{font-size:23px}
+.card.calm{opacity:.78}.card.calm h3{font-size:17px}
+.row1{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip{display:inline-flex;gap:6px;align-items:center;font-size:14px;font-weight:600;padding:3px 10px 3px 8px;border-radius:20px}
+.chip svg{width:16px;height:16px}
+.tagp{font-size:13px;color:var(--mute);border:1px solid var(--line);border-radius:20px;padding:2px 9px}
+.area{display:inline-flex;gap:5px;align-items:center;font-size:13px;color:var(--mute)}.area i{width:10px;height:10px;border-radius:50%;background:var(--c)}
+.s-ready .chip{color:var(--ready);background:var(--readyBg)}
+.s-doing .chip{color:var(--doing);background:var(--doingBg)}.s-doing{box-shadow:inset 0 0 0 2px var(--doing)}
+.s-stale .chip{color:var(--stale);background:var(--staleBg)}.s-stale{box-shadow:inset 0 0 0 2px var(--stale)}
+.s-locked{opacity:.62;border-style:dashed;background:var(--lockedBg)}.s-locked .chip{color:var(--locked)}
+.s-done{opacity:.6}.s-done h3{text-decoration:line-through}.s-done .chip{color:var(--mute)}
+.pays{margin:2px 0;font-size:14px;color:var(--mute)}.pays b{color:var(--ink);font-weight:600}
+.multi{margin:6px 0 0;font-size:14px;padding:6px 10px;border-radius:8px;background:var(--doingBg)}
+.wait{margin:2px 0;font-size:14px;color:var(--mute)}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.empty{padding:28px;text-align:center;border:2px dashed var(--line);border-radius:14px;color:var(--mute)}
+.add{width:100%;margin-top:12px;border-style:dashed;color:var(--mute)}
+.ktag{font-size:12px;border:1px dashed var(--mute);border-radius:20px;padding:1px 8px;color:var(--mute);white-space:nowrap}
+/* Baum */
+.vswitch{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0 14px}
+.vswitch button{min-height:40px;padding:6px 14px}
+.vswitch label{margin-left:auto;display:flex;gap:8px;align-items:center;font-size:15px;color:var(--mute)}
+.vswitch select{width:auto;min-height:40px}
+.stufen{display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;align-items:flex-start}
+.col{flex:1 0 270px;display:grid;gap:10px}
+.col>header{font-size:14px;font-weight:600;color:var(--mute);display:flex;justify-content:space-between;align-items:center;min-height:40px}
+.col>header button{min-height:36px;padding:4px 10px;font-size:14px}
+.col.folded{flex:0 0 150px}
+.colfold{min-height:140px;border-style:dashed;color:var(--mute);text-align:center;width:100%}
+.colfold b{display:block;font-size:26px;color:var(--ink)}
+.col.goalcol .card{border-width:2px}
+.arrow{flex:0 0 auto;align-self:center;color:var(--mute);font-size:22px}
+.tree,.tree ul{list-style:none;margin:0;padding:0}
+.tree ul{margin:8px 0 0 18px;padding-left:16px;border-left:2px dotted var(--line);display:grid;gap:8px}
+.tree>li{margin-bottom:12px}
+.fold{min-height:40px;margin-top:8px;padding:6px 12px;font-size:15px;color:var(--mute);background:transparent}
+details.donebox{margin-top:22px}details.donebox summary{cursor:pointer;color:var(--mute);min-height:44px;display:flex;align-items:center}
+details.donebox .list{margin-top:8px}
+/* Fokus */
+.focus{max-width:680px;margin:0 auto}
+.focus h3.q{font-size:18px;margin:24px 0 8px}
+.checkin{margin-top:14px;padding:16px;border-radius:14px;background:var(--doingBg);border:1px solid var(--doing)}
+.checkin p{margin:4px 0 10px}
+.mini{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:8px}
+.mini.s-done>span:first-child{text-decoration:line-through;color:var(--mute)}
+.mini .chip{flex:none}
+/* Art der Verknüpfung */
+.kinds{border:0;padding:0;margin:14px 0 0}
+.kinds legend{font-size:15px;color:var(--mute);margin-bottom:6px;padding:0}
+.kind{display:flex;gap:10px;align-items:center;padding:8px 12px;border:1px solid var(--line);border-radius:12px;margin-bottom:6px;cursor:pointer;min-height:48px;background:var(--panel)}
+.kind:has(input:checked){border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+.kind input{width:20px;min-height:20px;margin:0;flex:none}
+.kind b{display:block;font-size:16px}.kind small{display:block;font-size:13px;color:var(--mute)}
+/* Dialog, Toast */
+#modal{position:fixed;inset:0;z-index:20;background:rgb(0 0 0/.35);display:grid;place-items:center;padding:16px}
+#modal[hidden]{display:none}
+.box{background:var(--panel);border-radius:18px;padding:22px;width:min(560px,100%);max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgb(0 0 0/.25)}
+.box h2{margin:0 0 8px;font-size:21px;line-height:1.3}
+.box p{margin:6px 0}
+.box input,.box select{margin-top:6px}
+.lbl{display:block;margin-top:14px;font-size:15px;color:var(--mute)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:18px}
+.links{margin-top:18px;padding-top:12px;border-top:1px solid var(--line)}
+.links h3{font-size:15px;margin:12px 0 6px}
+.lrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 4px 6px 10px;border-radius:10px;background:var(--bg);margin-bottom:6px}
+.lrow>span:first-child{flex:1 1 160px}
+.arow{display:grid;grid-template-columns:minmax(0,1fr) 130px auto;gap:8px;align-items:center;margin-top:8px}
+.arow input,.arow select{margin:0}
+.opt{display:flex;gap:10px;align-items:center;margin-top:12px;min-height:44px}
+.opt input{width:22px;min-height:22px;margin:0}
+.reward{display:flex;gap:14px;align-items:center;padding:12px;border-radius:12px;background:var(--readyBg);margin-bottom:10px}
+.reward svg{width:44px;height:44px;flex:none;color:var(--ready)}
+.reward svg path{stroke-dasharray:40;stroke-dashoffset:0;animation:draw .7s ease-out}
+@keyframes draw{from{stroke-dashoffset:40}}
+.reward .bar{margin-top:6px}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:15;background:var(--ink);color:var(--bg);padding:8px 8px 8px 18px;border-radius:14px;display:flex;gap:10px;align-items:center;width:max-content;max-width:calc(100% - 24px)}
+#toast[hidden]{display:none}#toast span{flex:1}#toast button{flex:none;background:transparent;color:inherit;border-color:rgb(127 127 127/.6);min-height:40px}
+.tlink{all:unset;cursor:pointer;border-radius:6px}.tlink:hover{text-decoration:underline;text-underline-offset:3px}.tlink:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.inboxbtn{flex:0 0 auto!important;font-weight:500!important}
+.infocus .gtools{display:none}.infocus nav.tabs{display:none}.infocus #toast{bottom:96px}
+.back{margin:14px 0 0}
+.capture{position:sticky;bottom:0;margin-top:28px;padding:12px 0 16px;background:linear-gradient(transparent,var(--bg) 18px);display:flex;gap:8px}
+.capture input{flex:1}
+.where{display:grid;gap:8px;margin-top:10px}.where button{text-align:left;display:block;width:100%}.where small{display:block;font-weight:400;color:inherit;opacity:.8;font-size:13px}
+.ibrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 6px 8px 12px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px}.ibrow>span{flex:1 1 180px}.ibrow small{display:block;color:var(--mute);font-size:13px}
+.noanim *,.noanim *::before{transition:none!important;animation:none!important}
+.hint{font-size:13px;color:var(--mute);margin-top:30px}
+@media(max-width:700px){
+ .goalbar .wrap{grid-template-columns:minmax(0,1fr)}.gtools{grid-column:1;grid-row:auto;justify-content:flex-start}
+ .stufen{flex-direction:column;overflow:visible}.col,.col.folded{flex:none;width:100%}.colfold{min-height:60px}.arrow{transform:rotate(90deg)}
+ .vswitch label{margin-left:0;width:100%}
+ nav.tabs button{padding:10px 6px}
+ .areas{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.arow{grid-template-columns:1fr 1fr}.arow label{grid-column:1/-1}
+}
+</style>
+</head>
+<body>
+<header class="goalbar"><div class="wrap" id="gb"></div></header>
+<div class="wrap">
+ <nav class="tabs" aria-label="Ansicht">
+ </nav>
+ <main id="main"></main>
+</div>
+<div id="modal" hidden></div>
+<div id="toast" role="status" hidden></div>
+<script>
+{
+const KEY='schrittweise-v2', DAY=864e5;
+const COLORS=[['#6b9a7a','Salbei'],['#5f8fbf','Himmel'],['#8a7cb8','Lavendel'],['#c2a25a','Sand'],['#b87a62','Ton'],['#4f9a9a','Petrol'],['#a57aa0','Flieder'],['#6c7a86','Schiefer']];
+const REPS=[[1,'täglich'],[2,'alle 2 Tage'],[3,'2× pro Woche'],[7,'wöchentlich'],[14,'alle 2 Wochen'],[30,'monatlich']];
+const repLabel=r=>(REPS.find(x=>x[0]==r)||[0,`alle ${r} Tage`])[1];
+const ICON={
+ ready:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/></svg>',
+ doing:'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor"/></svg>',
+ locked:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>',
+ stale:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg>',
+ done:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3 3 7-7"/></svg>',
+ rep:'<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 6a5 5 0 0 0-9.3-1.5M3 10a5 5 0 0 0 9.3 1.5M3.5 2v3h3M12.5 14v-3h-3"/></svg>'};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9);
+const sod=ts=>{const d=new Date(ts);d.setHours(0,0,0,0);return d.getTime()};
+const fold=new Map();
+let S, undoSnap=null, toastT;
+
+function seed(){
+ const now=Date.now();
+ const t=(id,title,o={})=>({id,t:title,needs:[],soft:[],done:false,doing:false,prio:0,area:null,goal:false,repeat:null,doneAt:null,startedAt:null,created:now,touched:now,...o});
+ const L=[
+  t('g1','Stellen anschreiben für Kundenakquise',{goal:true,area:'arbeit',needs:['a','b']}),
+  t('a','Liste an Stellen anlegen',{needs:['c','desk']}),
+  t('c','Ort definieren, an dem die Liste erstellt wird'),
+  t('b','Text überlegen',{soft:['ex'],created:now-9*DAY,touched:now-9*DAY,startedAt:now-9*DAY}),
+  t('ex','Zwei Beispiel-Anschreiben ansehen'),
+  t('desk','Schreibtisch freiräumen',{area:'haus'}),
+  t('g2','Newsletter starten',{goal:true,area:'arbeit',needs:['c','n1']}),
+  t('n1','Thema der ersten Ausgabe festlegen'),
+  t('g3','Wäsche waschen',{goal:true,area:'haus',repeat:3,needs:['w'],doneAt:now-2*DAY,touched:now-2*DAY}),
+  t('w','Waschmittel kaufen',{done:true,doneAt:now-2*DAY}),
+  t('g4','Malen',{goal:true,area:'hobby',repeat:3,needs:['desk'],doneAt:now-12*DAY,touched:now-12*DAY}),
+  t('g5','Geburtstagskarte schreiben',{goal:true,area:'freunde',needs:['k']}),
+  t('k','Karte besorgen'),
+  t('g6','Spazieren gehen',{goal:true,area:'basis',repeat:1,doneAt:now-DAY,touched:now-DAY})];
+ const tasks={};L.forEach(x=>tasks[x.id]=x);
+ let anim=true;try{anim=!matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){}
+ return {tasks,areas:[{id:'haus',name:'Haushalt',color:'#c2a25a'},{id:'freunde',name:'Freund*innen',color:'#b87a62'},{id:'hobby',name:'Hobbys',color:'#8a7cb8'},{id:'arbeit',name:'Arbeit',color:'#5f8fbf'},{id:'basis',name:'Grundbedürfnisse',color:'#6b9a7a'}],
+  fz:{areas:['arbeit','haus'],until:sod(now)+DAY,per:'tag'},active:'g1',view:'jetzt',prev:'jetzt',scope:'all',focus:null,inbox:[],set:{anim,variant:'stufen',depth:1,stale:5}};
+}
+function load(){try{const r=localStorage.getItem(KEY);if(r){const o=JSON.parse(r);if(o&&o.tasks&&o.areas){o.inbox=o.inbox||[];return o}}}catch(e){}return seed()}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+const snap=()=>JSON.stringify(S);
+
+/* ---------- Graph-Helfer ----------
+   needs = harte Voraussetzungen (sperren), soft = hilfreich (sperren nicht).
+   Ein Schritt kann in needs/soft mehrerer To-Dos stehen: Graph, kein reiner Baum. */
+const T=id=>S.tasks[id];
+const A=id=>S.areas.find(a=>a.id===id);
+const all=()=>Object.values(S.tasks);
+const goals=()=>all().filter(t=>t.goal);
+const softOf=t=>t.soft||(t.soft=[]);
+const nextDue=t=>sod(t.doneAt)+t.repeat*DAY;
+const isDone=t=>t.repeat?!!t.doneAt&&Date.now()<nextDue(t):t.done;
+const openNeeds=t=>t.needs.filter(n=>T(n)&&!isDone(T(n)));
+const openSoft=t=>softOf(t).filter(n=>T(n)&&!isDone(T(n)));
+const parents=id=>all().filter(p=>p.needs.includes(id));
+const parentsAll=id=>all().filter(p=>p.needs.includes(id)||softOf(p).includes(id));
+const isSoft=(p,id)=>softOf(p).includes(id);
+function goalsOf(id){const out=[],seen=new Set,st=[id];while(st.length){const x=st.pop();if(seen.has(x)||!T(x))continue;seen.add(x);if(T(x).goal&&x!==id)out.push(T(x));parentsAll(x).forEach(p=>st.push(p.id))}return out}
+function sub(gid){const seen=new Set,st=[gid];while(st.length){const x=st.pop();if(seen.has(x)||!T(x))continue;seen.add(x);T(x).needs.forEach(n=>st.push(n));softOf(T(x)).forEach(n=>st.push(n))}return seen}
+function areasOf(t){const s=new Set;if(t.area)s.add(t.area);goalsOf(t.id).forEach(g=>{if(g.area)s.add(g.area)});return[...s].map(A).filter(Boolean)}
+function stripe(as){if(!as.length)return'var(--line)';if(as.length===1)return as[0].color;const n=as.length;return`linear-gradient(${as.map((a,i)=>`${a.color} ${i*100/n}% ${(i+1)*100/n}%`).join(',')})`}
+function status(t){if(isDone(t))return'done';if(openNeeds(t).length)return'locked';if(t.doing)return'doing';if(!t.repeat&&Date.now()-t.touched>S.set.stale*DAY)return'stale';return'ready'}
+const dayDiff=ts=>Math.round((sod(Date.now())-sod(ts))/DAY);
+const ago=ts=>{const d=dayDiff(ts);return d<=0?'heute':d===1?'gestern':`vor ${d} Tagen`};
+const LABEL={ready:t=>t.repeat?'Wieder dran':'Bereit',doing:()=>'In Arbeit',locked:()=>'Gesperrt',
+ done:t=>{if(!t.repeat)return'Erledigt';const d=Math.round((nextDue(t)-sod(Date.now()))/DAY);return`Erledigt · wieder ${d<=1?'morgen':'in '+d+' Tagen'}`},
+ stale:t=>`Liegt seit ${dayDiff(t.touched)} Tagen`};
+function progress(gid){const ids=sub(gid);let d=0;ids.forEach(i=>{if(isDone(T(i)))d++});return{d,n:ids.size,p:ids.size?Math.round(d/ids.size*100):0}}
+function levels(ids){const m=new Map;const f=id=>{if(m.has(id))return m.get(id);m.set(id,0);const on=openNeeds(T(id)).filter(n=>ids.has(n));const v=on.length?1+Math.max(...on.map(f)):0;m.set(id,v);return v};ids.forEach(f);return m}
+function mk(title,o={}){const now=Date.now();const t={id:uid(),t:title,needs:[],soft:[],done:false,doing:false,prio:0,area:null,goal:false,repeat:null,doneAt:null,startedAt:null,created:now,touched:now,...o};S.tasks[t.id]=t;return t}
+const fzAreas=()=>S.fz&&S.fz.until>Date.now()?S.fz.areas:[];
+const inFz=t=>{const f=fzAreas();return!f.length||areasOf(t).some(a=>f.includes(a.id))};
+const byPrio=(a,b)=>b.prio-a.prio||(b.doing-a.doing)||a.created-b.created;
+function scopeIds(){return S.scope==='goal'&&T(S.active)?sub(S.active):new Set(Object.keys(S.tasks))}
+const nowList=ids=>[...ids].map(T).filter(t=>!isDone(t)&&!openNeeds(t).length).sort(byPrio);
+function lastAct(aid){let m=0;all().forEach(t=>{if((t.doneAt||t.startedAt)&&areasOf(t).some(a=>a.id===aid))m=Math.max(m,t.doneAt||0,t.startedAt||0)});return m}
+const label=t=>{const as=areasOf(t);return(as.length?as.map(a=>a.name).join(', ')+' · ':'')+t.t};
+
+/* ---------- Bausteine ---------- */
+function card(t,o={}){
+ const st=status(t),as=areasOf(t),gs=goalsOf(t.id);
+ const waits=st==='locked'?openNeeds(t).map(n=>T(n).t):[];
+ const helpsBefore=st!=='done'?openSoft(t).map(n=>T(n).t):[];
+ const helpsFor=st!=='done'?parentsAll(t.id).filter(p=>isSoft(p,t.id)&&!isDone(p)):[];
+ const cls=[`s-${st}`,t.prio>0&&st!=='done'?'big':'',o.calm?'calm':''].join(' ');
+ return `<article class="card ${cls}" style="--cat:${stripe(as)}">
+ <div class="row1"><span class="chip">${ICON[st]}${LABEL[st](t)}</span>${t.prio>0&&st!=='done'?'<span class="tagp">Zuerst</span>':''}${t.goal?`<span class="tagp">${t.repeat?'Routine':'Ziel'}</span>`:''}${t.repeat?`<span class="area">${ICON.rep}${repLabel(t.repeat)}</span>`:''}${as.map(a=>`<span class="area" style="--c:${a.color}"><i></i>${esc(a.name)}</span>`).join('')}</div>
+ <h3>${o.inFocus?esc(t.t):`<button class="tlink" data-act="focus" data-id="${t.id}" title="Im Fokus öffnen">${esc(t.t)}</button>`}</h3>
+ ${gs.length?`<p class="pays">Zahlt ein auf: <b>${gs.map(g=>esc(g.t)).join('</b> und <b>')}</b></p>`:''}
+ ${gs.length>1&&st!=='done'?`<p class="multi">Dient ${gs.length} Zielen. Denk bei der Entscheidung alle mit.</p>`:''}
+ ${waits.length?`<p class="wait">Geht erst nach: ${waits.map(esc).join(', ')}</p>`:''}
+ ${helpsBefore.length?`<p class="wait">Würde helfen, sperrt aber nicht: ${helpsBefore.map(esc).join(', ')}</p>`:''}
+ ${helpsFor.length?`<p class="wait">Hilft bei: ${helpsFor.map(p=>esc(p.t)).join(', ')}</p>`:''}
+ ${o.noActs?'':acts(t,st,o)}
+ </article>`}
+function acts(t,st,o){
+ const b=(a,l,c='')=>`<button class="${c}" data-act="${a}" data-id="${t.id}">${l}</button>`;
+ const ed=b('edit','Bearbeiten','quiet'),fo='';
+ if(st==='done')return`<div class="acts">${b('reopen','Abhaken rückgängig')}${ed}</div>`;
+ if(st==='locked')return`<div class="acts">${b('addneed','+ Voraussetzung')}${fo}${ed}</div>`;
+ return`<div class="acts">${b('done','Erledigt','pri')}${t.doing?'':b('start','Anfangen')}${b('block',st==='stale'?'Was blockiert dich?':'Blockiert mich')}${fo}${ed}</div>`}
+
+function goalBar(){
+ const g=T(S.active),gl=goals();
+ if(!g){$('#gb').innerHTML=`<div class="glabel">Noch kein Ziel</div><div class="gtools"><button class="pri" data-act="newgoal">+ Neues Ziel</button></div>`;return}
+ const p=progress(g.id),a=A(g.area);
+ $('#gb').innerHTML=`<div class="glabel" style="--gc:${a?a.color:'var(--acc)'}"><span class="dot"></span>${g.repeat?'Deine Routine':'Dein Ziel – dafür machst du das'}${a?' · '+esc(a.name):''}</div>
+ <h1>${esc(g.t)}${isDone(g)&&!g.repeat?' ✓':''}</h1>
+ <div class="gtools">${gl.length>1?`<select id="gsel" aria-label="Ziel wechseln">${gl.map(x=>`<option value="${x.id}"${x.id===g.id?' selected':''}>${esc(x.t)}${!x.repeat&&isDone(x)?' (erreicht)':''}</option>`).join('')}</select>`:''}
+ <button data-act="newgoal">+ Ziel</button><button data-act="settings">Einstellungen</button></div>
+ ${g.repeat?`<div class="prog">${ICON.rep}<span>Routine · ${repLabel(g.repeat)} · zuletzt ${g.doneAt?ago(g.doneAt):'noch nie'}</span></div>`
+ :`<div class="prog"><div class="bar" role="progressbar" aria-valuenow="${p.p}" aria-valuemin="0" aria-valuemax="100" aria-label="Fortschritt"><i style="width:${p.p}%"></i></div><span>${p.d} von ${p.n} Schritten</span></div>`}`}
+
+/* ---------- Ansichten ---------- */
+function areaTiles(){
+ const f=fzAreas();
+ return `<div class="fzline"><span>${f.length?`Dein Fokus ${S.fz.per==='woche'?'diese Woche':'heute'}: <b style="color:var(--ink)">${f.map(i=>esc(A(i)?.name)).join(' und ')}</b>`:'Kein Fokus gewählt. Alles ist gleich wichtig.'}</span><button class="small" data-act="fzpick">Fokus wählen</button></div>
+ <div class="areas">${S.areas.map(a=>{const l=lastAct(a.id),d=l?dayDiff(l):null,on=f.includes(a.id);
+  return`<button class="atile${on?' on':''}" style="--c:${a.color}" data-act="fztoggle" data-id="${a.id}" aria-pressed="${on}"><b>${esc(a.name)}</b><small>${l?'zuletzt etwas getan '+ago(l):'noch nichts erledigt'}</small>${d!==null&&d>7&&!on?'<small>Lange her. Magst du heute etwas Kleines machen?</small>':''}${on?'<span class="tag">Im Fokus</span>':''}</button>`}).join('')}</div>`}
+function vJetzt(){
+ const ids=scopeIds(),L=nowList(ids),f=fzAreas();
+ const mine=L.filter(inFz),rest=f.length?L.filter(t=>!inFz(t)):[];
+ const dn=[...ids].map(T).filter(isDone).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
+ const g=T(S.active);
+ return `<h2>Jetzt dran</h2>${areaTiles()}
+ <div class="scope" role="group" aria-label="Was zeigen"><button class="small" data-act="scope" data-v="all" aria-pressed="${S.scope!=='goal'}">Alle Ziele</button>${g?`<button class="small" data-act="scope" data-v="goal" aria-pressed="${S.scope==='goal'}">Nur: ${esc(g.t)}</button>`:''}</div>
+ <p class="sub">Nur Schritte, die gerade nichts sperrt. Tippe auf einen, um ihn im Fokus zu öffnen.${f.length?' Dein Fokus steht oben.':''}</p>
+ <div class="list">${mine.length?mine.map(t=>card(t)).join(''):`<div class="empty">${f.length?'Im Fokus ist gerade nichts offen.':'Alles erledigt. Schön.'}</div>`}</div>
+ ${rest.length?`<h3 class="sec">Andere Bereiche – ganz ohne Druck</h3><div class="list">${rest.map(t=>card(t,{calm:true})).join('')}</div>`:''}
+ ${g?`<button class="add" data-act="addneed" data-id="${g.id}">+ Was musst du noch tun für „${esc(g.t)}“?</button>`:''}
+ ${dn.length?`<details class="donebox"><summary>Erledigt (${dn.length}) – hier kannst du Abhaken rückgängig machen</summary><div class="list">${dn.map(t=>card(t)).join('')}</div></details>`:''}`}
+
+function vBaum(){
+ const g=T(S.active),ids=sub(g.id),v=S.set.variant;
+ const dn=[...ids].map(T).filter(t=>isDone(t)&&t.id!==g.id);
+ return `<h2>Übersicht</h2><p class="sub">Tippe auf ein To-Do, um es im Fokus zu öffnen. Was zuerst passieren muss, steht vorne. Das Ziel kommt am Ende. Was nur „hilft“, sperrt nichts.</p>
+ <div class="vswitch" role="group" aria-label="Darstellung">
+  <button data-act="variant" data-v="stufen" aria-pressed="${v==='stufen'}">A · Stufen</button>
+  <button data-act="variant" data-v="gliederung" aria-pressed="${v==='gliederung'}">B · Gliederung</button>
+  <label>Ausgeklappt <select id="depth">${[[1,'nur erste Schritte'],[2,'2 Ebenen'],[3,'3 Ebenen'],[99,'alles']].map(([n,l])=>`<option value="${n}"${S.set.depth==n?' selected':''}>${l}</option>`).join('')}</select></label>
+ </div>
+ ${v==='stufen'?vStufen(g,ids):vGliederung(g,ids)}
+ ${dn.length?`<details class="donebox"><summary>Erledigt (${dn.length})</summary><div class="list">${dn.map(t=>card(t)).join('')}</div></details>`:''}`}
+
+function isOpen(key,lvl){return fold.has(key)?fold.get(key):lvl<S.set.depth}
+function vStufen(g,ids){
+ const lv=levels(ids),open=[...ids].filter(i=>!isDone(T(i))&&i!==g.id);
+ const max=open.length?Math.max(...open.map(i=>lv.get(i))):-1;
+ const cols=[];
+ for(let k=0;k<=max;k++){
+  const items=open.filter(i=>lv.get(i)===k).map(T).sort(byPrio),key='s'+k,o=isOpen(key,k);
+  const head=k===0?'Zuerst – jetzt möglich':`Danach · Stufe ${k+1}`;
+  cols.push(o?`<section class="col"><header>${head}${k?`<button class="quiet" data-act="tog" data-k="${key}" data-l="${k}">Einklappen</button>`:''}</header>${items.map(t=>card(t)).join('')}</section>`
+   :`<section class="col folded"><header>${head}</header><button class="colfold" data-act="tog" data-k="${key}" data-l="${k}" aria-expanded="false"><b>${items.length}</b>${items.length===1?'Schritt':'Schritte'} danach<br>ausklappen</button></section>`)}
+ cols.push(`<section class="col goalcol"><header>${g.repeat?'Routine':'Ziel'}</header>${card(g)}</section>`);
+ return `<div class="stufen">${cols.join('<span class="arrow" aria-hidden="true">→</span>')}</div>`}
+
+function vGliederung(g,ids){
+ const tops=[...ids].map(T).filter(t=>!isDone(t)&&!openNeeds(t).length&&t.id!==g.id).sort(byPrio);
+ const node=(t,lvl,path)=>{
+  const ps=parentsAll(t.id).filter(p=>ids.has(p.id)&&!isDone(p)),key=path+'/'+t.id,o=isOpen(key,lvl);
+  const nm=p=>esc(p.t)+(isSoft(p,t.id)?' (hilft nur)':'');
+  const lab=ps.length===1?`Danach: ${nm(ps[0])}`:`Danach: ${ps.length} Schritte`;
+  return `<li>${card(t)}${ps.length?`<button class="fold" data-act="tog" data-k="${esc(key)}" data-l="${lvl}" aria-expanded="${o}">${o?'▾ Einklappen':'▸ '+lab}</button>${o?`<ul>${ps.map(p=>node(p,lvl+1,key)).join('')}</ul>`:''}`:''}</li>`};
+ if(!tops.length)return `<ul class="tree"><li>${card(g)}</li></ul>`;
+ return `<ul class="tree">${tops.map(t=>node(t,1,'')).join('')}</ul>`}
+
+const kindRadios=(name,def='hard',neu=true)=>`<fieldset class="kinds"><legend>Geht es ohne das nicht, hilft es nur${neu?', oder ist es dir gerade eingefallen':''}?</legend>${[['hard','Geht ohne das nicht','Sperrt, bis es erledigt ist'],['help','Hilft nur','Wäre gut vorher, sperrt aber nicht'],...(neu?[['neu','Ist mir gerade eingefallen','Wird ein eigenes To-Do fürs Ziel, ohne zu sperren']]:[])].map(([v,l,s])=>`<label class="kind"><input type="radio" name="${name}" value="${v}"${v===def?' checked':''}><span><b>${l}</b><small>${s}</small></span></label>`).join('')}</fieldset>`;
+
+function vFokus(){
+ const g=T(S.active);let id=S.focus;
+ if(!T(id)){const L=nowList(sub(g.id));id=(L[0]||g).id}
+ S.focus=id;const t=T(id),st=status(t);
+ const needs=[...t.needs.map(n=>[T(n),0]),...softOf(t).map(n=>[T(n),1])].filter(x=>x[0]);
+ const ps=parentsAll(id).filter(p=>!isDone(p));
+ const mini=(n,soft)=>{const s=status(n);return`<div class="mini s-${s}"><span>${esc(n.t)} ${soft?'<span class="ktag">hilft nur</span>':''}</span><span class="row1"><span class="chip">${ICON[s]}${LABEL[s](n)}</span>${s==='ready'||s==='stale'||s==='doing'?`<button class="small" data-act="done" data-id="${n.id}">Erledigt</button>`:''}${s==='done'?`<button class="small quiet" data-act="reopen" data-id="${n.id}">Rückgängig</button>`:`<button class="small quiet" data-act="focus" data-id="${n.id}">Fokus</button>`}</span></div>`};
+ return `<div class="focus"><button class="quiet back" data-act="back">← Zurück</button><h2>Fokus</h2><p class="sub">Ein Schritt. Nur das hier.</p>
+ ${card(t,{inFocus:true})}
+ ${st==='doing'&&!t.checked?`<div class="checkin" role="region" aria-label="Nachfrage"><b>Du hast angefangen.</b><p>Merkst du gerade, dass vorher noch etwas passieren muss? Etwas, das du noch nicht gemacht oder überlegt hast?</p>
+  <input id="ci" placeholder="z. B. Erst klären, wer zuständig ist" autocomplete="off" aria-label="Was ist aufgetaucht?">
+  ${kindRadios('ck')}
+  <div class="acts"><button class="pri" data-act="ciadd" data-id="${t.id}">Hinzufügen</button><button data-act="block" data-id="${t.id}">Vorhandenes To-Do wählen</button><button class="quiet" data-act="ciok" data-id="${t.id}">Nein, läuft</button></div></div>`:''}
+ <h3 class="q">Was musst du vorher tun?</h3>
+ ${needs.length?needs.map(([n,s])=>mini(n,s)).join(''):'<p class="sub">Nichts. Dieser Schritt ist frei.</p>'}
+ <button class="add" data-act="addneed" data-id="${t.id}">+ Voraussetzung hinzufügen</button>
+ <form class="capture" id="capf" autocomplete="off"><input id="cap" placeholder="Fällt mir gerade ein …" aria-label="Fällt mir gerade ein"><button class="pri">Notieren</button></form></div>`}
+
+function render(){
+ document.body.classList.toggle('noanim',!S.set.anim);
+ if(S.active&&!T(S.active))S.active=goals()[0]?.id||null;
+ goalBar();
+ document.body.classList.toggle('infocus',S.view==='fokus');
+ const ib=S.inbox.length;
+ $('nav.tabs').innerHTML=`<button data-view="jetzt">Jetzt dran</button><button data-view="baum">Übersicht</button>${ib?`<button class="inboxbtn" data-act="inbox">Eingangskorb · ${ib}</button>`:''}`;
+ document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-current',b.dataset.view===S.view?'page':'false'));
+ if(!S.active){$('#main').innerHTML=`<div class="empty"><p>Noch kein Ziel.</p><button class="pri" data-act="newgoal">Erstes Ziel anlegen</button></div>`;return}
+ $('#main').innerHTML=(S.view==='baum'?vBaum():S.view==='fokus'?vFokus():vJetzt())+(S.view==='fokus'?'':`<p class="hint">Alles bleibt nur in diesem Browser. Kein Konto, kein Tracking. Beispielinhalte sind vorbefüllt.</p>`);
+ const d=$('#depth');if(d)d.onchange=()=>{S.set.depth=+d.value;fold.clear();save();render()};
+ const gs=$('#gsel');if(gs)gs.onchange=()=>{S.active=gs.value;S.focus=null;save();render()};
+}
+
+/* ---------- Dialog & Toast ---------- */
+function modal({title,text='',body='',input=null,ph='',buttons}){
+ return new Promise(res=>{
+  const m=$('#modal'),prev=document.activeElement;
+  m.innerHTML=`<div class="box" role="dialog" aria-modal="true" aria-labelledby="mt"><h2 id="mt">${title}</h2>${text?`<p>${text}</p>`:''}${input!==null?`<input id="mi" name="text" autocomplete="off" aria-label="Text" placeholder="${esc(ph)}" value="${esc(input)}">`:''}${body}<div class="btns">${buttons.map((b,i)=>`<button data-i="${i}" class="${b.cls||''}">${b.label}</button>`).join('')}</div></div>`;
+  m.hidden=false;(m.querySelector('#mi')||m.querySelector('button.pri')||m.querySelector('button')).focus();
+  const close=v=>{const vals={};m.querySelectorAll('[name]').forEach(el=>{if(el.type==='radio'){if(el.checked)vals[el.name]=el.value}else if(el.type==='checkbox')vals[el.name]=el.checked;else vals[el.name]=el.value.trim()});
+   m.hidden=true;m.innerHTML='';m.onclick=null;document.removeEventListener('keydown',kd);prev&&prev.focus&&prev.focus();res({v,vals,text:vals.text||''})};
+  const kd=e=>{if(e.key==='Escape')close(null);if(e.key==='Enter'&&e.target.id==='mi'){const i=buttons.findIndex(b=>(b.cls||'').includes('pri'));if(i>=0)close(buttons[i].value)}};
+  document.addEventListener('keydown',kd);
+  m.onclick=e=>{const r=e.target.closest('[data-ret]');if(r)return close(r.dataset.ret);const b=e.target.closest('button[data-i]');if(b)close(buttons[+b.dataset.i].value);else if(e.target===m)close(null)};
+ })}
+function toast(msg,undo){
+ const t=$('#toast');clearTimeout(toastT);
+ t.innerHTML=`<span>${msg}</span>${undo?'<button id="undo">Rückgängig</button>':''}`;t.hidden=false;
+ if(undo)$('#undo').onclick=()=>{S=JSON.parse(undoSnap);save();render();t.hidden=true};
+ toastT=setTimeout(()=>t.hidden=true,7000)}
+const areaSel=(cur,none='Wie das Ziel')=>`<select name="area"><option value="">${none}</option>${S.areas.map(a=>`<option value="${a.id}"${cur===a.id?' selected':''}>${esc(a.name)}</option>`).join('')}</select>`;
+const repSel=cur=>`<select name="rep"><option value="">Einmalig (Projekt)</option>${REPS.map(([n,l])=>`<option value="${n}"${cur==n?' selected':''}>Routine · ${l}</option>`).join('')}</select>`;
+const colorSel=(name,cur)=>`<select name="${name}" aria-label="Farbe">${COLORS.map(([c,n])=>`<option value="${c}"${cur===c?' selected':''}>${n}</option>`).join('')}</select>`;
+const rewardHtml=g=>{if(!g)return'';const p=progress(g.id);return`<div class="reward"><svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="3"><circle cx="22" cy="22" r="19" stroke-opacity=".3"/><path d="M13 23l6 6 12-13" stroke-linecap="round" stroke-linejoin="round"/></svg><div style="flex:1"><b>Ein Schritt näher.</b><div class="sub" style="margin:0">${esc(g.t)}${g.repeat?'':`: ${p.d} von ${p.n}`}</div>${g.repeat?'':`<div class="bar"><i style="width:${p.p}%"></i></div>`}</div></div>`};
+
+/* ---------- Abläufe ---------- */
+// darf x vor pid kommen? (kein Kreis, noch nicht verknüpft)
+const canPrecede=pid=>{const p=T(pid);return all().filter(x=>!isDone(x)&&x.id!==pid&&!sub(x.id).has(pid)&&!p.needs.includes(x.id)&&!softOf(p).includes(x.id))};
+// darf id zusätzlich vor x kommen?
+const canFollow=id=>all().filter(x=>x.id!==id&&!sub(id).has(x.id)&&!x.needs.includes(id)&&!softOf(x).includes(id));
+const optList=L=>L.map(o=>`<option value="${o.id}">${o.goal?(o.repeat?'Routine: ':'Ziel: '):''}${esc(label(o))}</option>`).join('');
+// verknüpft n mit p je nach Art; gibt Hinweistext zurück
+function attach(p,n,kind,boost){
+ if(kind==='neu'){const g=p.goal?p:(goalsOf(p.id)[0]||p);if(!g.needs.includes(n.id))g.needs.push(n.id);if(boost)n.prio=Math.max(n.prio,1);return`Eigenes To-Do für „${esc(g.t)}“. Sperrt nichts.`}
+ if(kind==='help'){softOf(p).push(n.id);return'Hilft nur – sperrt nicht.'}
+ p.needs.push(n.id);if(boost)n.prio=Math.max(n.prio,p.prio+1,1);return boost?'Kommt vorher und steht jetzt ganz oben.':'Kommt vorher.'}
+async function addNeed(pid,{title='Was musst du tun, um das bearbeiten zu können?',boost=false,startBtn=false}={}){
+ for(;;){
+  const p=T(pid),opts=canPrecede(pid);
+  const r=await modal({title,text:`Für: <b>${esc(p.t)}</b>${boost?'<br>Schreib es als kleinen Schritt auf.':''}`,input:'',ph:boost?'z. B. Ich weiß nicht, wen ich fragen soll':'z. B. Telefonnummern raussuchen',
+   body:(opts.length?`<label class="lbl">Oder ein To-Do, das schon da ist (auch aus anderen Bereichen)<select name="link"><option value="">– neues To-Do anlegen –</option>${optList(opts)}</select></label>`:'')+kindRadios('kind'),
+   buttons:[startBtn?{label:'Nichts, ich fang an',value:'start',cls:'quiet'}:{label:'Abbrechen',value:null,cls:'quiet'},...(boost?[]:[{label:'Noch einer',value:'more'}]),{label:'Hinzufügen',value:'ok',cls:'pri'}]});
+  if(r.v==='start'){startTask(pid);return}
+  if(!r.v)return;
+  const before=snap();let n;
+  if(r.vals.link)n=T(r.vals.link);else if(r.text)n=mk(r.text);else return;
+  const msg=attach(p,n,r.vals.kind||'hard',boost);
+  p.touched=Date.now();undoSnap=before;save();render();
+  if(r.v!=='more'){toast(msg,true);return}
+ }}
+const blocker=id=>addNeed(id,{title:'Was blockiert dich gerade?',boost:true,startBtn:!T(id).doing&&status(T(id))!=='locked'});
+async function newGoal(){
+ const r=await modal({title:'Neues Ziel',text:'Was willst du geschafft haben – oder regelmäßig tun?',input:'',ph:'z. B. Steuererklärung abgeben',
+  body:`<div class="grid2"><label class="lbl">Bereich${areaSel(fzAreas()[0]||'','Ohne Bereich')}</label><label class="lbl">Rhythmus${repSel('')}</label></div>`,
+  buttons:[{label:'Abbrechen',value:null,cls:'quiet'},{label:'Weiter',value:'ok',cls:'pri'}]});
+ if(r.v!=='ok'||!r.text)return;
+ undoSnap=snap();const g=mk(r.text,{goal:true,area:r.vals.area||null,repeat:r.vals.rep?+r.vals.rep:null});S.active=g.id;S.view='jetzt';S.scope='goal';save();render();
+ await addNeed(g.id);}
+function startTask(id){const t=T(id);undoSnap=snap();t.doing=true;t.checked=false;t.startedAt=Date.now();t.touched=Date.now();if(S.view!=='fokus')S.prev=S.view;S.focus=id;const g=t.goal?t:goalsOf(id)[0];if(g)S.active=g.id;S.view='fokus';save();render();scrollTo(0,0)}
+async function complete(id){
+ const t=T(id),before=snap(),g=t.goal?t:(goalsOf(id)[0]||T(S.active));
+ const freed=parents(id).filter(p=>!isDone(p)&&openNeeds(p).length===1);
+ t.prevDoneAt=t.doneAt;t.done=!t.repeat;t.doneAt=Date.now();t.doing=false;t.checked=false;t.touched=Date.now();save();render();
+ if(t.goal&&!t.repeat){await modal({title:'Ziel erreicht.',body:rewardHtml(t)+'<p>Du hast alles geschafft, was dafür nötig war.</p>',buttons:[{label:'Schön',value:'ok',cls:'pri'}]})}
+ else for(const p of freed){
+  const r=await modal({title:'Erledigt.',body:`${rewardHtml(g)}<p>Jetzt frei: <b>${esc(p.t)}</b></p><p>Kannst du es jetzt machen, oder ist inzwischen etwas Neues sichtbar geworden, das vorher passieren muss?</p>`,
+   buttons:[{label:'Später',value:'later',cls:'quiet'},{label:'Vorher kommt noch etwas',value:'more'},{label:'Ich kann es machen',value:'go',cls:'pri'}]});
+  if(r.v==='go'){startTask(p.id);break}
+  if(r.v==='more'){save();render();await addNeed(p.id,{title:'Was muss vorher noch passieren?',boost:true})}
+ }
+ undoSnap=before;save();render();
+ toast(t.repeat?`Erledigt. Wieder dran: ${repLabel(t.repeat)}.`:'Erledigt.',true)}
+function reopen(id){const t=T(id);undoSnap=snap();if(t.repeat){t.doneAt=t.prevDoneAt||null;t.prevDoneAt=null}else{t.done=false;t.doneAt=null}t.touched=Date.now();save();render();toast('Wieder offen.',true)}
+async function linkUp(id){
+ const t=T(id),opts=canFollow(id);
+ if(!opts.length){toast('Nichts Passendes zum Verknüpfen da.');return}
+ const r=await modal({title:'Worauf zahlt das noch ein?',text:`<b>${esc(t.t)}</b> wird einmal erledigt und zählt dann überall.`,body:`<label class="lbl">Kommt auch vor<select name="p">${optList(opts)}</select></label>${kindRadios('kind','hard',false)}`,buttons:[{label:'Abbrechen',value:null,cls:'quiet'},{label:'Verknüpfen',value:'ok',cls:'pri'}]});
+ if(r.v!=='ok')return;attach(T(r.vals.p),t,r.vals.kind||'hard');save();render();toast('Verknüpft.')}
+function del(id){
+ delete S.tasks[id];const strip=x=>{all().forEach(y=>{y.needs=y.needs.filter(n=>n!==x);y.soft=softOf(y).filter(n=>n!==x)})};strip(id);
+ let ch=true;while(ch){ch=false;all().forEach(x=>{if(!x.goal&&!parentsAll(x.id).length){delete S.tasks[x.id];strip(x.id);ch=true}})}
+ S.focus=null;save();render()}
+async function edit(id){
+ const before=snap();
+ for(;;){
+  const t=T(id);if(!t)return;
+  const nrows=[...t.needs.map(n=>[n,0]),...softOf(t).map(n=>[n,1])].filter(([n])=>T(n));
+  const prows=parentsAll(id).map(p=>[p.id,isSoft(p,id)?1:0]);
+  const row=([x,soft],pre)=>`<div class="lrow"><span>${esc(label(T(x)))}</span><span class="ktag">${soft?'hilft nur':'sperrt'}</span><button type="button" class="small quiet" data-ret="${pre}kind:${x}">${soft?'Ändern: sperrt':'Ändern: hilft nur'}</button><button type="button" class="small quiet" data-ret="${pre}rm:${x}">Entfernen</button></div>`;
+  const r=await modal({title:'Bearbeiten',input:t.t,body:`
+   <div class="grid2"><label class="lbl">Bereich${areaSel(t.area||'',t.goal?'Ohne Bereich':'Wie das Ziel')}</label><label class="lbl">Rhythmus${repSel(t.repeat||'')}</label></div>
+   <label class="opt"><input type="checkbox" name="prio"${t.prio>0?' checked':''}> Zuerst machen (steht oben)</label>
+   <label class="opt"><input type="checkbox" name="goal"${t.goal?' checked':''}> Ist ein eigenes Ziel</label>
+   <div class="links"><h3>Kommt vorher</h3>${nrows.map(x=>row(x,'n')).join('')||'<p class="sub">Noch nichts.</p>'}
+    <button type="button" class="small" data-ret="addexisting">+ Ein vorhandenes To-Do kommt vorher</button> <button type="button" class="small quiet" data-ret="addnew">+ Neues</button>
+    <h3>Zahlt ein auf</h3>${prows.map(x=>row(x,'p')).join('')||'<p class="sub">Nichts – das ist ein eigenes Ziel.</p>'}
+    <button type="button" class="small" data-ret="linkup">+ Zahlt noch auf ein weiteres Ziel ein</button></div>`,
+   buttons:[{label:'Löschen',value:'del',cls:'quiet'},{label:'Abbrechen',value:'cancel',cls:'quiet'},{label:'Speichern',value:'save',cls:'pri'}]});
+  if(r.v===null||r.v==='cancel'){S=JSON.parse(before);save();render();return}
+  if(r.text)t.t=r.text;t.area=r.vals.area||null;t.repeat=r.vals.rep?+r.vals.rep:null;t.prio=r.vals.prio?Math.max(1,t.prio):0;
+  if(!r.vals.goal&&t.goal&&!parentsAll(id).length)toast('Ohne übergeordnetes To-Do bleibt es ein Ziel.');else t.goal=!!r.vals.goal;
+  t.touched=Date.now();
+  const [act,x]=r.v.split(':');
+  if(act==='save'){save();render();undoSnap=before;toast('Gespeichert.',true);return}
+  if(act==='del'){const c=await modal({title:'Wirklich löschen?',text:`<b>${esc(t.t)}</b> und Schritte, die nur dafür da waren.`,buttons:[{label:'Abbrechen',value:null,cls:'quiet'},{label:'Löschen',value:'ok',cls:'pri'}]});if(c.v==='ok'){del(id);undoSnap=before;toast('Gelöscht.',true);return}continue}
+  const flip=(p,c)=>{if(p.needs.includes(c)){p.needs=p.needs.filter(n=>n!==c);softOf(p).push(c)}else{p.soft=softOf(p).filter(n=>n!==c);p.needs.push(c)}};
+  const unlink=(p,c)=>{p.needs=p.needs.filter(n=>n!==c);p.soft=softOf(p).filter(n=>n!==c);if(!T(c).goal&&!parentsAll(c).length)T(c).goal=true};
+  if(act==='nkind')flip(t,x);
+  if(act==='pkind')flip(T(x),id);
+  if(act==='nrm')unlink(t,x);
+  if(act==='prm')unlink(T(x),id);
+  if(act==='addexisting'){const opts=canPrecede(id);if(!opts.length){toast('Nichts Passendes da.');continue}
+   const q=await modal({title:'Welches To-Do kommt vorher?',text:`Vor: <b>${esc(t.t)}</b>`,body:`<select name="n" aria-label="To-Do">${optList(opts)}</select>${kindRadios('kind','hard',false)}`,buttons:[{label:'Abbrechen',value:null,cls:'quiet'},{label:'Verknüpfen',value:'ok',cls:'pri'}]});
+   if(q.v==='ok')attach(t,T(q.vals.n),q.vals.kind||'hard')}
+  if(act==='addnew')await addNeed(id);
+  if(act==='linkup')await linkUp(id);
+  save();render();
+ }}
+async function fzPick(){
+ const f=fzAreas();
+ const r=await modal({title:'Fokus wählen',text:'Ein oder zwei Bereiche. Die kommen in „Jetzt dran“ nach oben, der Rest wird ruhiger.',
+  body:S.areas.map(a=>`<label class="opt"><input type="checkbox" name="f_${a.id}"${f.includes(a.id)?' checked':''}><span class="dot" style="--gc:${a.color}"></span>${esc(a.name)}</label>`).join('')+
+  `<label class="lbl">Für<select name="per"><option value="tag"${S.fz.per!=='woche'?' selected':''}>heute</option><option value="woche"${S.fz.per==='woche'?' selected':''}>diese Woche</option></select></label>`,
+  buttons:[{label:'Ohne Fokus',value:'none',cls:'quiet'},{label:'Übernehmen',value:'ok',cls:'pri'}]});
+ if(!r.v)return;
+ let ar=r.v==='none'?[]:S.areas.filter(a=>r.vals['f_'+a.id]).map(a=>a.id);
+ if(ar.length>2){ar=ar.slice(0,2);toast('Höchstens zwei – die ersten beiden sind gewählt.')}
+ setFz(ar,r.vals.per)}
+function setFz(ar,per=S.fz.per||'tag'){let until=sod(Date.now())+DAY;if(per==='woche'){const wd=(new Date().getDay()+6)%7;until=sod(Date.now())+(7-wd)*DAY}S.fz={areas:ar,until,per};save();render()}
+async function areasEdit(){
+ const r=await modal({title:'Bereiche',text:'Name, Farbe – oder löschen.',body:S.areas.map(a=>`<div class="arow"><input name="an_${a.id}" value="${esc(a.name)}" aria-label="Name">${colorSel('ac_'+a.id,a.color)}<label class="opt" style="margin:0"><input type="checkbox" name="ad_${a.id}"> Löschen</label></div>`).join('')+
+  `<div class="arow"><input name="new_n" placeholder="Neuer Bereich" aria-label="Neuer Bereich">${colorSel('new_c',COLORS[S.areas.length%COLORS.length][0])}</div>`,
+  buttons:[{label:'Abbrechen',value:null,cls:'quiet'},{label:'Speichern',value:'ok',cls:'pri'}]});
+ if(r.v!=='ok')return;undoSnap=snap();
+ S.areas=S.areas.filter(a=>{if(r.vals['ad_'+a.id]){all().forEach(t=>{if(t.area===a.id)t.area=null});S.fz.areas=S.fz.areas.filter(x=>x!==a.id);return false}a.name=r.vals['an_'+a.id]||a.name;a.color=r.vals['ac_'+a.id];return true});
+ if(r.vals.new_n)S.areas.push({id:uid(),name:r.vals.new_n,color:r.vals.new_c});
+ save();render();toast('Bereiche gespeichert.',true)}
+async function settings(){
+ const s=S.set;
+ const r=await modal({title:'Einstellungen',body:`
+ <label class="opt"><input type="checkbox" name="anim"${s.anim?' checked':''}> Animationen</label>
+ <label class="lbl">Als „liegt lange“ markieren nach<select name="stale">${[2,3,5,7,14].map(n=>`<option value="${n}"${s.stale==n?' selected':''}>${n} Tagen</option>`).join('')}</select></label>
+ <p class="lbl">Deine Daten bleiben in diesem Browser. Zum Sichern kannst du sie kopieren.</p>`,
+  buttons:[{label:'Beispiel zurücksetzen',value:'reset',cls:'quiet'},{label:'Bereiche bearbeiten',value:'areas'},{label:'Daten kopieren',value:'copy'},{label:'Fertig',value:'ok',cls:'pri'}]});
+ if(r.v==='reset'){undoSnap=snap();S=seed();fold.clear();save();render();toast('Beispiel wiederhergestellt.',true);return}
+ if(r.v){s.anim=!!r.vals.anim;s.stale=+r.vals.stale}
+ save();render();
+ if(r.v==='areas')areasEdit();
+ if(r.v==='copy'){try{await navigator.clipboard.writeText(snap());toast('Daten in die Zwischenablage kopiert.')}catch(e){toast('Kopieren ging hier nicht.')}}}
+
+/* ---------- Fällt mir gerade ein & Eingangskorb ---------- */
+async function capture(txt){
+ const cur=T(S.focus),g=cur&&(cur.goal?cur:goalsOf(cur.id)[0]);
+ const opt=(v,l,s,c='')=>`<button type="button" class="${c}" data-ret="${v}">${l}<small>${s}</small></button>`;
+ const r=await modal({title:'Wohin damit?',text:`„${esc(txt)}“`,body:`<div class="where">
+  ${opt('later','Später einsortieren','Landet im Eingangskorb. Du bleibst bei deiner Aufgabe.','pri')}
+  ${cur&&!isDone(cur)?opt('hard','Kommt vor diesem Schritt','Geht sonst nicht – sperrt ihn, steht dann oben.'):''}
+  ${cur&&!isDone(cur)?opt('help','Hilft bei diesem Schritt','Wäre gut vorher, sperrt nicht.'):''}
+  ${g&&g.id!==cur.id?opt('goalstep',`Eigener Schritt für „${esc(g.t)}“`,'Gehört zum Ziel, aber nicht vor diesen Schritt.'):''}
+  ${opt('newgoal','Neues Haupt-To-Do','Hat mit dem hier nichts zu tun.')}</div>`,buttons:[{label:'Abbrechen',value:null,cls:'quiet'}]});
+ if(!r.v)return false;
+ undoSnap=snap();let msg='Notiert.';
+ if(r.v==='later'){S.inbox.push({id:uid(),t:txt,ctx:cur?cur.id:null,created:Date.now()});msg='Im Eingangskorb. Weiter geht’s.'}
+ else if(r.v==='newgoal'){mk(txt,{goal:true});msg='Als neues Haupt-To-Do angelegt.'}
+ else if(r.v==='goalstep'){g.needs.push(mk(txt).id);msg=`Schritt für „${esc(g.t)}“ angelegt.`}
+ else msg=attach(cur,mk(txt),r.v,true);
+ save();render();toast(msg,true);return true}
+async function inbox(){
+ for(;;){
+  if(!S.inbox.length){render();return}
+  const r=await modal({title:'Eingangskorb',text:'Was dir zwischendurch eingefallen ist. Sortier es ein, wann es dir passt.',
+   body:S.inbox.map(i=>`<div class="ibrow"><span>${esc(i.t)}${i.ctx&&T(i.ctx)?`<small>eingefallen bei: ${esc(T(i.ctx).t)}</small>`:''}</span><button type="button" class="small" data-ret="sort:${i.id}">Einsortieren</button><button type="button" class="small quiet" data-ret="rm:${i.id}">Löschen</button></div>`).join(''),
+   buttons:[{label:'Fertig',value:null,cls:'pri'}]});
+  if(!r.v){render();return}
+  const [act,iid]=r.v.split(':'),it=S.inbox.find(i=>i.id===iid);if(!it)continue;
+  if(act==='rm'){undoSnap=snap();S.inbox=S.inbox.filter(i=>i!==it);save();continue}
+  const opts=all().filter(x=>!isDone(x));
+  const q=await modal({title:'Einsortieren',input:it.t,body:`<label class="lbl">Wohin<select name="to"><option value="">Als neues Haupt-To-Do</option>${opts.map(o=>`<option value="${o.id}"${o.id===it.ctx?' selected':''}>Vor: ${esc(label(o))}</option>`).join('')}</select></label>
+   <label class="lbl">Bereich${areaSel('','Wie das Ziel / ohne')}</label>${kindRadios('kind','hard',false)}`,
+   buttons:[{label:'Zurück',value:null,cls:'quiet'},{label:'Einsortieren',value:'ok',cls:'pri'}]});
+  if(q.v!=='ok')continue;
+  undoSnap=snap();const n=mk(q.text||it.t,{area:q.vals.area||null});
+  if(q.vals.to)attach(T(q.vals.to),n,q.vals.kind||'hard');else n.goal=true;
+  S.inbox=S.inbox.filter(i=>i!==it);save();render();toast('Einsortiert.',true);
+ }}
+document.addEventListener('submit',async e=>{if(e.target.id!=='capf')return;e.preventDefault();const i=$('#cap'),txt=i.value.trim();if(!txt){i.focus();return}
+ if(await capture(txt)){const n=$('#cap');if(n)n.focus()}else{const n=$('#cap');if(n){n.value=txt;n.focus()}}});
+document.addEventListener('click',async e=>{
+ if(!$('#modal').hidden)return;
+ const v=e.target.closest('[data-view]');if(v){S.view=v.dataset.view;save();render();scrollTo(0,0);return}
+ const b=e.target.closest('[data-act]');if(!b)return;const id=b.dataset.id,t=T(id);
+ switch(b.dataset.act){
+  case'done':complete(id);break;
+  case'start':startTask(id);break;
+  case'reopen':reopen(id);break;
+  case'focus':{if(S.view!=='fokus')S.prev=S.view;S.focus=id;const g=t.goal?t:goalsOf(id)[0];if(g)S.active=g.id;S.view='fokus';save();render();scrollTo(0,0);break}
+  case'addneed':addNeed(id);break;
+  case'block':blocker(id);break;
+  case'edit':edit(id);break;
+  case'newgoal':newGoal();break;
+  case'settings':settings();break;
+  case'fzpick':fzPick();break;
+  case'fztoggle':{let f=fzAreas().slice();if(f.includes(id))f=f.filter(x=>x!==id);else{f.push(id);if(f.length>2){f.shift();toast('Höchstens zwei Bereiche im Fokus.')}}setFz(f);break}
+  case'scope':S.scope=b.dataset.v;save();render();break;
+  case'variant':S.set.variant=b.dataset.v;save();render();break;
+  case'tog':{const k=b.dataset.k;fold.set(k,!isOpen(k,+b.dataset.l));render();break}
+  case'back':S.view=S.prev&&S.prev!=='fokus'?S.prev:'jetzt';save();render();scrollTo(0,0);break;
+  case'inbox':inbox();break;
+  case'ciok':t.checked=true;save();render();break;
+  case'ciadd':{const txt=($('#ci')?.value||'').trim();if(!txt){$('#ci').focus();break}
+   const kind=document.querySelector('input[name=ck]:checked')?.value||'hard';
+   undoSnap=snap();const msg=attach(t,mk(txt),kind,true);t.checked=true;save();render();toast(msg,true);break}
+ }});
+
+S=load();render();
+try{if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}
+}
+</script>
+</body>
+</html>
