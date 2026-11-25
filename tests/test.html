@@ -102,9 +102,9 @@ function testData() {
  return {
   name: 'Testliste', tasks,
   cats: [
-   { id: 'arbeit', name: 'Arbeit', color: '#5b8def', subs: [{ id: 'akq', name: 'Akquise' }, { id: 'fin', name: 'Finanzen' }, { id: 'orga', name: 'Orga' }] },
-   { id: 'privat', name: 'Privat', color: '#e0a03a', subs: [{ id: 'haus', name: 'Haushalt' }, { id: 'ges', name: 'Gesundheit' }] },
-   { id: 'hobby', name: 'Hobby', color: '#9b7fd1', subs: [] }
+   { id: 'arbeit', name: 'Arbeit', color: '#5b8def', sammlung: true, subs: [{ id: 'akq', name: 'Akquise' }, { id: 'fin', name: 'Finanzen' }, { id: 'orga', name: 'Orga' }] },
+   { id: 'privat', name: 'Privat', color: '#e0a03a', sammlung: true, subs: [{ id: 'haus', name: 'Haushalt' }, { id: 'ges', name: 'Gesundheit' }] },
+   { id: 'hobby', name: 'Hobby', color: '#9b7fd1', sammlung: true, subs: [] }
   ],
   openCat: 'arbeit', view: 'jetzt', inbox: [], anim: false, day: midnight.getTime() + shift, format: 1
  };
@@ -134,6 +134,31 @@ test('Erster Start zeigt die Beispielkarte, zwei Tabs und Machbar an', async () 
  expect($('.cat.open .mswitch[aria-checked="true"]'), 'Schalter „Machbar“ ist beim ersten Start nicht an');
  expect($('#acc .cat.open'), 'Kein Bereich aufgeklappt');
  expect($$('#acc .card').length > 0, 'Keine Karte in „Machbar“');
+});
+test('Jeder Bereich hat eine „Sammlung“ ohne Zeitnah und Backlog, mit Auge zum Ausblenden', async () => {
+ const col = $$('#cols > .col')[0];
+ expect(col.querySelector('.sammlung') && !col.querySelector('.zlabel') && !col.querySelector('.blsec'), 'Sammlung hat Zeitnah oder Backlog');
+ await click(col.querySelector('.ins[data-act="insroot"]'));
+ const input = $('.insrowroot .tinput');
+ input.value = 'Schnell notiert';
+ await pressKey(input, 'Enter');
+ if ($('.insrowroot .tinput')) await pressKey($('.insrowroot .tinput'), 'Escape');
+ expect(saved().cats.every(b => b.subs[0].inbox && b.subs[0].name === 'Sammlung'), 'Nicht jeder Bereich hat eine Sammlung');
+ const sammlungId = saved().cats[0].subs[0].id;
+ const note = Object.values(saved().tasks).find(t => t.t === 'Schnell notiert');
+ expect(note && note.area === sammlungId && !note.backlog, 'Notiz liegt nicht in der Sammlung');
+ const columns = $$('#cols > .col').length;
+ await click('.subtabs .eye');
+ expect(saved().cats[0].subs[0].hidden && $$('#cols > .col').length === columns - 1, 'Auge blendet die Sammlung nicht aus');
+ expect($('.subtabs .tab.off'), 'Ausgeblendeter Knopf fehlt');
+ await click('.subtabs .tab.off');
+ expect(!saved().cats[0].subs[0].hidden && $$('#cols > .col').length === columns, 'Sammlung kommt nicht wieder');
+ // Gelöscht bleibt gelöscht
+ await click(`[data-act="editsub"][data-s="${sammlungId}"]`);
+ await click('#modal [data-v="del"]');
+ await click('#modal [data-v="yes"]');
+ await loadApp();
+ expect(!saved().cats[0].subs.some(k => k.inbox), 'Gelöschte Sammlung ist wieder da');
 });
 test('Testliste laden', async () => {
  await freshApp();

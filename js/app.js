@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.20-c';
+const APP_VERSION = '1.0.21-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -51,6 +51,8 @@ const ONE_HOUR = 60 * 60 * 1000; // in Millisekunden
 const ICON_TICK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>';
 const ICON_TRASH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>';
 const ICON_DOTS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
+const ICON_EYE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const ICON_EYE_OFF = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a9.6 9.6 0 0 0 4.4-1.1M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
 const ICON_PEN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>';
 const ICON_GRIP = '<svg width="12" height="20" viewBox="0 0 12 20" fill="currentColor"><circle cx="3" cy="4" r="1.5"/><circle cx="9" cy="4" r="1.5"/><circle cx="3" cy="10" r="1.5"/><circle cx="9" cy="10" r="1.5"/><circle cx="3" cy="16" r="1.5"/><circle cx="9" cy="16" r="1.5"/></svg>';
 const ICON_GRIP_WIDE = '<svg width="14" height="20" viewBox="0 0 14 20" fill="currentColor"><circle cx="4" cy="4" r="1.6"/><circle cx="10" cy="4" r="1.6"/><circle cx="4" cy="10" r="1.6"/><circle cx="10" cy="10" r="1.6"/><circle cx="4" cy="16" r="1.6"/><circle cx="10" cy="16" r="1.6"/></svg>';
@@ -145,9 +147,9 @@ function seed() {
   tasks,
   cats: [ // Bereiche, jeweils mit ihren Kategorien (subs)
    { id: 'arbeit', name: 'Arbeit', color: '#5b8def',
-     subs: [{ id: 'verw', name: 'Verwaltung' }, { id: 'akq', name: 'Akquise & Marketing' }, { id: 'daily', name: 'Daily business' }] },
+     sammlung: true, subs: [newSammlung(), { id: 'verw', name: 'Verwaltung' }, { id: 'akq', name: 'Akquise & Marketing' }, { id: 'daily', name: 'Daily business' }] },
    { id: 'privat', name: 'Privat', color: '#e0a03a',
-     subs: [{ id: 'hobso', name: 'Hobby & Sozial' }, { id: 'alltag', name: 'Alltag & Lebensorga' }, { id: 'proj', name: 'Projekte' }] }
+     sammlung: true, subs: [newSammlung(), { id: 'hobso', name: 'Hobby & Sozial' }, { id: 'alltag', name: 'Alltag & Lebensorga' }, { id: 'proj', name: 'Projekte' }] }
   ],
   openCat: 'arbeit',
   view: 'jetzt',
@@ -158,11 +160,21 @@ function seed() {
   format: FORMAT
  };
 }
+/* Version C: „Sammlung“ = voreingestellte Kategorie in jedem Bereich zum schnellen Notieren, ohne Zeitnah und
+   Backlog (kategorie.inbox). Sie lässt sich umbenennen und löschen und mit dem Auge im Kategorie-Knopf ein- und
+   ausblenden (kategorie.hidden). bereich.sammlung merkt sich, dass sie schon einmal angelegt wurde, damit sie
+   nach dem Löschen nicht wiederkommt. */
+const newSammlung = () => ({ id: uid(), name: 'Sammlung', icon: '📥', inbox: true });
+function addSammlung(bereich) {
+ if (bereich.sammlung) return;
+ bereich.subs.unshift(newSammlung());
+ bereich.sammlung = true;
+}
 // Bringt gespeicherte oder importierte Daten auf das aktuelle Format.
 // Daten ohne Formatnummer stammen aus dem Prototyp (= Format 1).
 function migrate(data) {
  data.inbox = data.inbox || [];
- data.cats.forEach(bereich => { bereich.subs = bereich.subs || []; });
+ data.cats.forEach(bereich => { bereich.subs = bereich.subs || []; addSammlung(bereich); });
  if (data.openCat === undefined) data.openCat = data.cats[0] ? data.cats[0].id : null;
  // Version C: „Machbar“ ist kein eigener Tab mehr, sondern ein Schalter in der Übersicht.
  // Wer bisher im Tab „Machbar“ war (view 'jetzt'), landet in der Übersicht mit Schalter an.
@@ -341,7 +353,7 @@ function bereicheOf(task) {
 function kategorieIn(task, bereichId, seen = new Set()) {
  const bereich = getBereich(bereichId);
  if (!bereich || !bereich.subs.length) return '';
- const firstKategorie = bereich.subs[0].id;
+ const firstKategorie = (bereich.subs.find(k => !k.inbox) || bereich.subs[0]).id;
  if (seen.has(task.id)) return firstKategorie;
  seen.add(task.id);
  if (task.cat === bereichId && bereich.subs.some(k => k.id === task.area)) return task.area;
@@ -360,7 +372,8 @@ function isIn(task, bereichId, kategorieId = '') {
 }
 // Die Spalten eines Bereichs: seine Kategorien, oder eine einzige Spalte, wenn er keine hat
 function columnsOf(bereich) {
- if (bereich && bereich.subs && bereich.subs.length) return bereich.subs;
+ const shown = bereich && bereich.subs ? bereich.subs.filter(k => !k.hidden) : [];
+ if (shown.length) return shown;
  return [{ id: '', name: bereich ? bereich.name : '' }];
 }
 // Alle Bereiche, dazu „Ohne Bereich“, falls es To-Dos ohne Bereich gibt
@@ -398,9 +411,9 @@ function currentPlace() {
  const bereichId = state.openCat ?? (state.cats[0] ? state.cats[0].id : '');
  const bereich = getBereich(bereichId);
  const kategorie = bereich && bereich.subs.length
-  ? bereich.subs[Math.min(currentColumn, bereich.subs.length - 1)]
+  ? columnsOf(bereich)[Math.min(currentColumn, columnsOf(bereich).length - 1)]
   : null;
- return (bereichId || '') + '|' + (kategorie ? kategorie.id : '');
+ return (bereichId || '') + '|' + (kategorie && kategorie.id ? kategorie.id : '');
 }
 // Farbe eines To-Dos = Farbe seines Bereichs (grau ohne Bereich)
 function colorOf(task) {
@@ -784,6 +797,24 @@ function uebersichtColumnHtml(bereich, kategorie) {
  return `<p class="zlabel">Zeitnah</p><div class="list zone tzone" ${dropTarget} data-bl="0">${soonHtml}</div>
  ${backlogHtml}${doneHtml}`;
 }
+// Spalte „Sammlung“: alle offenen To-Dos dieser Kategorie als Karten, ohne Zeitnah/Backlog. Neues über „+“.
+function sammlungColumnHtml(bereich, kategorie) {
+ const here = t => isIn(t, bereich.id, kategorie.id);
+ const roots = allTasks().filter(t => here(t) && (t.goal || !parentsOf(t.id).some(here)));
+ const open = roots.filter(t => !t.done).sort(byPrio);
+ const done = roots.filter(t => t.done).sort((a, b) => b.doneAt - a.doneAt);
+ const dropTarget = `data-drop="zone" data-cat="${bereich.id}" data-area="${kategorie.id}" data-bl="0"`;
+ const card = t => state.view === 'baum' ? treeNodeHtml(t, bereich.color, bereich.id, 0) : cardHtml(t, bereich.color, { move: true });
+ const tag = state.view === 'baum' ? 'li' : 'div';
+ const items = open.length
+  ? open.map(t => card(t) + insertRootHtml(bereich, kategorie, t.id, tag)).join('')
+  : '';
+ const inner = state.view === 'baum'
+  ? `<ul class="tree">${insertRootHtml(bereich, kategorie, '', 'li')}${items}</ul>`
+  : insertRootHtml(bereich, kategorie, '') + items;
+ const empty = open.length ? '' : `<div class="empty" style="--c:${bereich.color}">Hier schnell notieren, einsortieren später.</div>`;
+ return `<div class="list zone sammlung${state.view === 'baum' ? ' tzone' : ''}" ${dropTarget}>${inner}${empty}</div>${doneBoxHtml(done, bereich.color)}`;
+}
 // Tab „Heute“: freie To-Dos (ziehbar), „Danach dran“ (noch gesperrt) und „Heute geschafft“
 function heuteViewHtml() {
  const byTodayOrder = (a, b) => (a.todayOrder ?? 1e12) - (b.todayOrder ?? 1e12) || byPrio(a, b);
@@ -840,20 +871,28 @@ function bereichOpenHtml(bereich) {
   + `<i></i>${name} <small>${bereichCountsText(bereich)}</small>${ICON_CHEVRON}</button>${machbarSwitchHtml(bereich)}${editButton}</div>`;
  const tabs = bereich.id
   ? `<nav class="subtabs" aria-label="Kategorien von ${name}">`
-   + bereich.subs.map((k, i) => `<button class="tab" data-act="gocol" data-i="${i}" data-drop="zone" data-cat="${bereich.id}" data-area="${k.id}"`
-    + ` style="--c:${bereich.color}" aria-current="${i === currentColumn}">${esc(katName(k))}</button>`).join('')
+   + bereich.subs.map(k => {
+    const i = columnsOf(bereich).indexOf(k);
+    const eye = k.inbox
+     ? `<span class="eye" data-act="eye" data-id="${bereich.id}" data-s="${k.id}" role="button" tabindex="0" aria-label="${esc(k.name)} ${k.hidden ? 'einblenden' : 'ausblenden'}" title="${k.hidden ? 'Einblenden' : 'Ausblenden'}">${k.hidden ? ICON_EYE_OFF : ICON_EYE}</span>`
+     : '';
+    if (k.hidden) return `<button class="tab off" data-act="eye" data-id="${bereich.id}" data-s="${k.id}" style="--c:${bereich.color}" aria-label="${esc(k.name)} einblenden">${esc(katName(k))}${eye}</button>`;
+    return `<button class="tab" data-act="gocol" data-i="${i}" data-drop="zone" data-cat="${bereich.id}" data-area="${k.id}"`
+     + ` style="--c:${bereich.color}" aria-current="${i === currentColumn}">${esc(katName(k))}${eye}</button>`;
+   }).join('')
    + `<button class="tab new" data-act="newsub" data-id="${bereich.id}">+ Kategorie</button></nav>`
   : '';
  const columns = columnsOf(bereich).map(kategorie => {
-  // Griff zum Umsortieren der Spalten, nur wenn es mehr als eine Kategorie gibt
-  const columnGrip = bereich.subs.length > 1
+  // Griff zum Umsortieren der Spalten, nur wenn es mehr als eine Spalte gibt
+  const columnGrip = columnsOf(bereich).length > 1
    ? `<button class="colgrip" data-cat="${bereich.id}" data-s="${kategorie.id}" aria-label="Kategorie ${esc(kategorie.name)} verschieben, mit Pfeil links oder rechts">${ICON_GRIP}</button>`
    : '';
   const columnHead = bereich.subs.length
    ? `<div class="colhead">${columnGrip}<h2>${esc(katName(kategorie))}</h2><button class="iconbtn" data-act="editsub" data-id="${bereich.id}" data-s="${kategorie.id}"`
     + ` aria-label="Kategorie ${esc(kategorie.name)} bearbeiten">${ICON_PEN}</button></div>`
    : '';
-  const content = state.view === 'baum' ? uebersichtColumnHtml(bereich, kategorie) : machbarColumnHtml(bereich, kategorie);
+  const content = kategorie.inbox ? sammlungColumnHtml(bereich, kategorie)
+   : state.view === 'baum' ? uebersichtColumnHtml(bereich, kategorie) : machbarColumnHtml(bereich, kategorie);
   return `<section class="col" aria-label="${esc(kategorie.name)}">${columnHead}${content}</section>`;
  }).join('');
  return `<section class="cat open" style="--c:${bereich.color}" aria-label="${name}">
@@ -1565,7 +1604,7 @@ document.addEventListener('keydown', event => {
  const { cat: bereichId, s: kategorieId } = grip.dataset;
  const bereich = getBereich(bereichId);
  if (!bereich) return;
- const index = bereich.subs.findIndex(k => k.id === kategorieId);
+ const index = columnsOf(bereich).findIndex(k => k.id === kategorieId);
  moveKategorie(bereichId, kategorieId, index + (event.key === 'ArrowRight' ? 1 : -1));
  document.querySelector(`.colgrip[data-cat="${bereichId}"][data-s="${kategorieId}"]`)?.focus({ preventScroll: true });
 });
@@ -2318,6 +2357,7 @@ async function bereichDialog(id) {
   bereich.color = r.vals.color;
  } else {
   const created = { id: uid(), name: r.vals.name, color: r.vals.color, subs: [] };
+  addSammlung(created);
   state.cats.push(created);
   state.openCat = created.id;
   currentColumn = 0;
@@ -2372,7 +2412,7 @@ function moveKategorieTo(fromBereichId, kategorieId, toBereichId, index) {
  }
  to.subs.splice(Math.min(index, to.subs.length), 0, kategorie);
  state.openCat = toBereichId;
- currentColumn = to.subs.indexOf(kategorie);
+ currentColumn = Math.max(0, columnsOf(to).indexOf(kategorie));
  save();
  render();
  goToColumn(currentColumn);
@@ -2403,12 +2443,26 @@ function duplicateKategorie(fromBereichId, kategorieId, toBereichId, index) {
  });
  to.subs.splice(Math.min(index, to.subs.length), 0, copy);
  state.openCat = toBereichId;
- currentColumn = to.subs.indexOf(copy);
+ currentColumn = Math.max(0, columnsOf(to).indexOf(copy));
  save();
  render();
  goToColumn(currentColumn);
  const n = originals.length;
  toast(`„${esc(copy.name)}“ angelegt${n ? ` – mit ${n} To-Do${pluralS(n)}` : ''}.`, true);
+}
+// Auge im Kategorie-Knopf: Sammlung ein- und ausblenden
+function toggleKategorieHidden(bereichId, kategorieId) {
+ const bereich = getBereich(bereichId);
+ const kategorie = bereich && bereich.subs.find(k => k.id === kategorieId);
+ if (!kategorie) return;
+ if (kategorie.hidden) delete kategorie.hidden;
+ else kategorie.hidden = true;
+ state.openCat = bereichId;
+ const index = columnsOf(bereich).indexOf(kategorie);
+ currentColumn = Math.max(0, index);
+ save();
+ render();
+ if (index >= 0) goToColumn(index, true);
 }
 function setIcon(kategorie, icon) {
  if (icon) kategorie.icon = icon;
@@ -2451,17 +2505,17 @@ async function kategorieDialog(bereichId, kategorieId) {
  }
  if (r.v === 'del') {
   const count = allTasks().filter(t => !t.done && isIn(t, bereichId, kategorieId)).length;
-  const rest = bereich.subs.find(k => k !== kategorie);
+  const rest = bereich.subs.find(k => k !== kategorie && !k.inbox) || bereich.subs.find(k => k !== kategorie);
   if (!await confirmDelete(`Kategorie „${esc(kategorie.name)}“ löschen?`,
    count === 1 ? `Das offene To-Do darin bleibt und liegt danach in ${esc(rest ? rest.name : bereich.name)}.` : count ? `Die ${count} offenen To-Dos darin bleiben und liegen danach in ${esc(rest ? rest.name : bereich.name)}.` : 'Sie ist leer.')) return;
   undoSnapshot = snapshot();
   const index = bereich.subs.indexOf(kategorie);
   bereich.subs.splice(index, 1);
   allTasks().forEach(t => { if (t.area === kategorieId) t.area = null; });
-  currentColumn = Math.max(0, index - 1);
+  currentColumn = 0;
   save();
   render();
-  toast(`Kategorie gelöscht. Die To-Dos liegen jetzt in ${esc(bereich.subs[0] ? bereich.subs[0].name : bereich.name)}.`, true);
+  toast(`Kategorie gelöscht. Die To-Dos liegen jetzt in ${esc(rest ? rest.name : bereich.name)}.`, true);
   return;
  }
  if (r.v !== 'ok' || !r.vals.name) return;
@@ -2471,7 +2525,7 @@ async function kategorieDialog(bereichId, kategorieId) {
   setIcon(kategorie, r.vals.icon);
  } else {
   bereich.subs.push(setIcon({ id: uid(), name: r.vals.name }, r.vals.icon));
-  currentColumn = bereich.subs.length - 1;
+  currentColumn = columnsOf(bereich).length - 1;
   state.openCat = bereichId;
  }
  save();
@@ -2481,15 +2535,19 @@ async function kategorieDialog(bereichId, kategorieId) {
 // Setzt eine Kategorie an Stelle `to` (0 = ganz links). Die Reihenfolge der Spalten ist einfach die
 // Reihenfolge in bereich.subs und wird damit gespeichert und in der Sicherung mitgenommen.
 // hasSnapshot = true: undoSnapshot wurde schon gesetzt (aus dem Popup), dann auch ohne Bewegung speichern.
+// Version C: `to` zählt nur die sichtbaren Spalten; ausgeblendete Kategorien bleiben an ihrem Platz.
 function moveKategorie(bereichId, kategorieId, to, hasSnapshot) {
  const bereich = getBereich(bereichId);
  if (!bereich) return;
- const from = bereich.subs.findIndex(k => k.id === kategorieId);
- to = Math.max(0, Math.min(to, bereich.subs.length - 1));
+ const visible = columnsOf(bereich);
+ const from = visible.findIndex(k => k.id === kategorieId);
+ to = Math.max(0, Math.min(to, visible.length - 1));
  if (from < 0 || (from === to && !hasSnapshot)) return;
  if (!hasSnapshot) undoSnapshot = snapshot();
- const [kategorie] = bereich.subs.splice(from, 1);
- bereich.subs.splice(to, 0, kategorie);
+ const [kategorie] = visible.splice(from, 1);
+ visible.splice(to, 0, kategorie);
+ let next = 0;
+ bereich.subs = bereich.subs.map(k => k.hidden ? k : visible[next++]);
  state.openCat = bereichId;
  currentColumn = to;
  save();
@@ -2832,6 +2890,7 @@ document.addEventListener('click', event => {
   case 'menu': settingsDialog(); break;
   case 'machbar': setMachbar(state.view !== 'jetzt'); break;
   case 'gocol': goToColumn(+button.dataset.i, true); break;
+  case 'eye': toggleKategorieHidden(id, button.dataset.s); break;
   case 'newcat': bereichDialog(); break;
   case 'editcat': bereichDialog(id); break;
   case 'opencat': toggleBereich(button.dataset.cat); break;
@@ -2849,6 +2908,12 @@ document.addEventListener('keydown', event => {
  if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('.t[data-act="rename"]')) {
   event.preventDefault();
   startRename(event.target);
+  return;
+ }
+ if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('.eye[data-act="eye"]')) {
+  event.preventDefault();
+  event.stopPropagation();
+  toggleKategorieHidden(event.target.dataset.id, event.target.dataset.s);
   return;
  }
  if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('.lt[data-act="lren"]')) {
