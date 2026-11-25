@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.21-c';
+const APP_VERSION = '1.0.22-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -893,7 +893,7 @@ function bereichOpenHtml(bereich) {
    : '';
   const content = kategorie.inbox ? sammlungColumnHtml(bereich, kategorie)
    : state.view === 'baum' ? uebersichtColumnHtml(bereich, kategorie) : machbarColumnHtml(bereich, kategorie);
-  return `<section class="col" aria-label="${esc(kategorie.name)}">${columnHead}${content}</section>`;
+  return `<section class="col${kategorie.inbox ? ' colsammlung' : ''}" aria-label="${esc(kategorie.name)}">${columnHead}${content}</section>`;
  }).join('');
  return `<section class="cat open" style="--c:${bereich.color}" aria-label="${name}">
  ${head}
