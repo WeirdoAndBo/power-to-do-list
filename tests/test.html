@@ -430,6 +430,27 @@ test('Liste: „Liste:“ vor den Text, Punkte eintippen, abhaken, löschen', as
  await pressKey($('.card[data-id="b"] .tinput'), 'Enter');
  expect(!$('.card[data-id="b"] .llist') && saved().tasks.b.list.length === 1, 'Ohne „Liste:“ soll die Liste ausgeblendet, aber nicht gelöscht sein');
 });
+test('🔗 im Bearbeitungsfeld: ein vorhandenes To-Do muss vorher erledigt sein', async () => {
+ await click('.card[data-id="b"] h3 .t');
+ const link = $('.card[data-id="b"] .linkbtn');
+ expect(link, '🔗 im Bearbeitungsfeld fehlt');
+ await click(link);
+ expect(modalOpen() && $('#modal [data-v="addk"]') && $('#modal [data-v="addp"]'), 'Popup „Verbindungen“ fehlt');
+ await click('#modal [data-v="addk"]');
+ const search = $('#modal [name=q]');
+ expect(search && $('#modal [name=o]'), 'Suche oder Auswahl fehlt');
+ const target = Object.values(saved().tasks).find(t => t.id !== 'b' && !t.done && $(`#modal [name=o] option[value="${t.id}"]`));
+ search.value = target.t;
+ search.dispatchEvent(new Event('input', { bubbles: true }));
+ expect($('#modal [name=o]').value === target.id || $$('#modal [name=o] option').some(o => o.value === target.id), 'Suche findet das To-Do nicht');
+ $('#modal [name=o]').value = target.id;
+ await click('#modal [data-v="ok"]');
+ expect(saved().tasks.b.needs.includes(target.id) || saved().tasks.b.soft.includes(target.id), 'Verbindung wurde nicht angelegt');
+ await click('#modal [data-v="ok"]');
+ expect(!modalOpen(), 'Popup schließt nicht');
+ await click('#undo');
+ expect(!saved().tasks.b.needs.includes(target.id) && !saved().tasks.b.soft.includes(target.id), 'Rückgängig löst die Verbindung nicht');
+});
 test('Übersicht: Ziel-Karte hat Heute und ⋯ im Kopf, + und Mülleimer hinter dem Titel', async () => {
  await zeige(false);
  const head = $('.tree li[data-tid="g1"] > .chead');
@@ -578,6 +599,23 @@ test('Ein Glied mitten aus einer Kette löschen: der Rest der Kette bleibt', asy
  expect(toastText().includes('gelöscht') && !toastText().includes('Unter-To-Do'), 'Hinweis spricht von mitgelöschten Unter-To-Dos');
  await click('#undo');
  expect(saved().tasks.b && saved().tasks.b.soft.includes('ex'), 'Rückgängig stellt die Kette nicht wieder her');
+});
+test('Zweite Kette unter einem To-Do anlegen („parallel vorher“)', async () => {
+ // b hat genau ein Vorher-To-Do (ex): Kette. Das „+“ am Ende der Kette legt ein zweites, paralleles an.
+ const strip = $('.ins.parallel[data-p="b"]');
+ expect(strip && strip.querySelector('em').textContent.includes('parallel'), '„+“ für eine parallele Kette fehlt');
+ await click(strip);
+ const input = $('.insrow .tinput');
+ expect(input && input.placeholder.includes('parallel'), 'Frage im Eingabefeld passt nicht');
+ input.value = 'Zweite Kette';
+ await pressKey(input, 'Enter');
+ if ($('.insrow .tinput')) await pressKey($('.insrow .tinput'), 'Escape');
+ const b = saved().tasks.b;
+ const created = Object.values(saved().tasks).find(t => t.t === 'Zweite Kette');
+ expect(created && (b.needs.length + b.soft.length) === 2, '„b“ hat nicht zwei Vorher-To-Dos');
+ const rowOf = id => $(`.tree li[data-tid="${id}"] > .row`);
+ expect(!rowOf('b').classList.contains('down') && rowOf('ex').getBoundingClientRect().left > rowOf('b').getBoundingClientRect().left + 5, 'Zwei Ketten sind nicht eingerückt');
+ await click('#undo');
 });
 test('„+“ zwischen zwei Kettengliedern fügt mitten in die Kette ein', async () => {
  await click('.ins[data-p="b"][data-into="ex"]');

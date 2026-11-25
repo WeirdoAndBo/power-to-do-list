@@ -502,3 +502,14 @@ details.blsec .bempty{padding:6px 8px 12px}
 .insroot.last .ins:hover,.insroot.last .ins:focus-visible{opacity:1}
 .insroot.last .ins:hover em,.insroot.last .ins:focus-visible em{opacity:1}
 body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
+
+/* Version C: Mehrere Ketten unter einem To-Do. Von der senkrechten Linie führt zu jedem parallelen
+   Vorher-To-Do (dem letzten Schritt seiner Kette) ein kleiner waagerechter Strich. */
+.tree .tcard ul ul:not(.chainul)>li>.row::before{content:'';position:absolute;left:-8px;top:calc(50% - 1px);width:7px;height:2px;border-radius:1px;background:color-mix(in srgb,var(--c) 30%,transparent)}
+
+/* Version C: 🔗 rechts im Bearbeitungsfeld */
+.t.editing{display:inline-flex;align-items:center;gap:4px;width:100%}
+.linkbtn{flex:none;width:30px;height:30px;border-radius:8px;font-size:15px;display:grid;place-items:center;background:var(--soft)}
+.linkbtn:hover{background:color-mix(in srgb,var(--c,var(--acc)) 18%,var(--card))}
+#modal select[size]{height:auto;padding:4px}
+.card h3 .t.editing,.row .tw .t.editing{display:flex;align-items:center;gap:4px;width:100%}

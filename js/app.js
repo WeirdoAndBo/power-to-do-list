@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.25-c';
+const APP_VERSION = '1.0.27-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -658,9 +658,10 @@ function insertRootHtml(bereich, kategorie, afterId, tag = 'div', backlog = fals
 // Unsichtbarer Streifen zwischen To-Dos. Mit der Maus darüber erscheint „+“; Klick = hier ein neues To-Do eintippen.
 // parentId = das To-Do, vor dem das neue kommt; afterId = steht danach direkt hinter diesem (leer = ganz vorn).
 // intoId = zwischen parentId und sein einziges Vorher-To-Do intoId (Kette): das neue kommt mitten in die Kette.
-function insertHtml(parentId, afterId, color, cls = '', intoId = '') {
+function insertHtml(parentId, afterId, color, cls = '', intoId = '', question = '') {
+ question = question || insertQuestion(getTask(parentId));
  return `<button class="ins${cls}" data-act="ins" data-p="${parentId}" data-after="${afterId || ''}"${intoId ? ` data-into="${intoId}"` : ''} style="--c:${color}"`
-  + ` aria-label="Hier einfügen: ${esc(insertQuestion(getTask(parentId)))}">${insertLabelHtml(insertQuestion(getTask(parentId)))}</button>`;
+  + ` aria-label="Hier einfügen: ${esc(question)}">${insertLabelHtml(question)}</button>`;
 }
 // Kleiner Papierkorb-Knopf für Listenzeilen (Erledigt, Heute geschafft, Danach dran)
 function deleteMiniHtml(task) {
@@ -771,8 +772,12 @@ function treeNodeHtml(task, color, path, level, viaSoft, parentId = null, inCard
   : insertHtml(task.id, '', color, ' deeper');
  // Innerhalb einer Kette kein eigener „danach“-Streifen (sonst stapeln sich leere Streifen am Kettenende)
  const insertAfter = inCard && parentId && !linked ? insertHtml(parentId, task.id, color) : '';
+ // Oben an einer Kette (nur ein Vorher-To-Do): am Ende der Kette ein „+“ für eine zweite, parallele Kette
+ const insertParallel = inCard && chainDown && !linked && !task.done
+  ? insertHtml(task.id, children[0][0].id, color, ' deeper parallel', '', 'Was muss parallel vorher passieren?')
+  : '';
  return `<li data-tid="${task.id}" data-k="${esc(key)}" data-l="${level}" style="--c:${color}">${row}
- ${listHtml(task, color)}${insertFirst}${childList}${insertAfter}</li>`;
+ ${listHtml(task, color)}${insertFirst}${childList}${insertParallel}${insertAfter}</li>`;
 }
 // Schalter „Machbar“ aus: eine Kategorie-Spalte mit den Zielen als Wurzeln
 function uebersichtColumnHtml(bereich, kategorie) {
@@ -1886,7 +1891,7 @@ function startInsert(button) {
  const box = document.createElement('div');
  box.className = 'insrow';
  box.style.setProperty('--c', button.style.getPropertyValue('--c'));
- box.innerHTML = `<input class="tinput" placeholder="${insertQuestion(parent)}" aria-label="Neues To-Do" autocomplete="off">`;
+ box.innerHTML = `<input class="tinput" placeholder="${esc(button.querySelector('em') ? button.querySelector('em').textContent : insertQuestion(parent))}" aria-label="Neues To-Do" autocomplete="off">`;
  button.replaceWith(box);
  const input = box.querySelector('input');
  input.focus();
@@ -1979,10 +1984,30 @@ function startRename(titleEl) {
  input.setAttribute('autocomplete', 'off');
  titleEl.textContent = '';
  titleEl.append(input);
+ // Version C: 🔗 im Bearbeitungsfeld öffnet die Verbindungen (kommt erst nach … / gehört auch zu …)
+ const linkButton = document.createElement('button');
+ linkButton.type = 'button';
+ linkButton.className = 'linkbtn';
+ linkButton.textContent = '🔗';
+ linkButton.title = 'Verbindungen: kommt erst nach … / gehört auch zu …';
+ linkButton.setAttribute('aria-label', 'Verbindungen bearbeiten');
+ titleEl.append(linkButton);
  titleEl.classList.add('editing');
  input.focus();
  input.setSelectionRange(input.value.length, input.value.length);
  let finished = false;
+ // Fokus im Feld lassen, damit das Antippen von 🔗 nicht erst das Feld schließt
+ linkButton.addEventListener('mousedown', event => event.preventDefault());
+ linkButton.addEventListener('pointerdown', event => event.stopPropagation());
+ linkButton.addEventListener('click', event => {
+  event.stopPropagation();
+  finished = true;
+  const text = input.value.trim();
+  const before = snapshot();
+  if (text && text !== task.t) { task.t = text; ensureList(task); save(); }
+  render();
+  connectionsDialog(task.id, before);
+ });
  const finish = keep => {
   if (finished) return;
   finished = true;
@@ -2245,6 +2270,47 @@ function editDialogHtml(task) {
    <div><button class="link" data-v="addp">+ Zahlt auch auf ein anderes To-Do ein</button></div>
    <div class="btns">${buttonHtml('del', 'Löschen', 'ghost')}${buttonHtml('ok', 'Fertig', 'pri')}</div>`;
 }
+// Popup „Verbindungen“ (über 🔗 im Bearbeitungsfeld): was kommt erst vorher, wozu gehört es noch.
+// Vorhandene To-Dos lassen sich dazuholen (auch aus anderen Bereichen); × löst eine Verbindung.
+async function connectionsDialog(id, before = snapshot()) {
+ for (;;) {
+  const task = getTask(id);
+  if (!task) return;
+  const r = await modal(connectionsHtml(task));
+  const [action, otherId] = (r.v || '').split(':');
+  if (action === 'kind') toggleKind(task, otherId);
+  else if (action === 'rmk') unlinkBefore(task, otherId);
+  else if (action === 'rmp') { unlinkBefore(getTask(otherId), id); if (!parentsOf(id).length) task.goal = true; }
+  else if (action === 'addk' || action === 'addp') await linkExisting(task, action === 'addk');
+  else {
+   save();
+   render();
+   if (snapshot() !== before) { undoSnapshot = before; toast('Verbindungen gespeichert.', true); }
+   return;
+  }
+  save();
+  render();
+ }
+}
+function connectionsHtml(task) {
+ const beforeList = [...task.needs.map(x => [x, 0]), ...task.soft.map(x => [x, 1])].filter(([x]) => getTask(x));
+ const parents = parentsOf(task.id);
+ const row = (title, buttons) => `<div class="lrow"><span>${esc(title)}</span>${buttons}</div>`;
+ const beforeRows = beforeList.length
+  ? beforeList.map(([x, soft]) => row(shownTitle(getTask(x)),
+   `<button class="link" data-v="kind:${x}" title="Umschalten">${soft ? 'hilft nur' : 'geht sonst nicht'}</button>`
+   + `<button class="mini" data-v="rmk:${x}" aria-label="Verbindung lösen">×</button>`)).join('')
+  : '<p class="prehint">Noch nichts.</p>';
+ const parentRows = parents.length
+  ? parents.map(parent => row(shownTitle(parent), `<button class="mini" data-v="rmp:${parent.id}" aria-label="Verbindung lösen">×</button>`)).join('')
+  : '<p class="prehint">Zu keinem anderen To-Do.</p>';
+ return `<h2>🔗 „${esc(shownTitle(task))}“</h2>
+  <label class="lbl">Kommt erst nach …</label>${beforeRows}
+  <button class="link" data-v="addk">+ Ein vorhandenes To-Do muss vorher erledigt sein</button>
+  <label class="lbl">Gehört auch zu …</label>${parentRows}
+  <button class="link" data-v="addp">+ Gehört auch zu einem anderen To-Do</button>
+  <div class="btns">${buttonHtml('ok', 'Fertig', 'pri')}</div>`;
+}
 // Schaltet ein Vorher-To-Do zwischen „geht sonst nicht“ und „hilft nur“ um
 function toggleKind(task, beforeId) {
  if (task.needs.includes(beforeId)) {
@@ -2265,10 +2331,23 @@ function unlinkBefore(task, beforeId) {
 // Ein vorhandenes To-Do verknüpfen: asBefore = true „kommt vorher“, sonst „zahlt auch ein auf“
 async function linkExisting(task, asBefore) {
  const choices = asBefore ? canPrecede(task.id) : canFollow(task.id);
- const q = await modal(`<h2>${asBefore ? 'Was kommt vorher?' : 'Worauf zahlt es noch ein?'}</h2><p>Auch aus anderen Bereichen.</p>`
-  + (choices.length ? `<select class="field" name="o">${taskOptionsHtml(choices)}</select>${kindChoiceHtml()}` : '<p>Gerade passt nichts.</p>')
+ const pending = modal(`<h2>${asBefore ? 'Was muss vorher erledigt sein?' : 'Wozu gehört es noch?'}</h2><p>Auch aus anderen Bereichen.</p>`
+  + (choices.length ? `<input class="field" name="q" placeholder="Suchen …" autocomplete="off" aria-label="Suchen"><select class="field" name="o" size="6">${taskOptionsHtml(choices)}</select>${kindChoiceHtml()}` : '<p>Gerade passt nichts.</p>')
   + `<div class="btns">${buttonHtml('', 'Zurück', 'ghost')}${choices.length ? buttonHtml('ok', 'Verknüpfen', 'pri') : ''}</div>`);
- if (q.v !== 'ok') return;
+ // Suche: filtert die Liste beim Tippen
+ const search = $('#modal [name=q]');
+ const select = $('#modal [name=o]');
+ if (search && select) {
+  if (select.options.length) select.selectedIndex = 0;
+  search.addEventListener('input', () => {
+   const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+   const matching = choices.filter(t => words.every(w => t.t.toLowerCase().includes(w)));
+   select.innerHTML = taskOptionsHtml(matching);
+   if (select.options.length) select.selectedIndex = 0;
+  });
+ }
+ const q = await pending;
+ if (q.v !== 'ok' || !q.vals.o || !getTask(q.vals.o)) return;
  if (asBefore) linkBefore(task, getTask(q.vals.o), q.vals.kind);
  else linkBefore(getTask(q.vals.o), task, q.vals.kind);
 }
