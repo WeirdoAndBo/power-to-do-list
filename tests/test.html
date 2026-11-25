@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Power-Liste – Selbsttest</title>
+<style>
+ body{font:15px/1.5 system-ui,sans-serif;margin:0;padding:16px;background:#f4f5f7;color:#1c1f23}
+ h1{font-size:22px;margin:0 0 6px}
+ p{margin:4px 0 12px;color:#555}
+ button{font:inherit;padding:8px 16px;border-radius:10px;border:0;background:#1c1f23;color:#fff;cursor:pointer}
+ ol{padding-left:22px}
+ li{margin:4px 0}
+ .ok{color:#1f7a4d}.fail{color:#b3261e;font-weight:600}
+ small{display:block;color:#b3261e;font-weight:400}
+ #summary{font-weight:700;margin:12px 0}
+ iframe{width:420px;max-width:100%;height:700px;border:1px solid #ccc;border-radius:12px;background:#fff;margin-top:12px}
+</style>
+</head>
+<body>
+<h1>Selbsttest der Power-Liste</h1>
+<p>Klickt die App automatisch durch und prüft, ob alles noch so funktioniert wie vorher.
+Deine eigene Liste wird vorher gesichert und danach wiederhergestellt.<br>
+Start: im Projektordner <code>python3 -m http.server 8000</code>, dann <a href="http://localhost:8000/tests/test.html">localhost:8000/tests/test.html</a> öffnen.</p>
+<button id="run">Test starten</button>
+<div id="summary"></div>
+<ol id="results"></ol>
+<iframe id="app" title="App im Test"></iframe>
+<script>
+// Kein Werkzeug nötig: Dieser Test lädt die App in einen Rahmen (iframe) und bedient sie wie ein Mensch,
+// indem er auf Knöpfe klickt. Nach jedem Schritt prüft er den gespeicherten Zustand und die Anzeige.
+const KEY = 'powerliste-b-v1';
+const frame = document.getElementById('app');
+const results = document.getElementById('results');
+let win, doc;
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const $ = sel => doc.querySelector(sel);
+const $$ = sel => [...doc.querySelectorAll(sel)];
+const saved = () => JSON.parse(win.localStorage.getItem(KEY));
+const toastText = () => $('#toast').hidden ? '' : $('#toast').textContent;
+const modalOpen = () => !$('#modal').hidden;
+async function click(sel) {
+ const el = typeof sel === 'string' ? $(sel) : sel;
+ if (!el) throw new Error('Nicht gefunden: ' + sel);
+ el.click();
+ await sleep(60);
+}
+async function type(sel, text) {
+ const el = $(sel);
+ if (!el) throw new Error('Nicht gefunden: ' + sel);
+ el.value = text;
+ el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+async function pressKey(el, key) {
+ el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+ await sleep(60);
+}
+function expect(cond, text) { if (!cond) throw new Error(text); }
+async function loadApp() {
+ frame.src = '../index.html?test=' + Date.now();
+ await new Promise(r => frame.onload = r);
+ win = frame.contentWindow;
+ doc = frame.contentDocument;
+ await sleep(100);
+}
+// Testdaten: eine feste Liste mit Zielen, Vorher-To-Dos, Backlog und Erledigtem.
+// Animationen sind aus, damit der Test nicht warten muss.
+function testData() {
+ const now = Date.now();
+ const shift = 4 * 60 * 60 * 1000; // Tag beginnt um 4 Uhr, wie in der App
+ const midnight = new Date(now - shift); midnight.setHours(0, 0, 0, 0);
+ const task = (id, title, extra = {}) => ({ id, t: title, needs: [], soft: [], done: false, goal: false, cat: null, prio: 0, created: now, doneAt: null, ...extra });
+ const list = [
+  task('g1', 'Stellen anschreiben für Kundenakquise', { goal: true, cat: 'arbeit', area: 'akq', needs: ['a', 'b'] }),
+  task('a', 'Liste an Stellen anlegen', { needs: ['c', 'desk'] }),
+  task('c', 'Ort festlegen, wo die Liste entsteht', { today: true }),
+  task('b', 'Text überlegen', { soft: ['ex'] }),
+  task('ex', 'Zwei Beispiel-Anschreiben ansehen'),
+  task('g2', 'Newsletter starten', { goal: true, cat: 'arbeit', area: 'akq', needs: ['n1'], backlog: true }),
+  task('n1', 'Thema der ersten Ausgabe festlegen', { backlog: true }),
+  task('g5', 'Rechnungen für November schreiben', { goal: true, cat: 'arbeit', area: 'fin', needs: ['r1'] }),
+  task('r1', 'Stunden aus dem Kalender zusammenzählen'),
+  task('g8', 'Mails auf null bringen', { goal: true, cat: 'arbeit', area: 'orga' }),
+  task('desk', 'Schreibtisch freiräumen'),
+  task('g3', 'Keller entrümpeln', { goal: true, cat: 'privat', area: 'haus', needs: ['k1', 'k2'] }),
+  task('k1', 'Sperrmüll-Termin holen', { today: true }),
+  task('k2', 'Kisten besorgen', { done: true, doneAt: now - 864e5 }),
+  task('g4', 'Ein Bild malen', { goal: true, cat: 'hobby', needs: ['desk', 'f1'] }),
+  task('f1', 'Farben besorgen')
+ ];
+ const tasks = {};
+ list.forEach(t => { tasks[t.id] = t; });
+ return {
+  name: 'Testliste', tasks,
+  cats: [
+   { id: 'arbeit', name: 'Arbeit', color: '#5b8def', subs: [{ id: 'akq', name: 'Akquise' }, { id: 'fin', name: 'Finanzen' }, { id: 'orga', name: 'Orga' }] },
+   { id: 'privat', name: 'Privat', color: '#e0a03a', subs: [{ id: 'haus', name: 'Haushalt' }, { id: 'ges', name: 'Gesundheit' }] },
+   { id: 'hobby', name: 'Hobby', color: '#9b7fd1', subs: [] }
+  ],
+  openCat: 'arbeit', view: 'jetzt', inbox: [], anim: false, day: midnight.getTime() + shift, format: 1
+ };
+}
+// Lädt die App mit den Testdaten
+async function freshApp() {
+ localStorage.setItem(KEY, JSON.stringify(testData()));
+ await loadApp();
+}
+// Eine Sicherungsdatei „hochladen“, als hätte man sie in der Dateiauswahl gewählt
+async function importText(text, name = 'sicherung.json') {
+ const input = $('#importFile');
+ const transfer = new win.DataTransfer();
+ transfer.items.add(new win.File([text], name, { type: 'application/json' }));
+ input.files = transfer.files;
+ input.dispatchEvent(new Event('change', { bubbles: true }));
+ await sleep(150);
+}
+
+const tests = [];
+const test = (name, fn) => tests.push({ name, fn });
+
+test('Erster Start zeigt die Beispielkarte und drei Tabs', async () => {
+ localStorage.removeItem(KEY);
+ await loadApp();
+ expect($$('[data-view]').length === 3, 'Es gibt nicht drei Tabs');
+ expect($('#acc .cat.open'), 'Kein Bereich aufgeklappt');
+ expect($$('#acc .card').length > 0, 'Keine Karte in „Machbar“');
+});
+test('Testliste laden', async () => {
+ await freshApp();
+ expect($$('#acc .card').length > 3, 'Karten der Testliste fehlen');
+ expect(saved().format === 1, 'Datenformat ist nicht 1');
+});
+test('Tabs Heute, Übersicht und Machbar wechseln', async () => {
+ await click('[data-view="heute"]');
+ expect($('#daylist'), 'Heute-Liste fehlt');
+ await click('[data-view="baum"]');
+ expect($('#acc .tree'), 'Baum in der Übersicht fehlt');
+ await click('[data-view="jetzt"]');
+ expect($('#acc .card'), 'Karten in Machbar fehlen');
+});
+test('Neues Ziel mit zwei Vorher-To-Dos anlegen', async () => {
+ const before = Object.keys(saved().tasks).length;
+ await click('.dock .plus');
+ expect(modalOpen(), 'Popup ging nicht auf');
+ await type('#modal [name=text]', 'Test-Ziel');
+ await pressKey($('#modal [name=text]'), 'Enter');
+ await type('#modal .prerow:nth-child(1) input', 'Schritt A');
+ await pressKey($('#modal .prerow:nth-child(1) input'), 'Enter');
+ await type('#modal .prerow:nth-child(2) input', 'Schritt B');
+ await click('#modal [data-v="ok"]');
+ const tasks = Object.values(saved().tasks);
+ expect(tasks.length === before + 3, 'Es wurden nicht genau 3 To-Dos angelegt');
+ const goal = tasks.find(t => t.t === 'Test-Ziel');
+ expect(goal && goal.goal && goal.needs.length === 2, 'Ziel hat nicht zwei Vorher-To-Dos');
+ expect(toastText().includes('mit 2 Vorher-To-Dos'), 'Hinweis „mit 2 Vorher-To-Dos“ fehlt');
+});
+test('Rückgängig nimmt das Anlegen zurück', async () => {
+ await click('#undo');
+ expect(!Object.values(saved().tasks).some(t => t.t === 'Test-Ziel'), 'Ziel ist noch da');
+});
+test('Abhaken, „Cool, geschafft!“ und wieder öffnen', async () => {
+ await click('.card[data-id="c"] .check');
+ expect(saved().tasks.c.done, '„c“ ist nicht erledigt');
+ await click('.card[data-id="desk"] .check');
+ expect(modalOpen() && $('#modal').textContent.includes('Cool, geschafft'), 'Frage „Jetzt machen?“ kam nicht');
+ await click('#modal [data-v="later"]');
+ expect(saved().tasks.desk.done, '„desk“ ist nicht erledigt');
+ await click('#undo');
+ expect(!saved().tasks.desk.done, 'Rückgängig hat „desk“ nicht wieder geöffnet');
+});
+test('Heute-Schalter nimmt offene Vorher-To-Dos mit', async () => {
+ await click('.card[data-id="b"] [data-act="today"]');
+ const s = saved();
+ expect(s.tasks.b.today, '„b“ ist nicht in Heute');
+ expect(s.tasks.ex.today && s.tasks.ex.todayBy === 'b', 'Vorher-To-Do „ex“ wurde nicht mitgenommen');
+ await click('[data-view="heute"]');
+ expect($('#daylist .card[data-id="ex"]'), 'Karte fehlt in Heute');
+});
+test('Reihenfolge in Heute mit Pfeiltaste ändern', async () => {
+ const first = $('#daylist .card').dataset.id;
+ const grip = $('#daylist .card .cgrip');
+ grip.focus();
+ await pressKey(grip, 'ArrowDown');
+ expect($('#daylist .card').dataset.id !== first, 'Reihenfolge hat sich nicht geändert');
+ const order = $$('#daylist .card').map(c => saved().tasks[c.dataset.id].todayOrder);
+ expect(order.every((n, i) => n === i + 1), 'Reihenfolge wurde nicht gespeichert');
+});
+test('Heute-Schalter aus nimmt Mitgenommene wieder raus', async () => {
+ await click('[data-view="jetzt"]');
+ await click('.card[data-id="b"] [data-act="today"]');
+ expect(!saved().tasks.ex.today, '„ex“ ist noch in Heute');
+});
+test('Ins Backlog verschieben und zurück', async () => {
+ await click('.card[data-id="b"] [data-act="move"]');
+ $('#modal [name=bl][value="1"]').checked = true;
+ await click('#modal [data-v="ok"]');
+ expect(modalOpen(), 'Frage „ganze Kette?“ kam nicht');
+ await click('#modal [data-v="one"]');
+ expect(saved().tasks.b.backlog, '„b“ ist nicht im Backlog');
+ await click('[data-act="tozeit"][data-id="b"]');
+ expect(!saved().tasks.b.backlog, '„b“ ist nicht zurück in Zeitnah');
+});
+test('Löschen mit Rückgängig', async () => {
+ await click('.card[data-id="ex"] [data-act="del"]');
+ expect(!saved().tasks.ex, '„ex“ wurde nicht gelöscht');
+ await click('#undo');
+ expect(saved().tasks.ex, '„ex“ ist nach Rückgängig nicht zurück');
+});
+test('Fokusmodus öffnen und mit Escape schließen', async () => {
+ await click('.card[data-id="ex"] h3');
+ expect(!$('#focus').hidden, 'Fokusmodus ging nicht auf');
+ await pressKey(doc.body, 'Escape');
+ expect($('#focus').hidden, 'Fokusmodus ging nicht zu');
+});
+test('Kategorie-Spalte mit Pfeiltaste verschieben (mit Rückgängig)', async () => {
+ const grip = $('.colgrip[data-s="akq"]');
+ expect(grip, 'Griff im Spaltenkopf fehlt');
+ grip.focus();
+ await pressKey(grip, 'ArrowRight');
+ expect(saved().cats[0].subs.map(k => k.id).join() === 'fin,akq,orga', 'Reihenfolge ist nicht Finanzen, Akquise, Orga');
+ expect(toastText().includes('verschoben'), 'Hinweis „verschoben“ fehlt');
+ await click('#undo');
+ expect(saved().cats[0].subs.map(k => k.id).join() === 'akq,fin,orga', 'Rückgängig hat die Reihenfolge nicht zurückgesetzt');
+});
+test('Kategorie im Popup „Nach links“ verschieben', async () => {
+ await click('[data-act="editsub"][data-s="orga"]');
+ expect(modalOpen() && $('#modal [data-v="left"]'), 'Knopf „Nach links“ fehlt');
+ await click('#modal [data-v="left"]');
+ expect(saved().cats[0].subs.map(k => k.id).join() === 'akq,orga,fin', 'Reihenfolge ist nicht Akquise, Orga, Finanzen');
+});
+let backup;
+test('Sicherung speichern erzeugt eine gültige Datei', async () => {
+ let blob;
+ const original = win.URL.createObjectURL;
+ win.URL.createObjectURL = b => { blob = b; return original.call(win.URL, b); };
+ win.HTMLAnchorElement.prototype.click = function () {}; // keinen echten Download auslösen
+ await click('[data-act="menu"]');
+ await click('#modal [data-v="export"]');
+ expect(blob, 'Es wurde keine Datei erzeugt');
+ backup = await blob.text();
+ const parsed = JSON.parse(backup);
+ expect(parsed.app === 'power-liste' && parsed.format === 1 && parsed.data.tasks.g1, 'Datei hat nicht den erwarteten Aufbau');
+});
+test('Sicherung laden ersetzt die Liste (mit Rückgängig)', async () => {
+ await click('.card[data-id="ex"] [data-act="del"]');
+ await importText(backup);
+ expect(modalOpen() && $('#modal').textContent.includes('Sicherung laden?'), 'Frage „Sicherung laden?“ kam nicht');
+ await click('#modal [data-v="ok"]');
+ expect(saved().tasks.ex, 'Gelöschtes To-Do ist nach dem Laden nicht zurück');
+ expect(toastText().includes('Sicherung geladen'), 'Hinweis „Sicherung geladen“ fehlt');
+});
+test('Alte Sicherung ohne Formatnummer lädt weiter', async () => {
+ const old = JSON.parse(backup).data;
+ delete old.format; delete old.inbox; delete old.openCat;
+ old.cats.forEach(c => delete c.subs);
+ Object.values(old.tasks).forEach(t => delete t.soft);
+ await importText(JSON.stringify(old));
+ await click('#modal [data-v="ok"]');
+ const s = saved();
+ expect(s.format === 1 && Array.isArray(s.inbox) && s.cats.every(c => Array.isArray(c.subs)), 'Alte Daten wurden nicht ergänzt');
+});
+test('Kaputte und zu neue Dateien werden abgelehnt', async () => {
+ await importText('{kaputt');
+ expect(toastText().includes('keine gültige Sicherung'), 'Kaputte Datei wurde nicht abgelehnt');
+ await importText(JSON.stringify({ app: 'power-liste', format: 99, data: {} }));
+ expect(toastText().includes('neueren Version'), 'Zu neue Datei wurde nicht abgelehnt');
+ const evil = JSON.parse(backup); evil.data.tasks.a.needs = ['<script>'];
+ await importText(JSON.stringify(evil));
+ expect(toastText().includes('beschädigt'), 'Beschädigte Datei wurde nicht abgelehnt');
+});
+test('Gespeicherte Liste bleibt nach Neuladen erhalten', async () => {
+ const before = win.localStorage.getItem(KEY);
+ await loadApp();
+ expect(win.localStorage.getItem(KEY) === before, 'Daten haben sich beim Laden verändert');
+ expect($$('#acc .card').length > 0, 'Nach dem Neuladen keine Karten');
+});
+
+document.getElementById('run').onclick = async () => {
+ const own = localStorage.getItem(KEY); // eigene Liste sichern
+ results.innerHTML = '';
+ let failed = 0;
+ try {
+  for (const t of tests) {
+   const li = document.createElement('li');
+   results.append(li);
+   try {
+    await t.fn();
+    li.className = 'ok';
+    li.textContent = '✓ ' + t.name;
+   } catch (e) {
+    failed++;
+    li.className = 'fail';
+    li.innerHTML = '✗ ' + t.name + '<small></small>';
+    li.querySelector('small').textContent = e.message;
+   }
+  }
+ } finally {
+  frame.src = 'about:blank';
+  await sleep(100);
+  if (own === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, own); // eigene Liste zurück
+ }
+ const summary = document.getElementById('summary');
+ summary.textContent = failed ? `${failed} von ${tests.length} Tests fehlgeschlagen.` : `Alle ${tests.length} Tests bestanden.`;
+ summary.className = failed ? 'fail' : 'ok';
+};
+</script>
+</body>
+</html>

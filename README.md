@@ -65,6 +65,7 @@ js/app.js              Logik, Speichern, Export/Import
 sw.js                  Service Worker für den Offline-Betrieb
 manifest.webmanifest   App-Name, Farben, Icons für die Installation
 icons/                 App-Icons (SVG und PNG, auch für iOS und Android)
+tests/test.html        Selbsttest (im Browser öffnen, siehe DEVELOPING.md)
 archiv/version-a.html  Prototyp Version A (Kategorien als Spalten), nur zum Nachschauen
 archiv/v3-voll.html    ältere, umfangreichere Fassung (Routinen, Fokus-Bereiche, Eingangskorb)
 .nojekyll              sorgt dafür, dass GitHub Pages die Dateien unverändert ausliefert
