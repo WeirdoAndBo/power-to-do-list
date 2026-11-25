@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.9-c';
+const APP_VERSION = '1.0.10-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -463,13 +463,13 @@ function chainBoxHtml(task) {
 // (options.tag, options.attrs), damit das Umsortieren der Unter-To-Dos weiter funktioniert.
 function cardHtml(task, color, options = {}) {
  const title = esc(task.t);
+ // Version C: Gezogen wird die ganze Karte (Abschnitt „Ziehen“). Der Griff ist nur noch für die Tastatur da
+ // und erst sichtbar, wenn er mit Tab angesteuert wird.
  let grip = '';
  if (options.grip) {
-  grip = `<button class="cgrip" data-act="grip" data-id="${task.id}" aria-label="${title} verschieben (Pfeiltasten hoch/runter)"`
-   + ` title="Ziehen, um die Reihenfolge zu ändern">${ICON_GRIP}</button>`;
+  grip = `<button class="cgrip" data-act="grip" data-id="${task.id}" aria-label="${title} verschieben (Pfeiltasten hoch/runter)">${ICON_GRIP}</button>`;
  } else if (options.move) {
-  grip = `<button class="cgrip mgrip" data-act="mgrip" data-id="${task.id}" aria-label="${title} verschieben"`
-   + ` title="Ziehen: ins Backlog, in eine andere Kategorie oder einen anderen Bereich">${ICON_GRIP}</button>`;
+  grip = `<button class="cgrip mgrip" data-act="mgrip" data-id="${task.id}" aria-label="${title} verschieben">${ICON_GRIP}</button>`;
  }
  const moveButton = options.move
   ? `<button class="hbtn" data-act="move" data-id="${task.id}" aria-label="${title}: Backlog oder verschieben" title="Backlog / Verschieben nach …">${ICON_DOTS}</button>`
@@ -480,14 +480,20 @@ function cardHtml(task, color, options = {}) {
   : '';
  const tag = options.tag || 'article';
  return `<${tag} class="card${options.cls || ''}" data-act="focus" data-id="${task.id}" ${options.attrs || ''} style="--c:${color}" tabindex="0" aria-label="${title} – im Fokusmodus öffnen">
- <div class="chead">${grip}${task.done ? '' : todaySwitchHtml(task)}<span class="sp"></span>
-  <button class="hbtn" data-act="edit" data-id="${task.id}" aria-label="${title} bearbeiten" title="Bearbeiten">${ICON_PEN}</button>
-  ${moveButton}
-  <button class="hbtn" data-act="del" data-id="${task.id}" aria-label="${title} löschen" title="Löschen">${ICON_TRASH}</button></div>
- <div class="cbody">${checkButtonHtml(task, color)}<div class="ctext"><h3>${title}</h3>${chainBoxHtml(task)}
- ${waitingHtml}</div></div>
- ${options.tree || ''}
- <button class="ask" data-act="block" data-id="${task.id}"><b aria-hidden="true">+</b> ${task.goal ? 'To-Do' : 'Vorher-To-Do'}</button></${tag}>`;
+ <div class="chead">${grip}${task.done ? '' : todaySwitchHtml(task)}<span class="sp"></span>${moveButton}</div>
+ <div class="cbody">${checkButtonHtml(task, color)}<div class="ctext"><h3>${titleHtml(task)}</h3>${chainBoxHtml(task)}
+ ${waitingHtml}</div><span class="cacts">${taskActionsHtml(task)}</span></div>
+ ${options.tree || ''}</${tag}>`;
+}
+// Titel eines To-Dos. Antippen = direkt hier bearbeiten (Enter speichert, Escape bricht ab), siehe startRename.
+function titleHtml(task) {
+ return `<span class="t" data-act="rename" data-id="${task.id}" tabindex="0" role="button" aria-label="${esc(task.t)} – Text bearbeiten">${esc(task.t)}</span>`;
+}
+// Version C: hinter jedem To-Do „+“ (etwas davor einfügen) und der kleine Mülleimer
+function taskActionsHtml(task) {
+ const title = esc(task.t);
+ return `${task.done ? '' : `<button class="mini add" data-act="block" data-id="${task.id}" aria-label="Vorher-To-Do für ${title} hinzufügen" title="Etwas davor einfügen">+</button>`}`
+  + `<button class="mini del" data-act="del" data-id="${task.id}" aria-label="${title} löschen" title="Löschen">${ICON_TRASH}</button>`;
 }
 // Kleiner Papierkorb-Knopf für Listenzeilen (Erledigt, Heute geschafft, Danach dran)
 function deleteMiniHtml(task) {
@@ -505,10 +511,10 @@ function backlogRowHtml(task, color) {
  const openBefore = [...taskAndAllBefore(task.id)].filter(id => id !== task.id && !getTask(id).done).length;
  const title = esc(task.t);
  return `<div class="brow" data-id="${task.id}" style="--c:${color}">`
-  + `<span class="grip mgrip" data-id="${task.id}" title="Ziehen: nach Zeitnah, in eine andere Kategorie oder einen anderen Bereich">${ICON_GRIP}</span>`
-  + `<button class="t" data-act="edit" data-id="${task.id}">${title}${openBefore ? `<small>mit ${openBefore} Vorher-To-Do${pluralS(openBefore)}</small>` : ''}</button>`
+  + `<span class="btext">${titleHtml(task)}${openBefore ? `<small>mit ${openBefore} Vorher-To-Do${pluralS(openBefore)}</small>` : ''}</span>`
   + `<button class="mini" data-act="tozeit" data-id="${task.id}" title="Nach Zeitnah holen" aria-label="${title} nach Zeitnah holen">↑</button>`
-  + `<button class="mini" data-act="move" data-id="${task.id}" aria-label="${title} verschieben" title="Verschieben nach …">${ICON_DOTS}</button></div>`;
+  + `<button class="mini" data-act="move" data-id="${task.id}" aria-label="${title} verschieben" title="Verschieben nach …">${ICON_DOTS}</button>`
+  + `${deleteMiniHtml(task)}</div>`;
 }
 // Schalter „Machbar“ an: eine Kategorie-Spalte mit Zeitnah (nicht gesperrt), Backlog und Erledigt
 function machbarColumnHtml(bereich, kategorie) {
@@ -572,19 +578,14 @@ function treeNodeHtml(task, color, path, level, viaSoft, parentId = null) {
   const tip = level === 0 ? (isOpen ? 'Alles zuklappen' : 'Alles aufklappen') : '';
   toggle = `<button class="mini chev" data-act="tog" data-k="${esc(key)}" data-l="${level}" aria-expanded="${isOpen}" aria-label="${label}" title="${tip}">${ICON_CHEVRON}</button>`;
  }
+ // Griff nur für die Tastatur (gezogen wird die ganze Zeile)
  const grip = parentId
-  ? `<button class="cgrip tgrip" aria-label="${title} umsortieren (Pfeiltasten: hoch/runter = Reihenfolge, rechts/links = Ebene)"`
-   + ` title="Ziehen: hoch/runter = Reihenfolge, nach rechts = kommt vor das To-Do darüber">${ICON_GRIP}</button>`
+  ? `<button class="cgrip tgrip" aria-label="${title} umsortieren (Pfeiltasten: hoch/runter = Reihenfolge, rechts/links = Ebene)">${ICON_GRIP}</button>`
   : '';
- // Version C: Auf Ziel-Karten wird nicht eingerückt. Die Ebene zeigen Punkte vor dem Häkchen
- // (• = direkt vor dem Ziel, •• = eine Ebene tiefer …) und die farbige Linie links, die je Ebene heller wird.
- const dots = level > 4 ? `${level}•` : '•'.repeat(level);
- const levelMark = `<span class="lvl" title="Ebene ${level}" aria-hidden="true">${dots}</span>`;
- const row = `<div class="row${task.done ? ' isdone' : ''}${inBacklog ? ' inbl' : ''}">${grip}${levelMark}${checkButtonHtml(task, color)}`
-  + `<button class="t" data-act="edit" data-id="${task.id}">${title}${inBacklog ? ' <span class="tag bl" title="Liegt im Backlog">Backlog</span>' : ''}</button>`
+ const row = `<div class="row${task.done ? ' isdone' : ''}${inBacklog ? ' inbl' : ''}">${grip}${checkButtonHtml(task, color)}`
+  + `<span class="tw">${titleHtml(task)}${inBacklog ? ' <span class="tag bl" title="Liegt im Backlog">Backlog</span>' : ''}</span>`
   + `${viaSoft ? '<span class="tag">hilft</span>' : ''}
- ${task.done ? '' : todaySwitchHtml(task, 1)}`
-  + `<button class="mini" data-act="addsub" data-id="${task.id}" aria-label="Vorher-To-Do für ${title} hinzufügen" title="Hier etwas davor einfügen">+</button>`
+ ${task.done ? '' : todaySwitchHtml(task, 1)}${taskActionsHtml(task)}`
   + `
  ${toggle}</div>`;
  return `<li data-tid="${task.id}" data-k="${esc(key)}" data-l="${level}" style="--c:${color}">${row}
@@ -681,8 +682,7 @@ function bereichOpenHtml(bereich) {
  const columns = columnsOf(bereich).map(kategorie => {
   // Griff zum Umsortieren der Spalten, nur wenn es mehr als eine Kategorie gibt
   const columnGrip = bereich.subs.length > 1
-   ? `<button class="colgrip" data-cat="${bereich.id}" data-s="${kategorie.id}" aria-label="Kategorie ${esc(kategorie.name)} verschieben, mit Pfeil links oder rechts"`
-    + ` title="Ziehen, um die Reihenfolge zu ändern">${ICON_GRIP}</button>`
+   ? `<button class="colgrip" data-cat="${bereich.id}" data-s="${kategorie.id}" aria-label="Kategorie ${esc(kategorie.name)} verschieben, mit Pfeil links oder rechts">${ICON_GRIP}</button>`
    : '';
   const columnHead = bereich.subs.length
    ? `<div class="colhead">${columnGrip}<h2>${esc(kategorie.name)}</h2><button class="iconbtn" data-act="editsub" data-id="${bereich.id}" data-s="${kategorie.id}"`
@@ -819,9 +819,10 @@ function renderFocus() {
  const beforeHtml = before.length
   ? `<div class="before"><p>Vorher noch:</p>${before.map(t => `<div class="drow">${checkButtonHtml(t, color)}<span>${esc(t.t)}</span></div>`).join('')}</div>`
   : '';
- const addButton = task.done
+ const addButton = (task.done
   ? ''
-  : `<button class="softbtn" data-act="block" data-id="${task.id}">${task.goal ? '+ To-Do' : '+ Vorher-To-Do'}</button>`;
+  : `<button class="softbtn" data-act="block" data-id="${task.id}">${task.goal ? '+ To-Do' : '+ Vorher-To-Do'}</button>`)
+  + ` <button class="softbtn" data-act="edit" data-id="${task.id}">Details und Verbindungen</button>`;
  focusEl.innerHTML = `<div class="ftop"><small>FOKUSMODUS</small><span class="fbtns">`
   + `<button class="iconbtn" data-act="del" data-id="${task.id}" aria-label="${esc(task.t)} löschen" title="Löschen">${ICON_TRASH}</button>`
   + `<button class="iconbtn" data-act="closefocus" aria-label="Fokusmodus schließen">${ICON_CLOSE}</button></span></div>
@@ -1043,10 +1044,7 @@ function saveDayOrder() {
  [...list.querySelectorAll('.card')].forEach((cardEl, i) => { getTask(cardEl.dataset.id).todayOrder = i + 1; });
  save();
 }
-document.addEventListener('pointerdown', event => {
- const grip = event.target.closest('#daylist .cgrip');
- if (!grip) return;
- event.preventDefault();
+function dragDayCard(event, grip) {
  const cardEl = grip.closest('.card');
  const list = cardEl.parentElement;
  cardEl.classList.add('dragging');
@@ -1062,7 +1060,7 @@ document.addEventListener('pointerdown', event => {
   saveDayOrder();
   render();
  });
-});
+}
 document.addEventListener('keydown', event => {
  const grip = event.target.closest && event.target.closest('#daylist .cgrip');
  if (!grip || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
@@ -1081,10 +1079,7 @@ document.addEventListener('keydown', event => {
 // Karten bzw. Backlog-Zeilen, die direkt in dieser Ablagefläche liegen (ohne die gezogene)
 const dropItems = (zone, source) => [...zone.querySelectorAll('.card,.brow')]
  .filter(el => el !== source && el.closest('[data-drop]') === zone);
-document.addEventListener('pointerdown', event => {
- const grip = event.target.closest('.mgrip');
- if (!grip || !$('#modal').hidden) return;
- event.preventDefault();
+function dragCard(event, grip) {
  const id = grip.dataset.id;
  const source = grip.closest('.card,.brow');
  const box = source.getBoundingClientRect();
@@ -1175,14 +1170,11 @@ document.addEventListener('pointerdown', event => {
   }
  };
  trackPointer(onMove, onUp);
-});
+}
 
 // 4) Kategorie-Spalten am Griff im Spaltenkopf ziehen. Eine farbige Kante zeigt, wo die Spalte landet.
 //    Erreicht der Zeiger den Rand der Spalten, wird automatisch seitlich gescrollt.
-document.addEventListener('pointerdown', event => {
- const grip = event.target.closest && event.target.closest('.colgrip');
- if (!grip || !$('#modal').hidden) return;
- event.preventDefault();
+function dragColumn(event, grip) {
  const cols = $('#cols');
  const source = grip.closest('.col');
  const columns = [...cols.children];
@@ -1252,7 +1244,7 @@ document.addEventListener('pointerdown', event => {
   if (upEvent.type === 'pointercancel') return;
   moveKategorie(bereichId, kategorieId, to);
  });
-});
+}
 // Tastatur: Griff im Spaltenkopf fokussieren, Pfeil links/rechts verschiebt die Spalte
 document.addEventListener('keydown', event => {
  const grip = event.target.closest && event.target.closest('.colgrip');
@@ -1331,10 +1323,7 @@ function applyTreeMove(id, oldParentId, newParentLi, afterId, quiet) {
  if (!quiet) toast(oldParentId === newParentId ? 'Reihenfolge geändert.' : `Kommt jetzt vor „${esc(getTask(newParentId).t)}“.`, true);
  return newParentLi.dataset.k + '/' + id;
 }
-document.addEventListener('pointerdown', event => {
- const grip = event.target.closest && event.target.closest('.tree .tgrip');
- if (!grip || !$('#modal').hidden) return;
- event.preventDefault();
+function dragTreeRow(event, grip) {
  const li = grip.closest('li');
  const card = li.closest('.tree > li');
  const id = li.dataset.tid;
@@ -1383,7 +1372,7 @@ document.addEventListener('pointerdown', event => {
   if (upEvent.type === 'pointercancel' || !drop || !drop.parentLi) return;
   applyTreeMove(id, oldParentId, drop.parentLi, drop.afterLi ? drop.afterLi.dataset.tid : null);
  });
-});
+}
 // Tastatur am Griff: hoch/runter = Reihenfolge, rechts = kommt vor das To-Do darüber, links = eine Ebene höher
 document.addEventListener('keydown', event => {
  const grip = event.target.closest && event.target.closest('.tree .tgrip');
@@ -1407,7 +1396,118 @@ document.addEventListener('keydown', event => {
  if (newKey) document.querySelector(`.tree li[data-k="${CSS.escape(newKey)}"] > .row .tgrip`)?.focus();
 });
 
+// 6) Version C: Gezogen wird, wo man anfasst – keine Griffe mehr.
+//    Maus: drücken und bewegen. Finger: kurz halten (HOLD_MS), dann ziehen; wer gleich wischt, scrollt normal.
+//    Knöpfe, Schalter, Häkchen und Eingabefelder starten kein Ziehen. Ein kurzer Klick auf den Text bearbeitet ihn.
+const HOLD_MS = 320;
+const NO_DRAG = 'button, input, select, textarea, summary, a, label, details.chain, .tinput';
+let touchDragging = false;  // während des Ziehens mit dem Finger: Seite nicht scrollen lassen
+document.addEventListener('touchmove', event => { if (touchDragging) event.preventDefault(); }, { passive: false });
+// Was würde hier gezogen? Gibt [Funktion, Element] zurück oder null.
+function dragTargetAt(target) {
+ if (!target.closest || target.closest(NO_DRAG) || !target.closest('#acc')) return null;
+ const li = target.closest('.tree li');
+ if (li && !li.classList.contains('card')) {
+  // Unter-To-Do in einer Ziel-Karte (nicht in „Erreichte Ziele“)
+  return li.closest('.tcard') ? [dragTreeRow, li.querySelector(':scope > .row')] : null;
+ }
+ const dayCard = target.closest('#daylist .card');
+ if (dayCard) return [dragDayCard, dayCard];
+ const card = target.closest('.card, .brow');
+ if (card) return [dragCard, card];
+ const head = target.closest('.colhead');
+ if (head && head.querySelector('.colgrip')) return [dragColumn, head.querySelector('.colgrip')];
+ return null;
+}
+document.addEventListener('pointerdown', event => {
+ if (event.button > 0 || !$('#modal').hidden || !$('#focus').hidden) return;
+ // Wird gerade ein Text bearbeitet: erst speichern (baut die Seite neu auf), nicht gleich ziehen
+ if (document.activeElement && document.activeElement.classList.contains('tinput') && event.target !== document.activeElement) {
+  document.activeElement.blur();
+  return;
+ }
+ const found = dragTargetAt(event.target);
+ if (!found) return;
+ const [startDrag, element] = found;
+ if (event.pointerType === 'mouse') {
+  event.preventDefault();   // keine Textauswahl beim Ziehen; der Klick kommt trotzdem an
+  startDrag(event, element);
+  return;
+ }
+ // Finger oder Stift: erst nach kurzem Halten
+ const lifted = element.closest('.card, .brow, li, .col');
+ const startX = event.clientX;
+ const startY = event.clientY;
+ const stop = () => {
+  clearTimeout(timer);
+  removeEventListener('pointermove', onMove);
+  removeEventListener('pointerup', stop);
+  removeEventListener('pointercancel', stop);
+ };
+ const onMove = moveEvent => {
+  if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > 8) stop();
+ };
+ const timer = setTimeout(() => {
+  stop();
+  touchDragging = true;
+  lifted?.classList.add('held');
+  try { navigator.vibrate?.(12); } catch (e) {}
+  const end = () => {
+   touchDragging = false;
+   lifted?.classList.remove('held');
+   ignoreClicksUntil = Date.now() + 350;  // Loslassen nach dem Halten ist kein Klick
+   removeEventListener('pointerup', end);
+   removeEventListener('pointercancel', end);
+  };
+  addEventListener('pointerup', end);
+  addEventListener('pointercancel', end);
+  startDrag(event, element);
+ }, HOLD_MS);
+ addEventListener('pointermove', onMove);
+ addEventListener('pointerup', stop);
+ addEventListener('pointercancel', stop);
+});
+// Langes Drücken soll auf dem Handy kein Kontextmenü öffnen
+document.addEventListener('contextmenu', event => { if (touchDragging) event.preventDefault(); });
+
 /* ---------- Abläufe (Dialoge) ---------- */
+// Text eines To-Dos direkt an Ort und Stelle bearbeiten. Enter (oder woanders hintippen) speichert, Escape bricht ab.
+function startRename(titleEl) {
+ const task = getTask(titleEl.dataset.id);
+ if (!task || titleEl.querySelector('input')) return;
+ const input = document.createElement('input');
+ input.className = 'tinput';
+ input.value = task.t;
+ input.setAttribute('aria-label', 'Text bearbeiten');
+ input.setAttribute('autocomplete', 'off');
+ titleEl.textContent = '';
+ titleEl.append(input);
+ titleEl.classList.add('editing');
+ input.focus();
+ input.setSelectionRange(input.value.length, input.value.length);
+ let finished = false;
+ const finish = keep => {
+  if (finished) return;
+  finished = true;
+  const text = input.value.trim();
+  if (keep && text && text !== task.t) {
+   undoSnapshot = snapshot();
+   task.t = text;
+   save();
+   render();
+   toast('Gespeichert.', true);
+  } else {
+   render();
+  }
+ };
+ input.addEventListener('keydown', event => {
+  event.stopPropagation();
+  if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+  if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+ });
+ input.addEventListener('blur', () => finish(true));
+ input.addEventListener('click', event => event.stopPropagation());
+}
 // Abhaken oder wieder öffnen. Danach fragt die App für jedes To-Do, das dadurch frei wird: „Jetzt machen?“
 async function toggleDone(id) {
  const task = getTask(id);
@@ -1891,7 +1991,9 @@ async function moveMenu(id) {
  const r = await modal(`<h2>Verschieben</h2><p>${esc(task.t)}</p>
   <div class="seg" role="radiogroup" aria-label="Zeitnah oder Backlog"><label><input type="radio" name="bl" value="0"${task.backlog ? '' : ' checked'}>Zeitnah</label><label><input type="radio" name="bl" value="1"${task.backlog ? ' checked' : ''}>Backlog</label></div>
   ${placePickerHtml(placeOf(task))}
+  <p><button class="link" data-v="more">Details und Verbindungen …</button></p>
   <div class="btns">${buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', 'Fertig', 'pri')}</div>`);
+ if (r.v === 'more') { await editTask(id); return; }
  if (r.v !== 'ok') return;
  const [cat, area] = r.vals.place.split('|');
  await moveTo(id, { cat, area, bl: r.vals.bl === '1' });
@@ -2128,6 +2230,7 @@ document.addEventListener('click', event => {
   case 'addhere': addTask({ mode: 'goal', place: button.dataset.cat + '|' + button.dataset.area }); break;
   case 'quick': quickNote(); break;
   case 'edit': editTask(id); break;
+  case 'rename': startRename(button); break;
   case 'inbox': sortInbox(); break;
   case 'menu': settingsDialog(); break;
   case 'machbar': setMachbar(state.view !== 'jetzt'); break;
@@ -2146,6 +2249,11 @@ document.addEventListener('click', event => {
 document.addEventListener('keydown', event => {
  if (!$('#modal').hidden) return;
  if (event.key === 'Escape' && !$('#focus').hidden) closeFocus();
+ if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('.t[data-act="rename"]')) {
+  event.preventDefault();
+  startRename(event.target);
+  return;
+ }
  if (event.key === 'Enter' && event.target.matches('.card')) openFocus(event.target.dataset.id);
  if (event.target.matches('.tab[data-i]') && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
   const count = columnsOf(visibleBereiche().find(b => b.id === state.openCat)).length;

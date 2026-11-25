@@ -289,26 +289,51 @@ test('Löschen in „Heute geschafft“', async () => {
  await click('#undo');
  await zeige(true);
 });
-test('Löschen in der Übersicht über „Bearbeiten“', async () => {
+test('Unter-To-Do in der Übersicht mit dem Mülleimer löschen', async () => {
  await zeige(false);
- await click('.tree [data-act="edit"][data-id="g8"]');
- await click('#modal [data-v="del"]');
- await click('#modal [data-v="ok"]');
- expect(!saved().tasks.g8, '„g8“ wurde nicht gelöscht');
+ const toggle = $('.tree li.card[data-id="g1"] > .ttog');
+ if (toggle.getAttribute('aria-expanded') !== 'true') await click(toggle);
+ const trash = $('.tree li[data-tid="b"] > .row [data-act="del"]');
+ expect(trash, 'Mülleimer am Unter-To-Do fehlt');
+ expect(!$('.tree li[data-tid="b"] > .row [data-act="edit"]'), 'Stift am Unter-To-Do ist noch da');
+ await click(trash);
+ expect(!saved().tasks.b, '„b“ wurde nicht gelöscht');
  await click('#undo');
- expect(saved().tasks.g8, '„g8“ ist nach Rückgängig nicht zurück');
+ expect(saved().tasks.b, '„b“ ist nach Rückgängig nicht zurück');
+ await click('.tree li.card[data-id="g1"] > .ttog');
  await zeige(true);
 });
-test('Übersicht: Ziel-Karte hat Kopf mit Heute, Bearbeiten und Löschen', async () => {
+test('Text direkt bearbeiten: antippen, tippen, Enter', async () => {
+ const title = $('.card[data-id="b"] h3 .t');
+ expect(title, 'Titel zum Antippen fehlt');
+ await click(title);
+ const input = $('.card[data-id="b"] .tinput');
+ expect(input && doc.activeElement === input, 'Eingabefeld erscheint nicht');
+ expect($('#focus').hidden, 'Antippen des Titels hat den Fokusmodus geöffnet');
+ input.value = 'Text gut überlegen';
+ await pressKey(input, 'Enter');
+ expect(saved().tasks.b.t === 'Text gut überlegen', 'Neuer Text wurde nicht gespeichert');
+ expect($('.card[data-id="b"] h3 .t').textContent === 'Text gut überlegen', 'Neuer Text wird nicht angezeigt');
+ await click('.card[data-id="b"] h3 .t');
+ $('.card[data-id="b"] .tinput').value = 'Verworfen';
+ await pressKey($('.card[data-id="b"] .tinput'), 'Escape');
+ expect(saved().tasks.b.t === 'Text gut überlegen', 'Escape hat trotzdem gespeichert');
+ await click('.card[data-id="b"] h3 .t');
+ $('.card[data-id="b"] .tinput').value = 'Text überlegen';
+ await pressKey($('.card[data-id="b"] .tinput'), 'Enter');
+});
+test('Übersicht: Ziel-Karte hat Heute und ⋯ im Kopf, + und Mülleimer hinter dem Titel', async () => {
  await zeige(false);
  const head = $('.tree li[data-tid="g1"] > .chead');
  expect(head, 'Kopfbereich auf der Karte fehlt');
- expect(head.querySelector('[data-act="today"]') && head.querySelector('[data-act="edit"]') && head.querySelector('[data-act="del"]'), 'Heute, Bearbeiten oder Löschen fehlt im Kopf');
+ expect(head.querySelector('[data-act="today"]') && head.querySelector('[data-act="move"]'), 'Heute oder ⋯ fehlt im Kopf');
+ expect(!$('.tree li[data-tid="g1"] [data-act="edit"]') && !$('.tree li[data-tid="g1"] .ask'), 'Stift oder „+ To-Do“ unten ist noch da');
+ expect($('.tree li[data-tid="g1"] > .cbody [data-act="block"]') && $('.tree li[data-tid="g1"] > .cbody [data-act="del"]'), '+ oder Mülleimer hinter dem Titel fehlt');
  await click(head.querySelector('[data-act="today"]'));
  expect(saved().tasks.g1.today, 'Heute-Schalter im Kopf hat nicht geschaltet');
  await click('.tree li[data-tid="g1"] > .chead [data-act="today"]');
  expect(!saved().tasks.g1.today, 'Heute-Schalter ging nicht wieder aus');
- await click('.tree li[data-tid="g8"] > .chead [data-act="del"]');
+ await click('.tree li[data-tid="g8"] > .cbody [data-act="del"]');
  expect(!saved().tasks.g8, '„g8“ wurde nicht gelöscht');
  await click('#undo');
  expect(saved().tasks.g8, '„g8“ ist nach Rückgängig nicht zurück');
@@ -336,11 +361,11 @@ test('Übersicht: Unter-To-Dos mit Pfeiltasten umsortieren und einrücken', asyn
  await click('#undo');
  expect(saved().tasks.g1.needs.join() === 'b,a', 'Rückgängig hat die Reihenfolge nicht zurückgesetzt');
 });
-test('Übersicht: Unter-To-Do per Ziehen nach oben verschieben', async () => {
- const grip = $('.tree li[data-tid="a"] > .row .tgrip');
+test('Übersicht: Unter-To-Do per Ziehen nach oben verschieben (anfassen, wo man will)', async () => {
+ const grip = $('.tree li[data-tid="a"] > .row .tw');
  const target = $('.tree li[data-tid="b"] > .row').getBoundingClientRect();
  const from = grip.getBoundingClientRect();
- const pointer = (type, x, y) => grip.dispatchEvent(new win.PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId: 1 }));
+ const pointer = (type, x, y) => grip.dispatchEvent(new win.PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId: 1, pointerType: 'mouse' }));
  pointer('pointerdown', from.x + 5, from.y + 5);
  const move = (x, y) => win.dispatchEvent(new win.PointerEvent('pointermove', { bubbles: true, clientX: x, clientY: y, pointerId: 1 }));
  move(from.x + 5, from.y - 10);
@@ -354,7 +379,7 @@ test('Übersicht: Unter-To-Do per Ziehen nach oben verschieben', async () => {
 // Zieht ein Element am Griff zu (x, y) – wie mit Maus oder Finger
 async function dragTo(grip, x, y) {
  const from = grip.getBoundingClientRect();
- const at = (type, px, py, target = win) => target.dispatchEvent(new win.PointerEvent(type, { bubbles: true, clientX: px, clientY: py, pointerId: 1 }));
+ const at = (type, px, py, target = win) => target.dispatchEvent(new win.PointerEvent(type, { bubbles: true, clientX: px, clientY: py, pointerId: 1, pointerType: 'mouse' }));
  at('pointerdown', from.x + 5, from.y + 5, grip);
  at('pointermove', from.x + 5, from.y + 20);
  at('pointermove', x, y);
@@ -365,22 +390,23 @@ test('Karten sehen mit Schalter „Machbar“ an und aus gleich aus', async () =
  await zeige(false);
  const goal = $('.tree li.card[data-id="g1"]');
  expect(goal, 'Ziel ist in der Übersicht keine Karte');
- const parts = el => ['.mgrip', '[data-act="today"]', '[data-act="edit"]', '[data-act="move"]', '[data-act="del"]', '.cbody .check', '.cbody h3', '.ask']
+ const parts = el => ['[data-act="today"]', '[data-act="move"]', '.cbody [data-act="block"]', '.cbody [data-act="del"]', '.cbody .check', '.cbody h3 .t']
   .filter(sel => el.querySelector(sel)).join();
  const goalParts = parts(goal);
  await zeige(true);
  const cardParts = parts($('.list.zone > .card'));
  expect(goalParts === cardParts, 'Aufbau unterschiedlich: ' + goalParts + ' / ' + cardParts);
 });
-test('Unter-To-Dos auf der Ziel-Karte: nicht eingerückt, Ebene als Punkte', async () => {
+test('Unter-To-Dos auf der Ziel-Karte: nur wenig eingerückt, ohne Punkte', async () => {
  await zeige(false);
  if ($('.tree li.card[data-id="g1"] > .ttog').getAttribute('aria-expanded') !== 'true') await click('.tree li.card[data-id="g1"] > .ttog');
  const one = $('.tcard li[data-tid="a"] > .row');
  const two = $('.tcard li[data-tid="c"] > .row');
  expect(one && two, 'Unter-To-Dos fehlen');
  const l1 = one.getBoundingClientRect(), l2 = two.getBoundingClientRect();
- expect(Math.abs(l1.left - l2.left) < 2 && Math.abs(l1.width - l2.width) < 2, 'Zweite Ebene ist eingerückt');
- expect(one.querySelector('.lvl').textContent === '•' && two.querySelector('.lvl').textContent === '••', 'Ebenen-Punkte stimmen nicht');
+ const indent = l2.left - l1.left;
+ expect(indent > 5 && indent <= 20, 'Zweite Ebene ist nicht schmal eingerückt (' + indent + ' px)');
+ expect(!$('.lvl'), 'Ebenen-Punkte sind noch da');
  await zeige(true);
 });
 test('Karte innerhalb der Kategorie an eine andere Stelle ziehen (Machbar an)', async () => {
@@ -390,7 +416,7 @@ test('Karte innerhalb der Kategorie an eine andere Stelle ziehen (Machbar an)', 
  expect(before.length >= 2, 'Zu wenig Karten zum Umsortieren');
  const last = before[before.length - 1];
  const first = $(`.card[data-id="${before[0]}"]`).getBoundingClientRect();
- await dragTo($(`.card[data-id="${last}"] .mgrip`), first.x + 40, first.y + 8);
+ await dragTo($(`.card[data-id="${last}"] .ctext`), first.x + 40, first.y + 8);
  expect(ids()[0] === last, 'Gezogene Karte steht nicht oben: ' + ids().join());
  expect(toastText().includes('Reihenfolge'), 'Hinweis „Reihenfolge geändert“ fehlt');
  await click('#undo');
@@ -399,7 +425,7 @@ test('Karte innerhalb der Kategorie an eine andere Stelle ziehen (Machbar an)', 
 test('Ziel-Karte in eine andere Kategorie ziehen und dort einsortieren (Machbar aus)', async () => {
  await zeige(false);
  const tab = $('.subtabs .tab[data-area="fin"]').getBoundingClientRect();
- await dragTo($('.tree li.card[data-id="g1"] .mgrip'), tab.x + 10, tab.y + 8);
+ await dragTo($('.tree li.card[data-id="g1"] > .cbody .ctext'), tab.x + 10, tab.y + 8);
  expect(saved().tasks.g1.area === 'fin', 'Ziel liegt nicht in Finanzen');
  await click('.subtabs .tab[data-area="fin"]');
  await sleep(150);
@@ -408,7 +434,7 @@ test('Ziel-Karte in eine andere Kategorie ziehen und dort einsortieren (Machbar 
  expect(before.includes('g1') && before.length > 1, 'Ziel fehlt in der Spalte Finanzen');
  const last = before[before.length - 1];
  const top = $(`.tree li.card[data-id="${before[0]}"]`).getBoundingClientRect();
- await dragTo($(`.tree li.card[data-id="${last}"] .mgrip`), top.x + 40, top.y + 8);
+ await dragTo($(`.tree li.card[data-id="${last}"] > .cbody .ctext`), top.x + 40, top.y + 8);
  expect(ids()[0] === last, 'Ziel wurde nicht nach oben gezogen: ' + ids().join());
  await click('#undo');
  expect(ids().join() === before.join(), 'Rückgängig hat die Reihenfolge nicht zurückgesetzt');

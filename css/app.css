@@ -215,17 +215,9 @@ details.done[open] summary::before,details.bl[open] summary::before{transform:ro
 /* Version C: Ziele in der Übersicht sind dieselben Karten (.card) wie mit Schalter „Machbar“ an */
 .tree>li.card{margin-bottom:10px}
 .tree>li.card:hover{transform:none}
-/* Vorher-To-Dos auf der Ziel-Karte: flach, ohne Einrücken, jede Zeile in voller Breite.
-   Die Ebene zeigen Punkte (.lvl) und die Linie links: je tiefer, desto heller. */
-.tree .tcard ul{margin:0;padding:0;border:0}
-.tree .tcard>ul{margin:6px -4px 0}
-.tcard li>.row{border-left:3px solid color-mix(in srgb,var(--c) var(--lv,100%),transparent);border-top:1px solid var(--line);padding-left:2px}
-.tcard>ul>li:first-child>.row{border-top:0}
-.tcard li[data-l="2"]>.row{--lv:60%}
-.tcard li[data-l="3"]>.row{--lv:35%}
-.tcard li[data-l]:not([data-l="1"]):not([data-l="2"]):not([data-l="3"])>.row{--lv:18%}
-.lvl{flex:none;min-width:12px;font-size:12px;letter-spacing:-1px;line-height:1;color:color-mix(in srgb,var(--c) 75%,var(--ink));text-align:center}
-.lvl{display:none}.tcard .lvl{display:block}
+/* Vorher-To-Dos auf der Ziel-Karte: nur wenig eingerückt (10 + 8 px je Ebene), dünne Linie in Bereichsfarbe */
+.tree .tcard>ul{margin:6px -4px 0;padding:0;border:0}
+.tree .tcard ul ul{margin-left:10px;padding-left:8px;border-left:2px solid color-mix(in srgb,var(--c) 30%,transparent)}
 .tcard .pbar{margin:10px 0 2px 38px}
 /* Knopf „3 Vorher-To-Dos“ auf einer Ziel-Karte: klappt die Vorher-To-Dos auf und zu */
 .ttog{display:flex;align-items:center;gap:4px;min-height:32px;margin:6px 0 0 30px;padding:2px 10px 2px 4px;border-radius:12px;font-size:13px;color:var(--mute)}
@@ -375,3 +367,28 @@ body.coldrag .cat .cols{scroll-snap-type:none!important}
 /* „Reihenfolge: ← Nach links / Nach rechts →“ im Popup „Kategorie bearbeiten“ */
 .subpos{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px}
 .subpos .lbl{margin:0 auto 0 0}
+
+/* ---------- Version C: direkt bedienen ----------
+   Ziehen geht überall, wo man anfasst (app.js, Abschnitt „Ziehen“ Nr. 6). Die Griffe gibt es nur noch für die
+   Tastatur: unsichtbar, bis man sie mit Tab ansteuert. Am Handy: kurz halten (.held), dann ziehen. */
+.cgrip,.colhead .colgrip{position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;margin:0}
+.cgrip:focus-visible,.colhead .colgrip:focus-visible{position:static;width:22px;height:34px;opacity:1;overflow:visible}
+.card,.brow,.tcard li>.row,.colhead{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.colhead{cursor:grab}
+.held{transform:scale(1.02);box-shadow:0 14px 34px rgb(0 0 0/.18);transition:transform .15s,box-shadow .15s}
+/* Titel: antippen = direkt bearbeiten */
+.t[data-act=rename]{cursor:text;border-radius:6px}
+.t[data-act=rename]:hover{background:var(--soft)}
+.card h3 .t{display:inline;padding:1px 3px;margin:-1px -3px}
+.row .tw{flex:1;min-width:0;padding:6px 4px;line-height:1.35;font-size:15px;overflow-wrap:break-word;hyphens:auto}
+.row .tw .t{flex:none;padding:1px 3px;margin:-1px -3px;font-size:inherit}
+.row.isdone .tw .t{color:var(--mute);text-decoration:line-through}
+.btext{flex:1;min-width:0;padding:8px 4px;font-size:14.5px;line-height:1.3}
+.tinput{font:inherit;color:var(--ink);width:100%;min-width:8em;border:0;border-radius:6px;padding:2px 4px;margin:-2px -4px;background:var(--card);box-shadow:inset 0 0 0 2px var(--c,var(--ink));outline:none}
+.t.editing{display:block;background:none}
+/* + und Mülleimer hinter dem Titel einer Karte */
+.ctext{min-width:0}
+.cacts{display:flex;flex:none;margin:-4px -6px 0 0}
+.mini.add{font-weight:500;color:color-mix(in srgb,var(--c) 70%,var(--ink))}
+.tree .row .mini.del{opacity:.4}.tree .row:hover .mini.del{opacity:.8}
+.tree .cacts .mini{opacity:1}.tree .cacts .mini.del{opacity:.55}
