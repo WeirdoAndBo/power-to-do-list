@@ -131,13 +131,34 @@ test('Testliste laden', async () => {
  expect($$('#acc .card').length > 3, 'Karten der Testliste fehlen');
  expect(saved().format === 1, 'Datenformat ist nicht 1');
 });
-test('Tabs Heute, Übersicht und Machbar wechseln', async () => {
+test('Tabs Übersicht, Machbar und Heute wechseln', async () => {
  await click('[data-view="heute"]');
  expect($('#daylist'), 'Heute-Liste fehlt');
  await click('[data-view="baum"]');
  expect($('#acc .tree'), 'Baum in der Übersicht fehlt');
  await click('[data-view="jetzt"]');
  expect($('#acc .card'), 'Karten in Machbar fehlen');
+});
+test('Reihenfolge der Tabs: Übersicht, Machbar, Heute', async () => {
+ const order = $$('[data-view]').map(b => b.dataset.view).join(',');
+ expect(order === 'baum,jetzt,heute', 'Reihenfolge ist ' + order);
+});
+test('Kategorie-Navigation: alle Kategorien sichtbar, Klick springt zur Spalte', async () => {
+ const tabs = $$('.subtabs .tab[data-i]');
+ expect(tabs.length === 3, 'Nicht alle drei Kategorien als Knopf da');
+ expect(tabs.every(t => t.offsetParent !== null), 'Ein Kategorie-Knopf ist versteckt');
+ const nav = $('.subtabs');
+ expect(nav.scrollWidth <= nav.clientWidth + 1, 'Kategorie-Knöpfe ragen seitlich heraus statt umzubrechen');
+ await click(tabs[2]);
+ expect(tabs[2].getAttribute('aria-current') === 'true', 'Geklickte Kategorie ist nicht markiert');
+ const cols = $('#cols');
+ const column = cols.children[2];
+ expect(column.classList.contains('jump'), 'Spalte leuchtet nicht auf');
+ const visible = column.getBoundingClientRect().left < cols.getBoundingClientRect().right - 20;
+ expect(visible, 'Zur Spalte wurde nicht gesprungen');
+ await click(tabs[0]);
+ await sleep(150);
+ expect(cols.scrollLeft < 5, 'Zurück zur ersten Spalte ging nicht');
 });
 test('Neues Ziel mit zwei Vorher-To-Dos anlegen', async () => {
  const before = Object.keys(saved().tasks).length;

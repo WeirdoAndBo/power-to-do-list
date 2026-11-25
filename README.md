@@ -10,9 +10,10 @@ Dies ist **Version B** des Prototyps: Bereiche liegen übereinander wie ein Akko
 
 ## So funktioniert die App
 
-- **Heute**: nur die To-dos, die du für heute markiert hast. Die Reihenfolge lässt sich per Griff ziehen (oder Pfeiltasten). Jeden Morgen ab 4 Uhr wird „Heute“ geleert; Offenes geht nicht verloren.
+- **Übersicht**: Baum mit dem Ziel oben und aufklappbaren Unter-To-dos. Der Ort, um in Ruhe alles systematisch zu erfassen; Machbar und Heute sind dann zum Umsetzen.
 - **Machbar**: pro Bereich und Kategorie die To-dos, die gerade nicht blockiert sind. Darunter der Backlog für alles, was gerade nicht dran ist, und das Erledigte.
-- **Übersicht**: Baum mit dem Ziel oben und aufklappbaren Unter-To-dos.
+- **Heute**: nur die To-dos, die du für heute markiert hast. Die Reihenfolge lässt sich per Griff ziehen (oder Pfeiltasten). Jeden Morgen ab 4 Uhr wird „Heute“ geleert; Offenes geht nicht verloren.
+- **Kategorie-Navigation**: Über den Spalten eines Bereichs stehen alle Kategorien als kleine Knöpfe. Ein Klick springt zur Spalte, sie leuchtet kurz auf.
 - **Fokusmodus**: Ein Tipp auf eine Karte öffnet sie im Vollbild. Dort kann man schnell ein neues To-do notieren und „später einsortieren“.
 - **Vorher-To-dos**: „geht sonst nicht“ sperrt das To-do, „würde nur helfen“ sperrt nichts. Ein Schritt kann zu mehreren Zielen gehören.
 

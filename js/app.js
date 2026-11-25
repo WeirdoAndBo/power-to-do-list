@@ -34,7 +34,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.5';
+const APP_VERSION = '1.0.6';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -86,6 +86,7 @@ let state;                      // die ganze Liste (siehe seed() und DEVELOPING.
 let undoSnapshot = null;        // Kopie von state als Text, für „Rückgängig“
 let toastTimer;                 // Timer des Hinweises unten
 let currentColumn = 0;          // Nummer der sichtbaren Kategorie-Spalte
+let columnJumpUntil = 0;        // bis wann gerade per Kategorie-Navigation gescrollt wird
 let focusId = null;             // To-Do, das gerade im Fokusmodus offen ist
 let lastRenderedBereich;        // welcher Bereich beim letzten render() offen war
 let ignoreClicksUntil = 0;      // Zeitpunkt, bis zu dem Klicks ignoriert werden (direkt nach dem Ziehen)
@@ -629,7 +630,7 @@ function bereichBarHtml(bereich) {
  return `<button class="catbar" data-act="opencat" data-cat="${bereich.id}" data-drop="cat" style="--c:${bereich.color}" aria-expanded="false">`
   + `<b>${esc(bereich.name)}</b><small>${bereichCountsText(bereich)}</small>${ICON_CHEVRON}</button>`;
 }
-// Bereich aufgeklappt: Kopf, Kategorie-Register und die Spalten nebeneinander
+// Bereich aufgeklappt: Kopf, Kategorie-Navigation (kleine Knöpfe) und die Spalten nebeneinander
 function bereichOpenHtml(bereich) {
  const name = esc(bereich.name);
  const editButton = bereich.id
@@ -713,25 +714,38 @@ function updateColumnEdges() {
  bereichEl.classList.toggle('ovf-r', overflows && cols.scrollLeft < cols.scrollWidth - cols.clientWidth - 4);
  bereichEl.classList.toggle('ovf-l', overflows && cols.scrollLeft > 4);
 }
-// Markiert das Register der Kategorie-Spalte Nr. index als aktuell
+// Markiert den Knopf der Kategorie-Spalte Nr. index in der Kategorie-Navigation als aktuell
 function markCurrentTab(index) {
  document.querySelectorAll('.tab[data-i]').forEach(b => b.setAttribute('aria-current', +b.dataset.i === index));
 }
-// Zu Kategorie-Spalte Nr. index wischen
-function goToColumn(index) {
+// Zu Kategorie-Spalte Nr. index wischen/scrollen. Mit highlight leuchtet die Spalte kurz auf
+// (Klick in der Kategorie-Navigation), damit man sieht, wo man gelandet ist.
+function goToColumn(index, highlight = false) {
  currentColumn = index;
  const cols = $('#cols');
  const column = cols && cols.children[index];
- if (column) cols.scrollTo({ left: column.offsetLeft - cols.offsetLeft, behavior: state.anim ? 'smooth' : 'auto' });
+ if (column) {
+  // Während des Scrollens die Markierung nicht vom Scroll-Ereignis umsetzen lassen
+  // (die letzte Spalte kann oft nicht ganz nach links rutschen)
+  columnJumpUntil = Date.now() + 800;
+  cols.scrollTo({ left: column.offsetLeft - cols.offsetLeft, behavior: state.anim ? 'smooth' : 'auto' });
+  if (highlight) {
+   column.classList.remove('jump');
+   void column.offsetWidth; // Animation neu starten, auch bei zweitem Klick
+   column.classList.add('jump');
+   setTimeout(() => column.classList.remove('jump'), 1100);
+  }
+ }
  markCurrentTab(index);
 }
 addEventListener('resize', updateColumnEdges);
-// Beim Wischen durch die Spalten das passende Kategorie-Register markieren
+// Beim Wischen durch die Spalten den passenden Knopf in der Kategorie-Navigation markieren
 // (14 = Abstand zwischen Spalten in px, siehe .cat .cols in app.css)
 document.addEventListener('scroll', event => {
  const cols = event.target;
  if (!cols || cols.id !== 'cols') return;
  updateColumnEdges();
+ if (Date.now() < columnJumpUntil) return;
  const columnWidth = cols.firstElementChild?.offsetWidth || 1;
  const index = Math.round(cols.scrollLeft / (columnWidth + 14));
  if (index !== currentColumn) {
@@ -1027,7 +1041,7 @@ document.addEventListener('keydown', event => {
 });
 
 // 3) Tab „Machbar“: Karte oder Backlog-Zeile am Griff ziehen.
-//    Ablageziele (data-drop im HTML): Zeitnah, Backlog, Kategorie-Register, Bereich-Leisten.
+//    Ablageziele (data-drop im HTML): Zeitnah, Backlog, Knöpfe der Kategorie-Navigation, Bereich-Leisten.
 document.addEventListener('pointerdown', event => {
  const grip = event.target.closest('.mgrip');
  if (!grip || !$('#modal').hidden) return;
@@ -2027,7 +2041,7 @@ document.addEventListener('click', event => {
   case 'edit': editTask(id); break;
   case 'inbox': sortInbox(); break;
   case 'menu': settingsDialog(); break;
-  case 'gocol': goToColumn(+button.dataset.i); break;
+  case 'gocol': goToColumn(+button.dataset.i, true); break;
   case 'newcat': bereichDialog(); break;
   case 'editcat': bereichDialog(id); break;
   case 'opencat': toggleBereich(button.dataset.cat); break;
