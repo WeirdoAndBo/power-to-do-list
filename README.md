@@ -55,6 +55,8 @@ Gespeichert wird ein JSON-Objekt unter dem Schlüssel `powerliste-b-v1` im local
 Ändert sich die Datenstruktur, wird `FORMAT` in `js/app.js` erhöht und `migrate()` bringt ältere Daten auf den neuen Stand. Sicherungen aus einer neueren App-Version werden abgelehnt statt falsch gelesen.
 
 ## Ordnerstruktur
+Wer am Code arbeiten will: Aufbau, Datenmodell und Arbeitsweise stehen in [DEVELOPING.md](DEVELOPING.md).
+
 
 ```
 index.html             Einstieg der App

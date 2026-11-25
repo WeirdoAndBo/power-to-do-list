@@ -3,6 +3,21 @@
    PICTURE: die Karten selbst; runde Häkchen; Fokusmodus als ruhige Vollbildfläche in Bereichfarbe.
    COLOUR and TYPE: helles Grau-Weiß, tiefe Tinte, Bereiche als sanfte Farbtöne; abgerundete Systemschrift (offline).
    LAYOUT: Titel, kleiner Umschalter, Bereich-Register, Spalten, fester Plus-Knopf unten. */
+/* ============================================================================
+   LESEHILFE (siehe auch DEVELOPING.md)
+   - Farben, Schrift und Schatten: die Variablen in :root direkt hier drunter.
+     light-dark(hell, dunkel) = erster Wert im hellen, zweiter im dunklen Modus.
+     --c ist die Farbe des jeweiligen Bereichs; sie wird im HTML pro Element gesetzt (style="--c:…").
+   - Die Datei ist in Schichten gewachsen: Die Abschnitte ab „Version B“, „Kompakter“ und
+     „Kartenkopf + Heute-Schalter“ weiter unten ÜBERSCHREIBEN frühere Regeln für dieselben
+     Klassen (z. B. .card, .check, .today). Bei CSS gewinnt bei gleicher Stärke die spätere Regel.
+     Wer etwas ändern will, sucht deshalb immer die LETZTE Stelle mit dieser Klasse
+     (im Editor: Suchen nach „.card{“ bzw. „.card “).
+   - Einige Klassen werden von der App nicht mehr benutzt (.trash, .more, .hasmore, .hasgrip,
+     .acts, .vtag, .morehint). Sie stören nicht, können aber in einem Aufräum-Schritt raus.
+   - .sw steht für zwei Dinge: die Farbauswahl im Bereich-Dialog (.sw label) und den
+     Heute-Schalter (.today.sw).
+   ============================================================================ */
 :root{color-scheme:light dark;
 --bg:light-dark(#f4f5f7,#141618);--card:light-dark(#fff,#1e2124);--ink:light-dark(#1c1f23,#eceef0);--mute:light-dark(#6b7178,#9aa1a8);
 --line:light-dark(#e4e6ea,#2c3035);--soft:light-dark(#eceef1,#25292d);--acc:light-dark(#1c1f23,#eceef0);--accInk:light-dark(#fff,#141618);
@@ -239,7 +254,8 @@ body.dnd .over{background:color-mix(in srgb,var(--c) 22%,var(--card))!important;
 .cat.ovf-l .cols{-webkit-mask-image:linear-gradient(to left,#000 calc(100% - 56px),transparent);mask-image:linear-gradient(to left,#000 calc(100% - 56px),transparent)}
 .cat.ovf-l.ovf-r .cols{-webkit-mask-image:linear-gradient(to right,transparent,#000 56px,#000 calc(100% - 56px),transparent);mask-image:linear-gradient(to right,transparent,#000 56px,#000 calc(100% - 56px),transparent)}
 .morehint{display:none;font-size:13px;color:var(--mute);margin-left:auto;padding-right:4px}.cat.ovf .morehint{display:inline}
-/* Kompakter: kleinere Schrift, kleinere Häkchen, schmaler Griff */
+/* Kompakter: kleinere Schrift, kleinere Häkchen, schmaler Griff.
+   ACHTUNG: überschreibt viele Größen von weiter oben (body, .card, .check, .mini …). */
 body{font-size:15px}
 .card{gap:10px;padding:12px 12px 12px;border-radius:16px}
 .card h3{font-size:16px;margin:1px 0}
@@ -263,7 +279,8 @@ body{font-size:15px}
 .mini{width:32px;height:32px;font-size:18px}
 .drow{gap:10px}
 .catbar b{font-size:16px}
-/* Kartenkopf + Heute-Schalter */
+/* Kartenkopf + Heute-Schalter.
+   ACHTUNG: überschreibt den Aufbau der Karte von weiter oben (.card ist hier kein Flex-Container mehr). */
 .card{display:block;padding:8px 12px 12px}
 .card.hasgrip,.card{padding-left:12px}
 .chead{display:flex;align-items:center;gap:2px;margin:0 -6px 6px -4px;min-height:36px}

@@ -1,29 +1,67 @@
+/* ============================================================================
+   Meine Power-Liste – die gesamte App-Logik in einer Datei.
+   Eine Übersicht für Menschen, die hier etwas ändern wollen, steht in DEVELOPING.md.
+
+   ACHTUNG, Namen im Code ≠ Namen in der App:
+     Code „cat“  / S.cats      = in der App „Bereich“   (z. B. Arbeit, Privat)
+     Code „sub“, „area“         = in der App „Kategorie“ (z. B. Akquise, Finanzen)
+     Code „needs“               = Vorher-To-Do „geht sonst nicht“ (sperrt)
+     Code „soft“                = Vorher-To-Do „würde nur helfen“ (sperrt nicht)
+     Code-Ansicht „jetzt“       = Tab „Machbar“, „baum“ = Tab „Übersicht“
+     Hinweis: sub(id) ist dagegen eine Funktion (alle Vorher-To-Dos eines To-Dos), keine Kategorie.
+
+   Grundprinzip: Der ganze Zustand liegt im Objekt S. Jede Änderung läuft so ab:
+     S verändern → save() (speichert in localStorage) → render() (baut die Ansicht neu).
+   Die Ansichten sind Funktionen, die HTML als Text zurückgeben (Template-Strings).
+   Texte von Nutzer*innen immer mit esc(...) einsetzen, sonst kann HTML eingeschleust werden.
+
+   Aufbau der Datei (Abschnitte mit „----------“ markiert):
+     Einstellungen & Hilfen → Laden/Speichern → Datenlogik (Graph) → Ansichten
+     → Fokusmodus → Popup & Hinweis → Abläufe (Dialoge) → Datensicherung → Ereignisse → Start
+   ============================================================================ */
 {
+/* ---------- Einstellungen & Hilfen ---------- */
 const KEY='powerliste-b-v1';
 // Versionen: APP_VERSION = Stand der App (siehe auch sw.js), FORMAT = Version des gespeicherten Datenformats.
 // FORMAT nur erhöhen, wenn sich die Datenstruktur ändert, und dann in migrate() nachziehen.
 const APP_VERSION='1.0.0';
 const FORMAT=1;
 const FILE_APP='power-liste';
+// Farben, die beim Anlegen eines Bereichs zur Auswahl stehen.
 const COLORS=['#5b8def','#e0a03a','#9b7fd1','#4fae8c','#e07a6a','#3fa3b5','#d27fb0','#8a96a3'];
+// Kleine SVG-Symbole (Häkchen, Papierkorb, Menü-Punkte, Stift, Griff, Pfeil).
 const TICK='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>';
 const TRASH='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>';
 const DOTS='<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
 const PEN='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>';
 const GRIP='<svg width="12" height="20" viewBox="0 0 12 20" fill="currentColor"><circle cx="3" cy="4" r="1.5"/><circle cx="9" cy="4" r="1.5"/><circle cx="3" cy="10" r="1.5"/><circle cx="9" cy="10" r="1.5"/><circle cx="3" cy="16" r="1.5"/><circle cx="9" cy="16" r="1.5"/></svg>';
 const CHEV='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>';
+// $ = ein Element per CSS-Selektor finden · esc = Text sicher in HTML einsetzen · uid = neue zufällige ID
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Math.random().toString(36).slice(2,9);
+// Zustand nur für diese Sitzung (wird NICHT gespeichert):
+//   open = auf-/zugeklappte Äste in der Übersicht · blOpen = aufgeklappte Backlog-Kästen
+//   noClick = Zeitpunkt, bis zu dem Klicks ignoriert werden (direkt nach dem Ziehen)
+//   S = der gesamte gespeicherte Zustand · undoSnap = Kopie von S für „Rückgängig“
+//   toastT = Timer des Hinweises unten · curCol = Nummer der sichtbaren Kategorie-Spalte
 const open=new Map(),blOpen=new Set();let noClick=0;
 let S,undoSnap=null,toastT,curCol=0;
+// sod = Mitternacht des Tages zu einem Zeitpunkt (36e5 ms = 1 Stunde, 864e5 ms = 1 Tag)
 const sod=ts=>{const d=new Date(ts);d.setHours(0,0,0,0);return d.getTime()};
 // Ein „Tag“ beginnt morgens um 4 Uhr, damit späte Abende noch zum Vortag zählen.
 const dayStart=()=>sod(Date.now()-4*36e5)+4*36e5;
+// Ist seit dem letzten Öffnen ein neuer Tag angebrochen? Dann wird „Heute“ geleert. true = es lagen noch offene To-Dos in „Heute“.
 function newDay(){if(S.day===undefined)S.day=dayStart();if(S.day===dayStart())return false;const had=all().some(t=>t.today&&!t.done);all().forEach(t=>{t.today=false});S.day=dayStart();save();return had}
 
+/* ---------- Laden, Speichern, Beispieldaten ----------
+   seed() liefert die Beispieldaten beim ersten Start (und für „Beispiel wiederherstellen“).
+   Gleichzeitig ist es die beste Beschreibung des Datenmodells, siehe DEVELOPING.md. */
 function seed(){
  const now=Date.now();
+// Ein To-Do: id, t (Titel), needs/soft (IDs der Vorher-To-Dos), done/doneAt, goal (ist ein Ziel),
+// cat/area (eigener Bereich/eigene Kategorie, sonst geerbt), prio (höher = weiter oben), created,
+// optional: today, todayBy (wer es nach „Heute“ mitgenommen hat), todayOrder (Reihenfolge in Heute), backlog
  const t=(id,title,o={})=>({id,t:title,needs:[],soft:[],done:false,goal:false,cat:null,prio:0,created:now,doneAt:null,...o});
  const L=[
   t('g1','Stellen anschreiben für Kundenakquise',{goal:true,cat:'arbeit',area:'akq',needs:['a','b']}),
@@ -53,26 +91,34 @@ function seed(){
 // Bringt gespeicherte oder importierte Daten auf das aktuelle Format. Daten ohne Formatnummer stammen aus dem Prototyp (= Format 1).
 function migrate(o){o.inbox=o.inbox||[];o.cats.forEach(c=>c.subs=c.subs||[]);if(o.openCat===undefined)o.openCat=o.cats[0]?o.cats[0].id:null;
  Object.values(o.tasks).forEach(t=>{t.needs=t.needs||[];t.soft=t.soft||[]});o.format=FORMAT;return o}
+// load: liest S aus localStorage, sonst Beispieldaten. save: schreibt S zurück. Fehler (z. B. voller Speicher) werden still ignoriert.
 function load(){try{const r=localStorage.getItem(KEY);if(r){const o=JSON.parse(r);if(o&&o.tasks&&o.cats)return migrate(o)}}catch(e){}return seed()}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+// snap: Momentaufnahme von S als Text, für „Rückgängig“ (undoSnap)
 const snap=()=>JSON.stringify(S);
 
 /* ---------- Datenlogik (Graph) ----------
    needs = geht ohne das nicht (sperrt), soft = hilft nur. Ein Schritt kann zu mehreren To-Dos gehören. */
+// Kurznamen: T(id) = To-Do holen · C(id) = Bereich holen · all() = alle To-Dos als Liste
+// openHard(t) = noch offene „geht sonst nicht“-Vorher-To-Dos · parentsAll/parentsHard(id) = To-Dos, vor denen id kommt
 const T=id=>S.tasks[id];
 const C=id=>S.cats.find(c=>c.id===id);
 const all=()=>Object.values(S.tasks);
 const openHard=t=>t.needs.filter(n=>T(n)&&!T(n).done);
 const parentsAll=id=>all().filter(p=>p.needs.includes(id)||p.soft.includes(id));
 const parentsHard=id=>all().filter(p=>p.needs.includes(id));
+// goalsOf: alle Ziele, zu denen ein To-Do (auch über mehrere Ebenen) gehört. sub: das To-Do selbst plus alle Vorher-To-Dos, alle Ebenen.
 function goalsOf(id){const out=[],seen=new Set,st=[id];while(st.length){const x=st.pop();if(seen.has(x)||!T(x))continue;seen.add(x);if(T(x).goal&&x!==id)out.push(T(x));parentsAll(x).forEach(p=>st.push(p.id))}return out}
 function sub(id){const seen=new Set,st=[id];while(st.length){const x=st.pop();if(seen.has(x)||!T(x))continue;seen.add(x);st.push(...T(x).needs,...T(x).soft)}return seen}
 // Version B: Eine eigene Bereich gewinnt. Ohne eigene erbt das To-Do Bereich und Kategorie von seinen Zielen.
+// catsOf: in welchem Bereich (oder welchen Bereichen) ein To-Do angezeigt wird
 function catsOf(t){if(t.cat&&C(t.cat))return[t.cat];const s=new Set;goalsOf(t.id).forEach(g=>{if(g.cat&&C(g.cat))s.add(g.cat)});return[...s]}
+// areaIn: in welcher Kategorie eines Bereichs ein To-Do angezeigt wird (eigene, sonst vom Ziel geerbt, sonst die erste)
 function areaIn(t,cid,seen=new Set()){const c=C(cid);if(!c||!c.subs.length)return'';if(seen.has(t.id))return c.subs[0].id;seen.add(t.id);
  if(t.cat===cid&&c.subs.some(x=>x.id===t.area))return t.area;
  if(t.cat!==cid)for(const p of parentsAll(t.id))if(catsOf(p).includes(cid))return areaIn(p,cid,seen);
  return c.subs[0].id}
+// Orte werden als Text „bereichId|kategorieId“ weitergereicht, z. B. „arbeit|akq“. Leer = „Ohne Bereich“.
 const subsOf=c=>c&&c.subs&&c.subs.length?c.subs:[{id:'',name:c?c.name:''}];
 const places=()=>[...S.cats.flatMap(c=>c.subs.length?c.subs.map(x=>({v:c.id+'|'+x.id,l:c.name+' · '+x.name})):[{v:c.id+'|',l:c.name}]),{v:'|',l:'Ohne Bereich'}];
 const placeOf=t=>{const c=catsOf(t)[0]||'';return c+'|'+(c?areaIn(t,c):'')};
@@ -85,14 +131,21 @@ function placeSel(sel){const[cid,area]=sel.split('|');const c=C(cid);
 document.addEventListener('change',e=>{const el=e.target;if(el.matches&&el.matches('#modal [name=what]')){const f=$('#modal [name=text]');if(f)f.placeholder=el.value==='goal'?'Was willst du erreichen? z. B. Neue Kund*innen gewinnen':'Was ist zu tun?';return}if(!el.matches||!el.matches('[data-pick]'))return;const w=el.closest('.pick'),cs=w.querySelector('[data-pick=cat]'),ks=w.querySelector('[data-pick=kat]');
  if(el===cs){ks.innerHTML=katOpts(cs.value,'');w.querySelector('.pkat').hidden=!ks.options.length}
  w.querySelector('[name=place]').value=cs.value+'|'+(ks.options.length?ks.value:'')});
+// curPlace: der gerade sichtbare Ort, als Vorbelegung für „Neues To-Do“
 function curPlace(){const cid=S.openCat??(S.cats[0]?S.cats[0].id:'');const c=C(cid);const x=c&&c.subs.length?c.subs[Math.min(curCol,c.subs.length-1)]:null;return(cid||'')+'|'+(x?x.id:'')}
+// colorOf: Farbe eines To-Dos = Farbe seines Bereichs (grau ohne Bereich)
 const colorOf=t=>{const c=C(catsOf(t)[0]);return c?c.color:'#8a96a3'};
+// mk: legt ein neues To-Do an und gibt es zurück (speichert noch nicht)
 function mk(title,o={}){const t={id:uid(),t:title,needs:[],soft:[],done:false,goal:false,cat:null,prio:0,created:Date.now(),doneAt:null,...o};S.tasks[t.id]=t;return t}
+// progress: Anteil erledigter Vorher-To-Dos eines Ziels in Prozent (Balken in der Übersicht)
 const progress=g=>{const ids=[...sub(g.id)].filter(i=>i!==g.id);const d=ids.filter(i=>T(i).done).length;return ids.length?Math.round(d/ids.length*100):0};
+// canPrecede/canFollow: welche To-Dos als Vorher-To-Do bzw. Ziel verknüpft werden dürfen, ohne einen Kreis zu bilden
 const canPrecede=pid=>{const p=T(pid);return all().filter(x=>!x.done&&x.id!==pid&&!sub(x.id).has(pid)&&!p.needs.includes(x.id)&&!p.soft.includes(x.id))};
 const canFollow=id=>all().filter(x=>!x.done&&x.id!==id&&!sub(id).has(x.id)&&!x.needs.includes(id)&&!x.soft.includes(id));
+// columns: alle Bereiche, dazu „Ohne Bereich“, falls es To-Dos ohne Bereich gibt. inCol: gehört ein To-Do in diesen Bereich/diese Kategorie?
 const columns=()=>{const cols=S.cats.map(c=>({...c}));if(all().some(t=>!catsOf(t).length))cols.push({id:'',name:'Ohne Bereich',color:'#8a96a3',subs:[]});return cols};
 const inCol=(t,cid,area='')=>cid?catsOf(t).includes(cid)&&(!area||areaIn(t,cid)===area):!catsOf(t).length;
+// byPrio: Sortierung – höhere prio zuerst, sonst das ältere zuerst
 const byPrio=(a,b)=>b.prio-a.prio||a.created-b.created;
 const goalHint=t=>{const g=goalsOf(t.id);return t.goal?'Das ist ein Ziel':g.length?'Ziel: '+g.map(x=>esc(x.t)).join(' · '):''};
 // alle Wege vom To-Do hoch bis zu einem Ziel (bei geteilten Schritten mehrere)
@@ -115,6 +168,7 @@ function chainBox(t){
 const optList=(L,sel)=>L.map(o=>`<option value="${o.id}"${o.id===sel?' selected':''}>${o.goal?'◆ ':''}${esc(o.t)}</option>`).join('');
 
 /* ---------- Ansichten ---------- */
+// Runder Abhak-Knopf. c = Farbe. Jede Ansicht baut ihr HTML aus solchen kleinen Funktionen zusammen.
 const checkBtn=(t,c)=>`<button class="check" role="checkbox" aria-checked="${!!t.done}" aria-label="${t.done?'Wieder öffnen':'Abhaken'}: ${esc(t.t)}" data-act="check" data-id="${t.id}" style="--c:${c}">${TICK}</button>`;
 // Karte: Kopf mit Griff, Heute-Schalter, Bearbeiten/Verschieben/Löschen. Darunter Häkchen + Titel, Ziel-Kette, dann die Frage.
 function card(t,c,o={}){
@@ -128,8 +182,11 @@ function card(t,c,o={}){
  <div class="cbody">${checkBtn(t,c)}<div class="ctext"><h3>${esc(t.t)}</h3>${chainBox(t)}
  ${openHard(t).length?`<p class="wait">Erst noch: ${openHard(t).map(n=>esc(T(n).t)).join(', ')}</p>`:''}</div></div>
  <button class="ask" data-act="block" data-id="${t.id}"><b aria-hidden="true">+</b> ${t.goal?'To-Do':'Vorher-To-Do'}</button></article>`}
+// Schalter „Heute“ auf Karten und (klein, mini) in der Übersicht
 const todaySw=(t,mini)=>`<button class="today sw${mini?' tmini':''}" role="switch" aria-checked="${!!t.today}" data-act="today" data-id="${t.id}" aria-label="${esc(t.t)}: für heute" title="Für heute – mit allen Vorher-To-Dos"><i></i><span>Heute</span></button>`;
+// Aufklappbarer Kasten „Erledigt · N“
 function doneBox(L,c){return L.length?`<details class="done"><summary>Erledigt · ${L.length}</summary>${L.map(t=>`<div class="drow">${checkBtn(t,c)}<span>${esc(t.t)}</span><button class="mini del" data-act="del" data-id="${t.id}" aria-label="${esc(t.t)} löschen">${TRASH}</button></div>`).join('')}</details>`:''}
+// Tab „Machbar“: eine Kategorie-Spalte mit Zeitnah (nicht blockiert), Backlog und Erledigt
 function colJetzt(col,sb){
  const inc=t=>inCol(t,col.id,sb.id);
  const L=all().filter(t=>!t.done&&!t.backlog&&!openHard(t).length&&inc(t)).sort(byPrio);
@@ -139,8 +196,10 @@ function colJetzt(col,sb){
  const z=`data-drop="zone" data-cat="${col.id}" data-area="${sb.id}"`,k=col.id+'|'+sb.id;
  return`<p class="zlabel">Zeitnah</p><div class="list zone" ${z} data-bl="0">${L.length?L.map(t=>card(t,col.color,{move:true})).join(''):`<div class="empty" style="--c:${col.color}">Hier ist gerade nichts zu tun.</div>`}</div>
  <details class="bl zone" ${z} data-bl="1" data-k="${esc(k)}"${blOpen.has(k)?' open':''}><summary>Backlog · ${BA.length}</summary>${B.length?B.map(t=>brow(t,col.color)).join(''):'<p class="bempty">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</p>'}</details>${doneBox(D,col.color)}`}
+// Eine Zeile im Backlog-Kasten
 function brow(t,c){const n=[...sub(t.id)].filter(x=>x!==t.id&&!T(x).done).length;
  return`<div class="brow" data-id="${t.id}" style="--c:${c}"><span class="grip mgrip" data-id="${t.id}" title="Ziehen: nach Zeitnah, in eine andere Kategorie oder einen anderen Bereich">${GRIP}</span><button class="t" data-act="edit" data-id="${t.id}">${esc(t.t)}${n?`<small>mit ${n} Vorher-To-Do${n>1?'s':''}</small>`:''}</button><button class="mini" data-act="tozeit" data-id="${t.id}" title="Nach Zeitnah holen" aria-label="${esc(t.t)} nach Zeitnah holen">↑</button><button class="mini" data-act="move" data-id="${t.id}" aria-label="${esc(t.t)} verschieben" title="Verschieben nach …">${DOTS}</button></div>`}
+// Tab „Übersicht“: ein Knoten im Baum, ruft sich für seine Vorher-To-Dos selbst auf. path = Weg im Baum (für auf/zu).
 function node(t,c,path,lvl,viaSoft){
  const kids=[...t.needs.map(n=>[T(n),0]),...t.soft.map(n=>[T(n),1])].filter(k=>k[0]).sort((a,b)=>a[0].done-b[0].done);
  const key=path+'/'+t.id,isOpen=open.has(key)?open.get(key):lvl>0;
@@ -149,12 +208,14 @@ function node(t,c,path,lvl,viaSoft){
  ${kids.length?`<button class="mini chev" data-act="tog" data-k="${esc(key)}" data-l="${lvl}" aria-expanded="${isOpen}" aria-label="${isOpen?'Zuklappen':(lvl===0?'Alles aufklappen':'Aufklappen')}" title="${lvl===0?(isOpen?'Alles zuklappen':'Alles aufklappen'):''}">${CHEV}</button>`:'<span class="mini"></span>'}</div>
  ${lvl===0&&!t.done?`<div class="pbar" aria-hidden="true"><i style="width:${progress(t)}%"></i></div>`:''}
  ${kids.length&&isOpen?`<ul>${kids.map(([k,s])=>node(k,c,key,lvl+1,s)).join('')}</ul>`:''}</li>`}
+// Tab „Übersicht“: eine Kategorie-Spalte mit den Zielen als Wurzeln
 function colBaum(col,sb){
  const roots=all().filter(t=>(t.goal||!parentsAll(t.id).length)&&(col.id?t.cat===col.id:!t.cat||!C(t.cat))&&(!sb.id||areaIn(t,col.id)===sb.id));
  const L=roots.filter(t=>!t.done&&!t.backlog).sort(byPrio),B=roots.filter(t=>!t.done&&t.backlog).sort(byPrio),D=roots.filter(t=>t.done);
  return`<p class="zlabel">Zeitnah</p>${L.length?`<ul class="tree">${L.map(t=>node(t,col.color,col.id,0)).join('')}</ul>`:`<div class="empty" style="--c:${col.color}">${B.length?'Gerade nichts zeitnah.':`Noch kein Ziel in ${esc(sb.name||col.name)}.`}</div>`}
  ${B.length?`<p class="zlabel blhead">Backlog · ${B.length}</p><ul class="tree bltree">${B.map(t=>node(t,col.color,col.id,0)).join('')}</ul>`:''}${D.length?`<details class="done"><summary>Erreichte Ziele · ${D.length}</summary><ul class="tree">${D.map(t=>node(t,col.color,col.id,1)).join('')}</ul></details>`:''}`}
 
+// Tab „Heute“: freie To-Dos (ziehbar), „Danach dran“ (noch blockiert) und „Heute geschafft“
 function viewHeute(){
  const L=all().filter(t=>t.today&&!t.done&&!openHard(t).length).sort((a,b)=>(a.todayOrder??1e12)-(b.todayOrder??1e12)||byPrio(a,b));
  const W=all().filter(t=>t.today&&!t.done&&openHard(t).length).sort(byPrio);
@@ -163,6 +224,7 @@ function viewHeute(){
  <div class="list" id="daylist">${L.length?L.map(t=>card(t,colorOf(t),{grip:true})).join(''):`<div class="empty">${W.length?'Gerade ist nichts frei.':'Noch nichts für heute.<br>Hake in „Machbar“ bei einer Karte „Heute“ an.'}</div>`}</div>
  ${W.length?`<details class="done"><summary>Danach dran · ${W.length}</summary>${W.map(t=>`<div class="drow wrow"><span>${esc(t.t)}<small>erst: ${openHard(t).map(n=>esc(T(n).t)).join(', ')}</small></span></div>`).join('')}</details>`:''}
  ${D.length?`<details class="done"><summary>Heute geschafft · ${D.length}</summary>${D.map(t=>`<div class="drow">${checkBtn(t,colorOf(t))}<span>${esc(t.t)}</span></div>`).join('')}</details>`:''}</section>`}
+// Bereich zugeklappt (catBar) und aufgeklappt mit Kategorie-Registern und Spalten (catOpen)
 function counts(c){const ts=all().filter(t=>!t.done&&inCol(t,c.id));const z=ts.filter(t=>!t.backlog).length,b=ts.length-z;return`${z} zeitnah${b?` · ${b} im Backlog`:''}`}
 function catBar(c){return`<button class="catbar" data-act="opencat" data-cat="${c.id}" data-drop="cat" style="--c:${c.color}" aria-expanded="false"><b>${esc(c.name)}</b><small>${counts(c)}</small>${CHEV}</button>`}
 function catOpen(c){const subs=subsOf(c);
@@ -171,6 +233,7 @@ function catOpen(c){const subs=subsOf(c);
  ${c.id?`<nav class="tabs subtabs" aria-label="Kategorien von ${esc(c.name)}">${c.subs.map((x,i)=>`<button class="tab" data-act="gocol" data-i="${i}" data-drop="zone" data-cat="${c.id}" data-area="${x.id}" style="--c:${c.color}" aria-current="${i===curCol}"><i></i>${esc(x.name)}</button>`).join('')}<button class="tab new" data-act="newsub" data-id="${c.id}">+ Kategorie</button></nav>`:''}
  <div class="cols" id="cols">${subs.map(x=>`<section class="col" aria-label="${esc(x.name)}">${c.subs.length?`<div class="colhead"><h2>${esc(x.name)}</h2><button class="iconbtn" data-act="editsub" data-id="${c.id}" data-s="${x.id}" aria-label="Kategorie ${esc(x.name)} umbenennen">${PEN}</button></div>`:''}${S.view==='baum'?colBaum(c,x):colJetzt(c,x)}</section>`).join('')}</div></section>`}
 let lastCat;
+// render: baut die ganze Seite aus S neu auf. Nach jeder Änderung an S aufrufen (nach save()).
 function render(){
  document.body.classList.toggle('noanim',!S.anim);
  const nm=$('#name');if(document.activeElement!==nm)nm.value=S.name;document.title=S.name||'Meine Liste';
@@ -184,11 +247,14 @@ function render(){
  const el=$('#cols');if(el){if(lastCat===S.openCat)el.scrollLeft=x;else if(curCol){const c=el.children[curCol];if(c)el.scrollLeft=c.offsetLeft-el.offsetLeft}}lastCat=S.openCat;moreCols();
  if(!$('#focus').hidden)renderFocus();
 }
+// moreCols: blendet die Kanten der Spalten aus, wenn man seitlich weiterwischen kann
 function moreCols(){const el=$('#cols');if(!el)return;const c=el.closest('.cat'),over=el.scrollWidth>el.clientWidth+4;c.classList.toggle('ovf',over);c.classList.toggle('ovf-r',over&&el.scrollLeft<el.scrollWidth-el.clientWidth-4);c.classList.toggle('ovf-l',over&&el.scrollLeft>4)}
 addEventListener('resize',moreCols);
+// Beim Wischen durch die Spalten das passende Kategorie-Register markieren (14 = Abstand zwischen Spalten in px, siehe .cat .cols in app.css)
 document.addEventListener('scroll',e=>{const el=e.target;if(!el||el.id!=='cols')return;moreCols();const w=el.firstElementChild?.offsetWidth||1;const i=Math.round(el.scrollLeft/(w+14));if(i!==curCol){curCol=i;document.querySelectorAll('.tab[data-i]').forEach(b=>b.setAttribute('aria-current',+b.dataset.i===i))}},{capture:true,passive:true});
 // Desktop: die zuletzt angetippte Spalte gilt als aktuelle Kategorie (z. B. als Vorbelegung bei „Neues To-Do“)
 document.addEventListener('pointerdown',e=>{const c=e.target.closest&&e.target.closest('#cols > .col');if(c)curCol=[...c.parentElement.children].indexOf(c)},true);
+// goCol: zu Kategorie-Spalte Nr. i wischen
 function goCol(i){curCol=i;const el=$('#cols'),c=el&&el.children[i];if(c)el.scrollTo({left:c.offsetLeft-el.offsetLeft,behavior:S.anim?'smooth':'auto'});document.querySelectorAll('.tab[data-i]').forEach(b=>b.setAttribute('aria-current',+b.dataset.i===i))}
 
 /* ---------- Fokusmodus ---------- */
@@ -207,6 +273,10 @@ function renderFocus(){
  <div class="fbot"><button class="plus" data-act="quick"><span>+</span> Neues To-Do</button></div>`}
 
 /* ---------- Popup & Hinweis ---------- */
+// modal(html): zeigt ein Popup und wartet, bis es geschlossen wird. Ergebnis: {v, vals}
+//   v = data-v des gedrückten Knopfs (null bei Escape/Klick daneben)
+//   vals = Werte aller Felder mit name="…" im Popup, _pre = Einträge der Vorher-Liste
+// Benutzung: const r = await modal(`<h2>…</h2> … ${btn('ok','Fertig','pri')}`); if (r.v === 'ok') …
 function modal(html){
  return new Promise(res=>{
   const m=$('#modal'),prev=document.activeElement;
@@ -244,6 +314,7 @@ document.addEventListener('pointerdown',e=>{
  const up=()=>{r.classList.remove('dragging');removeEventListener('pointermove',move);removeEventListener('pointerup',up);removeEventListener('pointercancel',up);fixLevels(list)};
  addEventListener('pointermove',move);addEventListener('pointerup',up);addEventListener('pointercancel',up)});
 // Heute: Karten per Griff ziehen (Maus/Finger) oder mit Pfeiltasten verschieben
+// saveDayOrder: merkt sich die Reihenfolge der Karten in „Heute“
 function saveDayOrder(){const list=$('#daylist');if(!list)return;[...list.querySelectorAll('.card')].forEach((c,i)=>{T(c.dataset.id).todayOrder=i+1});save()}
 document.addEventListener('pointerdown',e=>{
  const g=e.target.closest('#daylist .cgrip');if(!g)return;e.preventDefault();
@@ -279,15 +350,21 @@ document.addEventListener('pointerdown',e=>{
  addEventListener('pointermove',move);addEventListener('pointerup',up);addEventListener('pointercancel',up)});
 // Bei einem Ziel: „Was gehört dazu?“ (ein Ziel ist ein Zustand, erreicht, wenn alle To-Dos erledigt sind). Bei einem To-Do: die eine Vorher-Frage der ganzen App.
 const preBlock=()=>`<label class="lbl only-goal">Was gehört dazu? Welche To-Dos braucht es, damit das Ziel erreicht ist?</label><label class="lbl only-sub">Muss etwas anderes vorher passieren?</label><div class="prelist"></div><button type="button" class="link preadd" data-row="add"><span class="only-goal">+ To-Do</span><span class="only-sub">+ Vorher-To-Do</span></button><p class="prehint"><span class="only-goal">Das Ziel ist erreicht, wenn alles davon erledigt ist. </span>Darf leer bleiben. Ziehen am Griff oder ↳: ein Eintrag muss vor dem darüber passieren.</p>`;
+// createPre: legt die im Popup eingetippten Vorher-To-Dos an (Einrückung = eine Ebene tiefer)
 function createPre(root,list,today){const stack=[root];list.forEach(({t,l})=>{const d=Math.min(l,stack.length-1);const n=mk(t,{today,backlog:!!root.backlog});attach(stack[d],n,'hard');stack.length=d+1;stack.push(n)})}
+// btn(wert, beschriftung, art): Knopf für Popups. art 'pri' = Hauptknopf, 'ghost' = unauffällig
 const btn=(v,l,c='')=>`<button type="button" class="btn ${c}" data-v="${v}">${l}</button>`;
+// toast: kurzer Hinweis unten, verschwindet nach 7 Sekunden. undo=true zeigt „Rückgängig“ (setzt S auf undoSnap zurück).
 function toast(msg,undo){const t=$('#toast');clearTimeout(toastT);t.innerHTML=`<span>${msg}</span>${undo?'<button id="undo">Rückgängig</button>':''}`;t.hidden=false;
  if(undo)$('#undo').onclick=()=>{S=JSON.parse(undoSnap);save();render();t.hidden=true};toastT=setTimeout(()=>t.hidden=true,7000)}
+// kindSeg: Auswahl „Geht sonst nicht“ (hard) / „Würde nur helfen“ (help). catSel: Auswahl eines Bereichs.
 const kindSeg=(def='hard')=>`<div class="seg" role="radiogroup" aria-label="Wie wichtig vorher?"><label><input type="radio" name="kind" value="hard"${def==='hard'?' checked':''}>Geht sonst nicht</label><label><input type="radio" name="kind" value="help"${def==='help'?' checked':''}>Würde nur helfen</label></div>`;
 const catSel=sel=>`<select class="field" name="cat">${S.cats.map(c=>`<option value="${c.id}"${c.id===sel?' selected':''}>${esc(c.name)}</option>`).join('')}<option value=""${!sel?' selected':''}>Ohne Bereich</option></select>`;
+// attach: macht n zum Vorher-To-Do von p. Bei „geht sonst nicht“ rutscht n in der Sortierung über p.
 function attach(p,n,kind){if(kind==='help')p.soft.push(n.id);else{p.needs.push(n.id);n.prio=Math.max(n.prio,p.prio+1)}}
 
 /* ---------- Abläufe ---------- */
+// check: abhaken oder wieder öffnen. Danach fragt die App für jedes To-Do, das dadurch frei wird: „Jetzt machen?“
 async function check(id){
  const t=T(id);undoSnap=snap();
  if(t.done){t.done=false;t.doneAt=null;save();render();return}
@@ -307,6 +384,7 @@ async function check(id){
   if(r.v==='go'){openFocus(p.id);break}
   if(r.v==='more')await blocker(p.id);
  }}
+// blocker: Popup „Muss etwas anderes vorher passieren?“
 async function blocker(id){
  const t=T(id),opts=canPrecede(id);
  const r=await modal(`<h2>${t.goal?'Was gehört noch dazu?':'Muss etwas anderes vorher passieren?'}</h2><p>${t.goal?'Ziel':'Für'}: ${esc(t.t)}</p>
@@ -317,6 +395,7 @@ async function blocker(id){
  const before=snap(),n=r.vals.link?T(r.vals.link):r.vals.text?mk(r.vals.text):null;if(!n)return;
  attach(t,n,r.vals.kind);if(!r.vals.link)n.backlog=!!t.backlog;if(t.today&&r.vals.kind!=='help')n.today=true;undoSnap=before;save();render();
  toast(r.vals.kind==='help'?'Notiert – sperrt nichts.':'Kommt vorher und steht jetzt oben.',true)}
+// addTask: Popup „Neues Ziel / Neues To-Do“ (Knopf + unten). Gibt true zurück, wenn etwas angelegt wurde.
 async function addTask({text='',parent=null,mode=null}={}){
  const cp=curPlace(),ocid=cp.split('|')[0],ctx=parent||(focusId&&T(focusId)?focusId:null);
  const parents=all().filter(x=>!x.done);
@@ -340,6 +419,7 @@ async function addTask({text='',parent=null,mode=null}={}){
  createPre(n,pre,today);
  toast(pre.length?`Angelegt – mit ${pre.length} Vorher-To-Do${pre.length>1?'s':''}.`:(r.vals.what==='goal'?'Neues Ziel angelegt.':'Angelegt.'),true);
  save();render();return true}
+// quick: schnelles Notieren im Fokusmodus („später einsortieren“ landet in S.inbox)
 async function quick(){
  const r=await modal(`<h2>Neues To-Do</h2><p>Schreib es kurz auf. Danach geht’s hier weiter.</p>
   <input class="field" name="text" placeholder="Was ist dir eingefallen?" autocomplete="off" aria-label="Was ist dir eingefallen?">
@@ -347,6 +427,7 @@ async function quick(){
  if(!r.v||!r.vals.text)return;
  if(r.v==='later'){undoSnap=snap();S.inbox.push({id:uid(),t:r.vals.text,ctx:focusId});save();render();toast('Notiert. Weiter geht’s.',true);return}
  await addTask({text:r.vals.text,parent:focusId,mode:'sub'})}
+// inbox: Liste „Später einsortieren“ abarbeiten
 async function inbox(){
  for(;;){
   if(!S.inbox.length)return;
@@ -359,6 +440,7 @@ async function inbox(){
   const before=snap();
   if(await addTask({text:it.t,parent:it.ctx&&T(it.ctx)?it.ctx:null})){S.inbox=S.inbox.filter(i=>i.id!==iid);undoSnap=before;save();render()}
  }}
+// edit: Popup „Bearbeiten“. Läuft in einer Schleife, bis „Fertig“ oder „Löschen“ gedrückt wird.
 async function edit(id){
  const before=snap();
  for(;;){
@@ -388,6 +470,7 @@ async function edit(id){
   else{save();render();if(snap()!==before){undoSnap=before;toast('Gespeichert.',true)}return}
   save();render();
  }}
+// delAsk: löschen mit Hinweis und Rückgängig. del: löscht das To-Do und alle Vorher-To-Dos, die danach zu nichts mehr gehören.
 function delAsk(id){
  const t=T(id);if(!t)return;undoSnap=snap();
  const before=new Set(Object.keys(S.tasks));del(id);save();render();
@@ -397,6 +480,7 @@ function del(id){
  const strip=x=>{delete S.tasks[x];all().forEach(y=>{y.needs=y.needs.filter(n=>n!==x);y.soft=y.soft.filter(n=>n!==x)})};strip(id);
  let ch=true;while(ch){ch=false;all().forEach(x=>{if(!x.goal&&!parentsAll(x.id).length){strip(x.id);ch=true}})}
  if(focusId===id)closeFocus()}
+// catDialog: Bereich anlegen/bearbeiten/löschen. subDialog: Kategorie anlegen/umbenennen/löschen.
 async function catDialog(id){
  const c=id?C(id):null;
  const r=await modal(`<h2>${c?'Bereich bearbeiten':'Neuer Bereich'}</h2>
@@ -440,6 +524,7 @@ async function moveTo(id,{cat,area,bl}){
  }
  if(!msgs.length)return;
  undoSnap=before;save();render();toast(`„${esc(t.t)}“ ${msgs.join(' und ')}.`,true)}
+// moveMenu: Popup „Verschieben“ (Zeitnah/Backlog, Bereich, Kategorie)
 async function moveMenu(id){const t=T(id);if(!t)return;
  const r=await modal(`<h2>Verschieben</h2><p>${esc(t.t)}</p>
   <div class="seg" role="radiogroup" aria-label="Zeitnah oder Backlog"><label><input type="radio" name="bl" value="0"${t.backlog?'':' checked'}>Zeitnah</label><label><input type="radio" name="bl" value="1"${t.backlog?' checked':''}>Backlog</label></div>
@@ -447,6 +532,7 @@ async function moveMenu(id){const t=T(id);if(!t)return;
   <div class="btns">${btn('','Abbrechen','ghost')}${btn('ok','Fertig','pri')}</div>`);
  if(r.v!=='ok')return;const[cat,area]=r.vals.place.split('|');
  await moveTo(id,{cat,area,bl:r.vals.bl==='1'})}
+// menu: Einstellungen (···)
 async function menu(){
  const r=await modal(`<h2>Einstellungen</h2><label class="opt"><input type="checkbox" name="anim"${S.anim?' checked':''}> Sanfte Animationen</label>
   <p>Version B: Bereiche übereinander, Kategorien zum Wischen, Zeitnah und Backlog. Alles bleibt nur auf diesem Gerät.</p>
@@ -497,6 +583,8 @@ $('#importFile').addEventListener('change',e=>{const f=e.target.files&&e.target.
 
 /* ---------- Ereignisse ---------- */
 document.addEventListener('toggle',e=>{const d=e.target;if(d.matches&&d.matches('details.chain')){d.open?chainOpen.add(d.dataset.id):chainOpen.delete(d.dataset.id)}if(d.matches&&d.matches('details.bl')){d.open?blOpen.add(d.dataset.k):blOpen.delete(d.dataset.k)}},true);
+// Alle Klicks laufen hier zusammen. Jeder Knopf im HTML trägt data-act="…" (und meist data-id),
+// hier steht, was dann passiert. Neuer Knopf = data-act im HTML setzen + hier ein neues case.
 document.addEventListener('click',e=>{
  if(!$('#modal').hidden||Date.now()<noClick)return;
  if(e.target.closest('details.chain'))return;
@@ -525,6 +613,7 @@ document.addEventListener('click',e=>{
   case'tozeit':moveTo(id,{bl:false});break;
   case'tog':{const k=b.dataset.k,l=+b.dataset.l,cur=open.has(k)?open.get(k):l>0;if(l===0)[...open.keys()].forEach(x=>{if(x.startsWith(k+'/'))open.delete(x)});open.set(k,!cur);render();break}
  }});
+// Tastatur: Escape schließt den Fokusmodus, Enter öffnet eine Karte, Pfeiltasten wechseln die Kategorie
 document.addEventListener('keydown',e=>{
  if(!$('#modal').hidden)return;
  if(e.key==='Escape'&&!$('#focus').hidden)closeFocus();
@@ -533,6 +622,7 @@ document.addEventListener('keydown',e=>{
 $('#name').addEventListener('change',e=>{S.name=e.target.value.trim()||'Meine Liste';save();render()});
 $('#name').addEventListener('keydown',e=>{if(e.key==='Enter')e.target.blur()});
 
+/* ---------- Start: Daten laden, ggf. neuen Tag beginnen, anzeigen ---------- */
 S=load();const wasNew=newDay();render();if(wasNew)toast('Guten Morgen. „Heute“ ist wieder leer – Offenes steht weiter in „Machbar“.');
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&newDay()){render();toast('Neuer Tag. „Heute“ ist wieder leer.')}});
 // Offline-Betrieb: Der Service Worker legt alle Dateien der App lokal ab. Er greift nur über http(s), nicht bei file://.
