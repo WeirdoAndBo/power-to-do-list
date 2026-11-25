@@ -37,7 +37,7 @@ button{cursor:pointer;border:0;background:none;padding:0}
 /* Einstellung „Sanfte Animationen“ aus */
 .noanim *,.noanim *::before{transition:none!important;animation:none!important}
 
-/* ---------- Kopf: Name der Liste, Einstellungen, Umschalter Heute/Machbar/Übersicht ---------- */
+/* ---------- Kopf: Name der Liste, Einstellungen, Umschalter Übersicht/Machbar/Heute ---------- */
 header{padding:28px 0 6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .name{flex:1 1 240px;font-size:clamp(28px,5vw,40px);font-weight:700;letter-spacing:-.01em;border:0;background:transparent;padding:4px 8px;margin-left:-8px;border-radius:12px;line-height:1.1}
 .name:hover{background:var(--soft)}.name:focus{outline:none;background:var(--card);box-shadow:var(--shadow)}
@@ -64,10 +64,10 @@ header{padding:28px 0 6px;display:flex;align-items:center;gap:12px;flex-wrap:wra
 .cathead .ct i{width:12px;height:12px;border-radius:50%;background:var(--c);flex:none}
 .cathead .ct small{color:var(--mute);font-size:14px;font-weight:500}
 .cathead .ct svg{transform:rotate(90deg);color:var(--mute);margin-left:auto}
-/* Kategorie-Register (auf dem Handy zum Springen zwischen den Spalten) */
-.subtabs{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 12px;scrollbar-width:none}
-.subtabs::-webkit-scrollbar{display:none}
-.tab{flex:none;display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:20px;background:var(--card);box-shadow:var(--shadow);font-size:14px;color:var(--mute)}
+/* Kategorie-Navigation: kleine Knöpfe über den Spalten, immer alle sichtbar (brechen in mehrere Zeilen um).
+   Klick springt zur Spalte, die kurz aufleuchtet (Klasse .jump, setzt app.js). */
+.subtabs{display:flex;flex-wrap:wrap;gap:6px;padding:2px 2px 12px}
+.tab{flex:none;display:flex;align-items:center;gap:6px;min-height:32px;max-width:100%;padding:4px 12px;line-height:1.2;text-align:left;border-radius:20px;background:var(--card);box-shadow:var(--shadow);font-size:14px;color:var(--mute)}
 .tab i{width:8px;height:8px;border-radius:50%;background:var(--c)}
 .tab[aria-current=true]{color:var(--ink);font-weight:600;box-shadow:inset 0 0 0 2px var(--c)}
 .tab.new{background:transparent;box-shadow:inset 0 0 0 1.5px var(--line)}
@@ -85,10 +85,12 @@ header{padding:28px 0 6px;display:flex;align-items:center;gap:12px;flex-wrap:wra
 .colgrip:hover,.colgrip:focus-visible{opacity:1;background:color-mix(in srgb,var(--c) 14%,transparent)}
 /* Touch-Geräte: deutlicher sichtbar und größere Fläche zum Anfassen */
 @media(hover:none){.colhead .colgrip{opacity:.45;position:relative}.colgrip::before{content:'';position:absolute;inset:-4px -8px}}
-/* Desktop: Spalten nebeneinander mit sinnvoller Mindestbreite. Passen nicht alle hin, wird seitlich gewischt/gescrollt.
-   Die Register braucht man dann nur, wenn nicht alle Spalten sichtbar sind (Klasse ovf, setzt app.js). */
+/* Desktop: Spalten nebeneinander mit sinnvoller Mindestbreite. Passen nicht alle hin, wird seitlich gewischt/gescrollt. */
 @media(min-width:700px){.cols{scroll-snap-type:x proximity;flex-wrap:nowrap}.cat .col{flex:1 0 300px;max-width:440px}.cat .col:only-child{max-width:600px}
- .cat:not(.ovf) .subtabs .tab[data-i]{display:none}.subtabs{padding-bottom:4px}}
+ .subtabs{padding-bottom:8px}}
+/* Spalte leuchtet kurz auf, nachdem man über die Kategorie-Navigation hingesprungen ist */
+.cat .col.jump{animation:coljump 1s ease-out}
+@keyframes coljump{0%,35%{box-shadow:inset 0 0 0 3px var(--c)}100%{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 18%,transparent)}}
 /* Weiche Kante rechts/links, wenn es dort noch mehr Spalten gibt (Klassen ovf-r/ovf-l, setzt app.js). Nur Desktop. */
 @media(min-width:700px){
 .cat.ovf-r .cols{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 56px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 56px),transparent)}
@@ -199,7 +201,7 @@ details.done[open] summary::before,details.bl[open] summary::before{transform:ro
 .tree>li{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:8px 8px 8px 10px;margin-bottom:10px}
 .tree ul{margin-left:22px;padding-left:12px;border-left:1.5px solid var(--line)}
 .row{display:flex;align-items:center;gap:4px;min-height:46px}
-.row .t{flex:1;text-align:left;padding:6px 4px;border-radius:8px;line-height:1.35;font-size:15px}
+.row .t{flex:1;min-width:0;text-align:left;padding:6px 4px;border-radius:8px;line-height:1.35;font-size:15px;overflow-wrap:break-word;hyphens:auto}
 .row .t:hover{background:var(--soft)}
 .tree>li>.row .t{font-weight:600;font-size:16px}
 .row.isdone .t{color:var(--mute);text-decoration:line-through}
@@ -208,11 +210,22 @@ details.done[open] summary::before,details.bl[open] summary::before{transform:ro
 .row .tag{flex:none;font-size:12px;color:var(--mute);background:var(--soft);border-radius:10px;padding:1px 8px}
 .tag.bl{background:color-mix(in srgb,var(--c) 14%,var(--soft))}
 .row .t .tag.bl{display:inline-block;vertical-align:2px;margin-left:4px;font-weight:500;font-size:11px;padding:0 7px}
-/* Knöpfe im Baum erst beim Drüberfahren deutlich. Der Papierkorb hätte hier keinen Platz:
-   Löschen geht in der Übersicht über Tippen auf den Titel → „Bearbeiten“ → „Löschen“. */
-.tree .mini{opacity:.4;transition:opacity .15s}.tree .row:hover .mini,.tree .mini:focus-visible,.tree .chev{opacity:1}
+/* Knöpfe im Baum erst beim Drüberfahren deutlich. Im Baum etwas schmaler, damit der Titel Platz behält.
+   Unter-To-Dos haben keinen Papierkorb: Löschen über Tippen auf den Titel → „Bearbeiten“ → „Löschen“. */
+.tree .mini{width:28px;opacity:.4;transition:opacity .15s}.tree .row:hover .mini,.tree .mini:focus-visible,.tree .chev{opacity:1}
 @media(hover:none){.tree .mini{opacity:.6}}
-.tree .mini.del{display:none}
+.tree .row{gap:2px}
+/* Kopf einer Ziel-Karte in der Übersicht (wie .chead auf Karten in „Machbar“) */
+.tree>li>.chead{margin:-8px -8px 4px -10px;border-radius:18px 18px 0 0}
+/* Griff an Unter-To-Dos: ziehen zum Umsortieren */
+.tree .tgrip{width:18px;margin-left:-4px}
+.tree .row:hover>.tgrip{opacity:.8}
+@media(hover:none){.tree .tgrip{opacity:.6}}
+/* Beim Ziehen: gezogenes To-Do blass, farbige Linie zeigt Stelle und Ebene */
+body.treedrag{user-select:none;-webkit-user-select:none;cursor:grabbing}
+.tree li.tdrag{opacity:.35}
+.treeline{position:fixed;z-index:59;height:3px;border-radius:2px;background:var(--c);pointer-events:none;box-shadow:0 0 0 2px var(--card)}
+.treeline::before{content:'';position:absolute;left:-5px;top:-3.5px;width:10px;height:10px;border-radius:50%;background:var(--c)}
 /* Fortschrittsbalken unter einem Ziel */
 .pbar{height:4px;border-radius:2px;background:var(--soft);margin:2px 8px 6px 40px;overflow:hidden}.pbar i{display:block;height:100%;background:var(--c);border-radius:2px;transition:width .5s}
 /* Ziele im Backlog: blasser, mit gestrichelter Linie darüber */

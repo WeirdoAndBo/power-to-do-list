@@ -13,7 +13,7 @@ Diese Anleitung ist für Menschen, die HTML, CSS und JavaScript können und die 
 ## Ordnerstruktur
 
 ```
-index.html             Grundgerüst: Kopfzeile, Umschalter Heute/Machbar/Übersicht, leere Container
+index.html             Grundgerüst: Kopfzeile, Umschalter Übersicht/Machbar/Heute, leere Container
 css/app.css            Gestaltung (Farben ganz oben in :root)
 js/app.js              Logik, Ansichten, Dialoge, Speichern, Export/Import
 sw.js                  Service Worker: legt die Dateien für den Offline-Betrieb ab
@@ -101,7 +101,9 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | Tab „Heute“                            | `heuteViewHtml`, `setToday`, `saveDayOrder`    |
 | Tab „Machbar“                          | `machbarColumnHtml`, `cardHtml`, `backlogRowHtml` |
 | Tab „Übersicht“                        | `uebersichtColumnHtml`, `treeNodeHtml`         |
+| Unter-To-Dos in der Übersicht umsortieren | `moveInTree`, `treeDropTarget`, `applyTreeMove`, Ziehen am Griff (`.tgrip`, Abschnitt „Ziehen“ Nr. 5), Pfeiltasten |
 | Bereiche und Kategorien (Akkordeon)    | `bereichBarHtml`, `bereichOpenHtml`, `bereichDialog`, `kategorieDialog` |
+| Kategorie-Navigation (Knöpfe über den Spalten) | `subtabs` in `bereichOpenHtml`, `goToColumn` (Sprung + Aufleuchten), `markCurrentTab` |
 | Kategorie-Spalten umsortieren          | `moveKategorie`, Ziehen am Griff (`.colgrip`, Abschnitt „Ziehen“), Pfeiltasten, „Nach links/rechts“ in `kategorieDialog` |
 | Ganze Seite neu aufbauen               | `render`                                       |
 | Fokusmodus                             | `openFocus`, `renderFocus`, `closeFocus`       |
@@ -161,10 +163,10 @@ Einen neuen Test ergänzen: in `tests/test.html` einen Block `test('Name', async
 
 **Von Hand** (was der Selbsttest nicht kann):
 
-1. Alle drei Tabs ansehen: Heute, Machbar, Übersicht. Sieht alles aus wie vorher?
+1. Alle drei Tabs ansehen: Übersicht, Machbar, Heute. Sieht alles aus wie vorher?
 2. In „Heute“ eine Karte am Griff ziehen und die Reihenfolge ändern.
-3. In „Machbar“ eine Karte am Griff ins Backlog, auf ein Kategorie-Register und auf einen anderen Bereich ziehen.
-4. In der Übersicht Äste auf- und zuklappen.
+3. In „Machbar“ eine Karte am Griff ins Backlog, auf einen Knopf der Kategorie-Navigation und auf einen anderen Bereich ziehen.
+4. In der Übersicht Äste auf- und zuklappen. Ein Unter-To-Do am Griff hoch/runter ziehen (Reihenfolge) und nach rechts/links (Ebene). Die farbige Linie zeigt, wo es landet.
 5. Eine Kategorie-Spalte am Griff im Spaltenkopf ziehen (am Rand scrollt es seitlich mit). Nach dem Neuladen bleibt die Reihenfolge.
 6. Fenster schmal ziehen (Handy-Breite): nichts ragt seitlich heraus, Kategorien lassen sich wischen.
 7. Offline: Seite laden, dann in den Entwicklertools unter „Netzwerk“ auf „Offline“ stellen und neu laden. Die App muss erscheinen.
