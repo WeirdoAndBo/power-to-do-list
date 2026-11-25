@@ -142,8 +142,9 @@ details.done[open] summary::before,details.bl[open] summary::before{transform:ro
 .cgrip svg{width:8px;height:14px}
 .cgrip:hover,.cgrip:focus-visible{background:var(--soft)}
 .card:hover .cgrip{opacity:.8}
-/* Touch-Geräte: größere Fläche zum Anfassen */
-@media(hover:none){.cgrip::before{content:'';position:absolute;inset:-4px -6px}}
+/* Touch-Geräte: etwas größere Fläche zum Anfassen, rund um den Griff.
+   position:relative hält diese Fläche beim Griff (sonst lag sie über der ganzen Karte). */
+@media(hover:none){.cgrip{position:relative}.cgrip::before{content:'';position:absolute;inset:-4px -6px}}
 /* Knöpfe Bearbeiten / Verschieben / Löschen */
 .hbtn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:var(--mute);opacity:.6;flex:none}
 .hbtn svg{width:16px;height:16px}.hbtn:hover,.hbtn:focus-visible{opacity:1;background:var(--soft)}
