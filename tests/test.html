@@ -57,6 +57,7 @@ async function pressKey(el, key) {
  await sleep(60);
 }
 function expect(cond, text) { if (!cond) throw new Error(text); }
+const getTaskTitle = id => saved().tasks[id] && saved().tasks[id].t;
 // Version C: Übersicht öffnen und den Schalter „Machbar“ an (true) oder aus (false) stellen
 async function zeige(machbar) {
  await click('.switch [data-view="baum"]');
@@ -186,21 +187,32 @@ test('Kategorie-Navigation: alle Kategorien sichtbar, Klick springt zur Spalte',
  await sleep(150);
  expect(cols.scrollLeft < 5, 'Zurück zur ersten Spalte ging nicht');
 });
-test('Neues Ziel mit zwei Vorher-To-Dos anlegen', async () => {
+test('Popup „Neues To-Do“ wie eine Karte: Titel, Unter-To-Dos mit Enter und Tab', async () => {
  const before = Object.keys(saved().tasks).length;
  await click('.dock .plus');
  expect(modalOpen(), 'Popup ging nicht auf');
+ expect($('#modal [data-pick=cat]') && $('#modal [name=bl]'), 'Bereich/Kategorie oder „Erst mal ins Backlog“ fehlt');
+ expect(!$('#modal [name=what]'), 'Auswahl Ziel/Unter-To-Do soll weg sein');
  await type('#modal [name=text]', 'Test-Ziel');
  await pressKey($('#modal [name=text]'), 'Enter');
- await type('#modal .prerow:nth-child(1) input', 'Schritt A');
- await pressKey($('#modal .prerow:nth-child(1) input'), 'Enter');
- await type('#modal .prerow:nth-child(2) input', 'Schritt B');
- await click('#modal [data-v="ok"]');
+ const rowInput = n => $$('#modal .nrow input')[n];
+ expect(rowInput(0) && doc.activeElement === rowInput(0), 'Enter im Titel öffnet keine Unter-To-Do-Zeile');
+ rowInput(0).value = 'Schritt A';
+ await pressKey(rowInput(0), 'Enter');
+ rowInput(1).value = 'Schritt B';
+ await pressKey(rowInput(1), 'Enter');
+ rowInput(2).value = 'Vor B';
+ await pressKey(rowInput(2), 'Tab');
+ expect($$('#modal .nrow')[2].dataset.l === '1', 'Tab rückt nicht ein');
+ await pressKey(rowInput(2), 'Enter');
+ await pressKey(rowInput(3), 'Enter');   // leere Zeile + Enter = anlegen
+ expect(!modalOpen(), 'Enter in leerer Zeile legt nicht an');
  const tasks = Object.values(saved().tasks);
- expect(tasks.length === before + 3, 'Es wurden nicht genau 3 To-Dos angelegt');
+ expect(tasks.length === before + 4, 'Es wurden nicht genau 4 To-Dos angelegt');
  const goal = tasks.find(t => t.t === 'Test-Ziel');
- expect(goal && goal.goal && goal.needs.length === 2, 'Ziel hat nicht zwei Vorher-To-Dos');
- expect(toastText().includes('mit 2 Vorher-To-Dos'), 'Hinweis „mit 2 Vorher-To-Dos“ fehlt');
+ const b = tasks.find(t => t.t === 'Schritt B');
+ expect(goal && goal.needs.length === 2 && b.needs.length === 1 && getTaskTitle(b.needs[0]) === 'Vor B', 'Aufbau stimmt nicht');
+ expect(toastText().includes('mit 3 Unter-To-Dos'), 'Hinweis „mit 3 Unter-To-Dos“ fehlt');
 });
 test('Rückgängig nimmt das Anlegen zurück', async () => {
  await click('#undo');
@@ -245,7 +257,11 @@ test('Ins Backlog verschieben und zurück', async () => {
  expect(modalOpen(), 'Frage „ganze Kette?“ kam nicht');
  await click('#modal [data-v="one"]');
  expect(saved().tasks.b.backlog, '„b“ ist nicht im Backlog');
- await click('[data-act="tozeit"][data-id="b"]');
+ // Version C: Backlog ist ein eigener Abschnitt mit denselben Karten; zurück nach Zeitnah per Ziehen
+ const card = $('.col[aria-label="Akquise"] details.blsec .card[data-id="b"]');
+ expect(card && $('.col[aria-label="Akquise"] details.blsec').open, '„b“ steht nicht als Karte im offenen Backlog-Abschnitt');
+ const top = $('.col[aria-label="Akquise"] .list.zone[data-bl="0"] > .card').getBoundingClientRect();
+ await dragTo(card.querySelector('.ctext'), top.x + 40, top.y + 8);
  expect(!saved().tasks.b.backlog, '„b“ ist nicht zurück in Zeitnah');
 });
 test('Löschen mit Rückgängig', async () => {
@@ -260,12 +276,14 @@ test('Fokusmodus öffnen und mit Escape schließen', async () => {
  await pressKey(doc.body, 'Escape');
  expect($('#focus').hidden, 'Fokusmodus ging nicht zu');
 });
-test('„+ Neues To-Do“ in einer Spalte legt es in dieser Kategorie an', async () => {
- await click('[data-act="addhere"][data-cat="arbeit"][data-area="fin"]');
- expect(modalOpen(), 'Popup ging nicht auf');
- expect($('#modal [name=place]').value === 'arbeit|fin', 'Ort ist nicht mit Arbeit · Finanzen vorbelegt');
- await type('#modal [name=text]', 'Neu in Finanzen');
- await click('#modal [data-v="ok"]');
+test('„+“ zwischen den Karten einer Spalte legt dort ein neues To-Do an', async () => {
+ expect(!$('[data-act="addhere"]'), 'Knopf „+ Neues To-Do“ unten in der Spalte ist noch da');
+ await click('.ins[data-act="insroot"][data-cat="arbeit"][data-area="fin"][data-bl="0"][data-after=""]');
+ const input = $('.insrowroot .tinput');
+ expect(input, 'Eingabefeld erscheint nicht');
+ input.value = 'Neu in Finanzen';
+ await pressKey(input, 'Enter');
+ if ($('.insrowroot .tinput')) await pressKey($('.insrowroot .tinput'), 'Escape');
  const created = Object.values(saved().tasks).find(t => t.t === 'Neu in Finanzen');
  expect(created && created.cat === 'arbeit' && created.area === 'fin', 'To-Do liegt nicht in Arbeit · Finanzen');
  expect($(`#acc .card[data-id="${created.id}"]`).closest('.col').getAttribute('aria-label') === 'Finanzen', 'Karte steht nicht in der Spalte Finanzen');

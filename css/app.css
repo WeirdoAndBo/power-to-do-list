@@ -403,7 +403,7 @@ body.coldrag .cat .cols{scroll-snap-type:none!important}
 .ins::before{content:'';position:absolute;left:4px;right:4px;top:50%;height:2px;margin-top:-1px;border-radius:1px;background:var(--c)}
 .ins span{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:var(--c);color:#fff;font-size:16px;line-height:20px;text-align:center;font-weight:600}
 .ins:hover,.ins:focus-visible{opacity:1}
-body.dnd .ins,body.treedrag .ins{display:none}
+body.dnd .ins,body.treedrag .ins{visibility:hidden}
 .insrow{padding:4px 6px 4px 40px}
 .insrow .tinput{margin:0;padding:6px 8px}
 /* Ohne Maus (Handy): Streifen etwas höher und ganz leicht sichtbar */
@@ -421,3 +421,31 @@ body.dnd .ins,body.treedrag .ins{display:none}
 .tcard .row.down>.check,.tcard .row.down>.tw,.tcard .row.down>.tag{opacity:.5;transition:opacity .15s}
 .tcard .row.down:hover>.check,.tcard .row.down:hover>.tw{opacity:.85}
 .ins.inchain{width:calc(100% - 30px);margin-left:30px}
+/* Version C: „+“ zwischen den Karten einer Spalte (neues To-Do ganz oben an dieser Stelle).
+   Der Streifen nimmt kaum Platz weg: negative Ränder gleichen den Abstand zwischen den Karten aus. */
+.insroot{list-style:none;margin:-11px 0;position:relative;z-index:1}
+.tree>li.insroot{margin:-6px 0 4px;background:none;box-shadow:none;padding:0}
+.insroot .ins{height:14px;margin:0}
+.insroot:first-child{margin-top:-4px}
+.insrowroot{padding:4px 0;margin:0}
+.insrowroot .tinput{padding:12px 14px;border-radius:14px;font-size:16px;font-weight:600}
+/* Backlog-Abschnitt: Überschrift wie „Zeitnah“, einklappbar; Karten wie in Zeitnah */
+details.blsec{margin-top:18px;border-radius:18px}
+details.blsec>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px;min-height:32px;margin:0 6px 4px}
+details.blsec>summary::-webkit-details-marker{display:none}
+details.blsec>summary::after{content:'›';font-size:16px;line-height:1;letter-spacing:0;transition:transform .2s;display:inline-block}
+details.blsec[open]>summary::after{transform:rotate(90deg)}
+details.blsec .bempty{padding:6px 8px 12px}
+/* Popup „Neues To-Do“ als Karte */
+.ncard{margin:14px 0 6px;padding:10px 12px 12px;border-radius:16px;background:var(--card);box-shadow:var(--shadow),inset 4px 0 0 var(--c)}
+.nhead{display:flex;align-items:center;gap:10px}
+.nhead .field{flex:1;font-size:17px;font-weight:600;border:0;box-shadow:none;padding:8px 4px;min-height:44px;background:transparent}
+.ncheck{flex:none;width:22px;height:22px;border-radius:50%;box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--c) 60%,var(--mute))}
+.nlist{display:block}
+.nrow{display:flex;align-items:center;gap:8px;padding-left:calc(var(--l,0) * 20px);position:relative}
+.nrow:not([data-l="0"])::before{content:"";position:absolute;left:calc(var(--l) * 20px - 10px);top:0;bottom:0;height:auto;width:2px;border:0;border-radius:0;opacity:1;background:color-mix(in srgb,var(--c) 30%,transparent)}
+.nrow::after{display:none}
+.nrow .field{flex:1;min-height:40px;padding:8px 6px;font-size:15px;border:0;box-shadow:none;background:transparent;border-bottom:1px solid var(--line);border-radius:0}
+.nrow .field:focus{border-bottom-color:var(--c)}
+.nins{width:calc(100% - var(--l,0) * 20px);margin-left:calc(var(--l,0) * 20px)}
+.ncard .ins span{background:var(--c)}

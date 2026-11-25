@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.12-c';
+const APP_VERSION = '1.0.13-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -92,7 +92,7 @@ let focusId = null;             // To-Do, das gerade im Fokusmodus offen ist
 let lastRenderedBereich;        // welcher Bereich beim letzten render() offen war
 let ignoreClicksUntil = 0;      // Zeitpunkt, bis zu dem Klicks ignoriert werden (direkt nach dem Ziehen)
 const treeOpen = new Map();     // auf-/zugeklappte Äste in der Übersicht
-const openBacklogs = new Set(); // aufgeklappte Backlog-Kästen
+const closedBacklogs = new Set(); // zugeklappte Backlog-Abschnitte (Version C: sonst offen)
 const openChains = new Set();   // aufgeklappte Ziel-Ketten auf Karten
 
 /* ---------- Tag ---------- */
@@ -388,10 +388,12 @@ function colorOf(task) {
  return bereich ? bereich.color : GRAY;
 }
 // Text unter dem Titel: „Das ist ein Ziel“ oder „Ziel: …“ (schon HTML-sicher)
+// Version C: Ziel und To-Do werden in der Bedienung nicht mehr unterschieden (Idee zurückgestellt).
+// Intern bleibt goal: true für To-Dos ganz oben, damit Fortschritt und „Gehört zu“ funktionieren.
 function goalHint(task) {
  const goals = goalsOf(task.id);
- if (task.goal) return 'Das ist ein Ziel';
- return goals.length ? 'Ziel: ' + goals.map(goal => esc(goal.t)).join(' · ') : '';
+ if (task.goal) return '';
+ return goals.length ? 'Gehört zu: ' + goals.map(goal => esc(goal.t)).join(' · ') : '';
 }
 
 /* ---------- Bausteine für Auswahlfelder ---------- */
@@ -481,8 +483,7 @@ function cardHtml(task, color, options = {}) {
  const tag = options.tag || 'article';
  return `<${tag} class="card${options.cls || ''}" data-act="focus" data-id="${task.id}" ${options.attrs || ''} style="--c:${color}" tabindex="0" aria-label="${title} – im Fokusmodus öffnen">
  <div class="chead">${grip}${task.done ? '' : todaySwitchHtml(task)}<span class="sp"></span>${options.headExtra || ''}${moveButton}</div>
- <div class="cbody">${checkButtonHtml(task, color)}<div class="ctext"><h3>${titleHtml(task)}</h3>${chainBoxHtml(task)}
- ${waitingHtml}</div><span class="cacts">${taskActionsHtml(task)}</span></div>
+ <div class="cbody">${checkButtonHtml(task, color)}<div class="ctext"><h3>${titleHtml(task)}</h3>${options.tree === undefined ? chainBoxHtml(task) + waitingHtml : ''}</div><span class="cacts">${taskActionsHtml(task)}</span></div>
  ${options.tree === undefined ? (task.done ? '' : insertHtml(task.id, '', color)) : options.tree}</${tag}>`;
 }
 // Titel eines To-Dos. Antippen = direkt hier bearbeiten (Enter speichert, Escape bricht ab), siehe startRename.
@@ -493,6 +494,18 @@ function titleHtml(task) {
 // Neue To-Dos kommen über das „+“, das zwischen den To-Dos erscheint (insertHtml).
 function taskActionsHtml(task) {
  return `<button class="mini del" data-act="del" data-id="${task.id}" aria-label="${esc(task.t)} löschen" title="Löschen">${ICON_TRASH}</button>`;
+}
+// Version C: Backlog-Abschnitt einer Spalte, wie „Zeitnah“ aufgebaut (gleiche Karten), aber einklappbar.
+// Karten lassen sich zwischen Zeitnah und Backlog hin und her ziehen (auch auf die zugeklappte Überschrift).
+function backlogSectionHtml(bereich, kategorie, count, inner) {
+ const key = bereich.id + '|' + kategorie.id;
+ return `<details class="blsec zone" data-drop="zone" data-cat="${bereich.id}" data-area="${kategorie.id}" data-bl="1" data-k="${esc(key)}"${closedBacklogs.has(key) ? '' : ' open'}>`
+  + `<summary class="zlabel">Backlog · ${count}</summary>${inner}</details>`;
+}
+// Unsichtbarer Streifen zwischen den Karten einer Spalte: neues To-Do ganz oben (eigene Karte) an dieser Stelle.
+function insertRootHtml(bereich, kategorie, afterId, tag = 'div', backlog = false) {
+ return `<${tag} class="insroot"><button class="ins" data-act="insroot" data-cat="${bereich.id}" data-area="${kategorie.id}" data-bl="${backlog ? 1 : 0}" data-after="${afterId || ''}"`
+  + ` style="--c:${bereich.color}" aria-label="Hier ein neues To-Do in ${esc(kategorie.name || bereich.name)} anlegen" title="Hier einfügen"><span aria-hidden="true">+</span></button></${tag}>`;
 }
 // Unsichtbarer Streifen zwischen To-Dos. Mit der Maus darüber erscheint „+“; Klick = hier ein neues To-Do eintippen.
 // parentId = das To-Do, vor dem das neue kommt; afterId = steht danach direkt hinter diesem (leer = ganz vorn).
@@ -532,19 +545,15 @@ function machbarColumnHtml(bereich, kategorie) {
  const done = allTasks().filter(t => t.done && here(t)).sort((a, b) => b.doneAt - a.doneAt);
  // Ablageziel fürs Ziehen
  const dropTarget = `data-drop="zone" data-cat="${bereich.id}" data-area="${kategorie.id}"`;
- const backlogKey = bereich.id + '|' + kategorie.id;
- const doableHtml = doable.length
-  ? doable.map(t => cardHtml(t, bereich.color, { move: true })).join('')
-  : `<div class="empty" style="--c:${bereich.color}">Hier ist gerade nichts zu tun.</div>`;
- const backlogHtml = backlogTop.length
-  ? backlogTop.map(t => backlogRowHtml(t, bereich.color)).join('')
-  : '<p class="bempty">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</p>';
- // Knopf „+ Neues To-Do“ direkt in der Spalte: legt es in diesem Bereich und dieser Kategorie an
- const addHereHtml = `<button class="coladd" data-act="addhere" data-cat="${bereich.id}" data-area="${kategorie.id}"`
-  + ` aria-label="Neues To-Do in ${esc(kategorie.name || bereich.name)}"><span aria-hidden="true">+</span> Neues To-Do</button>`;
- return `<p class="zlabel">Zeitnah</p><div class="list zone" ${dropTarget} data-bl="0">${doableHtml}</div>${addHereHtml}
- <details class="bl zone" ${dropTarget} data-bl="1" data-k="${esc(backlogKey)}"${openBacklogs.has(backlogKey) ? ' open' : ''}>`
-  + `<summary>Backlog · ${backlogAll.length}</summary>${backlogHtml}</details>${doneBoxHtml(done, bereich.color)}`;
+ const doableHtml = insertRootHtml(bereich, kategorie, '') + (doable.length
+  ? doable.map(t => cardHtml(t, bereich.color, { move: true }) + insertRootHtml(bereich, kategorie, t.id)).join('')
+  : `<div class="empty" style="--c:${bereich.color}">Hier ist gerade nichts zu tun.</div>`);
+ const backlogHtml = `<div class="list">${insertRootHtml(bereich, kategorie, '', 'div', true)}`
+  + (backlogTop.length
+   ? backlogTop.map(t => cardHtml(t, bereich.color, { move: true }) + insertRootHtml(bereich, kategorie, t.id, 'div', true)).join('')
+   : '<p class="bempty">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</p>') + '</div>';
+ return `<p class="zlabel">Zeitnah</p><div class="list zone" ${dropTarget} data-bl="0">${doableHtml}</div>
+ ${backlogSectionHtml(bereich, kategorie, backlogAll.length, backlogHtml)}${doneBoxHtml(done, bereich.color)}`;
 }
 // Tab „Übersicht“: ein Knoten im Baum, ruft sich für seine Vorher-To-Dos selbst auf.
 // path = Weg im Baum (für auf/zu), level = Tiefe (0 = Ziel ganz oben), viaSoft = hängt über „hilft nur“ dran,
@@ -626,23 +635,19 @@ function uebersichtColumnHtml(bereich, kategorie) {
  const backlog = roots.filter(t => !t.done && t.backlog).sort(byPrio);
  const done = roots.filter(t => t.done);
  const nodes = (tasks, level) => tasks.map(t => treeNodeHtml(t, bereich.color, bereich.id, level)).join('');
- const emptyText = backlog.length ? 'Gerade nichts zeitnah.' : `Noch kein Ziel in ${esc(kategorie.name || bereich.name)}.`;
+ const emptyText = backlog.length ? 'Gerade nichts zeitnah.' : `Noch nichts in ${esc(kategorie.name || bereich.name)}.`;
  // Ablageflächen fürs Ziehen von Karten (wie mit Schalter „Machbar“ an)
  const dropTarget = `data-drop="zone" data-cat="${bereich.id}" data-area="${kategorie.id}"`;
  const soonHtml = soon.length
-  ? `<ul class="tree">${nodes(soon, 0)}</ul>`
-  : `<div class="empty" style="--c:${bereich.color}">${emptyText}</div>`;
- // Backlog: auch leer da (nur beim Ziehen sichtbar), damit man Karten hineinziehen kann
- const backlogHtml = `<div class="zone tzone${backlog.length ? '' : ' tzempty'}" ${dropTarget} data-bl="1">`
-  + `<p class="zlabel blhead">Backlog · ${backlog.length}</p>`
-  + (backlog.length ? `<ul class="tree bltree">${nodes(backlog, 0)}</ul>` : '<p class="bempty">Hierher ziehen: gerade nicht dran.</p>')
-  + '</div>';
+  ? `<ul class="tree">${insertRootHtml(bereich, kategorie, '', 'li')}${soon.map(t => treeNodeHtml(t, bereich.color, bereich.id, 0) + insertRootHtml(bereich, kategorie, t.id, 'li')).join('')}</ul>`
+  : insertRootHtml(bereich, kategorie, '') + `<div class="empty" style="--c:${bereich.color}">${emptyText}</div>`;
+ const backlogHtml = backlogSectionHtml(bereich, kategorie, backlog.length, backlog.length
+  ? `<ul class="tree">${insertRootHtml(bereich, kategorie, '', 'li', true)}${backlog.map(t => treeNodeHtml(t, bereich.color, bereich.id, 0) + insertRootHtml(bereich, kategorie, t.id, 'li', true)).join('')}</ul>`
+  : insertRootHtml(bereich, kategorie, '', 'div', true) + '<p class="bempty">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</p>');
  const doneHtml = done.length
-  ? `<details class="done"><summary>Erreichte Ziele · ${done.length}</summary><ul class="tree">${nodes(done, 1)}</ul></details>`
+  ? `<details class="done"><summary>Erledigt · ${done.length}</summary><ul class="tree">${nodes(done, 1)}</ul></details>`
   : '';
- const addHereHtml = `<button class="coladd" data-act="addhere" data-cat="${bereich.id}" data-area="${kategorie.id}"`
-  + ` aria-label="Neues To-Do in ${esc(kategorie.name || bereich.name)}"><span aria-hidden="true">+</span> Neues To-Do</button>`;
- return `<p class="zlabel">Zeitnah</p><div class="list zone tzone" ${dropTarget} data-bl="0">${soonHtml}</div>${addHereHtml}
+ return `<p class="zlabel">Zeitnah</p><div class="list zone tzone" ${dropTarget} data-bl="0">${soonHtml}</div>
  ${backlogHtml}${doneHtml}`;
 }
 // Tab „Heute“: freie To-Dos (ziehbar), „Danach dran“ (noch gesperrt) und „Heute geschafft“
@@ -1028,6 +1033,141 @@ function createPreTasks(root, entries, today) {
  });
 }
 
+/* ---------- Version C: Popup „Neues To-Do“ wie eine Karte ----------
+   Oben Bereich, Kategorie und „Erst mal ins Backlog“. Darunter eine Karte: Titel und Unter-To-Dos.
+   Enter = nächstes Unter-To-Do (Enter in einer leeren Zeile legt alles an), Tab = kommt davor (eine Ebene
+   tiefer), Umschalt+Tab = eine Ebene zurück, Rücktaste in leerer Zeile = Zeile weg.
+   „+“ zwischen den Zeilen wie auf der Karte. Die Zeilen sind .prerow, readModalValues liest sie als _pre. */
+function newRowHtml(level) {
+ return `<div class="prerow nrow" data-l="${level}" style="--l:${level}"><span class="ncheck" aria-hidden="true"></span>`
+  + `<input class="field pre" placeholder="Unter-To-Do" autocomplete="off" aria-label="Unter-To-Do">`
+  + `<button type="button" class="mini del" data-nrow="rm" aria-label="Zeile entfernen">${ICON_TRASH}</button></div>`;
+}
+// Ebenen in Ordnung bringen und die „+“-Streifen neu setzen
+function refreshNewRows(list) {
+ list.querySelectorAll('.nins').forEach(x => x.remove());
+ const rows = [...list.querySelectorAll('.nrow')];
+ let previous = -1;
+ rows.forEach(row => {
+  const level = Math.max(0, Math.min(+row.dataset.l, previous + 1));
+  row.dataset.l = level;
+  row.style.setProperty('--l', level);
+  previous = level;
+ });
+ const strip = level => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'ins nins';
+  b.dataset.nlevel = level;
+  b.style.setProperty('--l', level);
+  b.setAttribute('aria-label', 'Hier ein Unter-To-Do einfügen');
+  b.innerHTML = '<span aria-hidden="true">+</span>';
+  return b;
+ };
+ list.prepend(strip(0));
+ rows.forEach((row, i) => {
+  const level = +row.dataset.l;
+  row.after(strip(level + 1));             // direkt darunter: kommt davor (eine Ebene tiefer)
+  let j = i;
+  while (j + 1 < rows.length && +rows[j + 1].dataset.l > level) j++;
+  let anchor = rows[j];
+  while (anchor.nextElementSibling && anchor.nextElementSibling.classList.contains('nins')) anchor = anchor.nextElementSibling;
+  anchor.after(strip(level));               // nach allem, was dazugehört: gleiche Ebene
+ });
+}
+function addNewRow(list, where, level) {
+ const temp = document.createElement('div');
+ temp.innerHTML = newRowHtml(level);
+ const row = temp.firstElementChild;
+ if (where && where.classList.contains('nins')) where.replaceWith(row);
+ else if (where) where.after(row);
+ else list.append(row);
+ refreshNewRows(list);
+ row.querySelector('input').focus();
+ return row;
+}
+async function newTaskDialog(text = '', place = currentPlace()) {
+ const bereich = getBereich(place.split('|')[0]);
+ const pending = modal(`<h2>Neues To-Do</h2>
+  ${placePickerHtml(place)}
+  <label class="opt"><input type="checkbox" name="bl"> Erst mal ins Backlog</label>
+  <div class="ncard" style="--c:${bereich ? bereich.color : GRAY}">
+   <div class="nhead"><span class="ncheck" aria-hidden="true"></span><input class="field ntitle" name="text" value="${esc(text)}" placeholder="Was ist zu tun?" autocomplete="off" aria-label="Titel"></div>
+   <div class="nlist"></div>
+  </div>
+  <p class="prehint">Enter: nächstes Unter-To-Do · Tab: kommt davor (eine Ebene tiefer) · Umschalt+Tab: zurück · Enter in leerer Zeile: fertig</p>
+  <div class="btns">${buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', 'Anlegen', 'pri')}</div>`);
+ const modalEl = $('#modal');
+ const list = modalEl.querySelector('.nlist');
+ refreshNewRows(list);
+ // Farbe der Karte folgt dem gewählten Bereich
+ modalEl.querySelector('[data-pick=cat]').addEventListener('change', event => {
+  const chosen = getBereich(event.target.value);
+  modalEl.querySelector('.ncard').style.setProperty('--c', chosen ? chosen.color : GRAY);
+ });
+ modalEl.addEventListener('click', event => {
+  const strip = event.target.closest('.nins');
+  if (strip) { event.stopPropagation(); addNewRow(list, strip, +strip.dataset.nlevel); return; }
+  const remove = event.target.closest('[data-nrow="rm"]');
+  if (remove) {
+   event.stopPropagation();
+   const row = remove.closest('.nrow');
+   row.remove();
+   refreshNewRows(list);
+  }
+ }, true);
+ modalEl.addEventListener('keydown', event => {
+  const input = event.target;
+  if (input.name === 'text' && event.key === 'Enter') {
+   event.preventDefault();
+   event.stopPropagation();
+   const first = list.querySelector('.nrow input');
+   if (first) first.focus();
+   else addNewRow(list, list.querySelector('.nins'), 0);
+   return;
+  }
+  const row = input.closest && input.closest('.nrow');
+  if (!row) return;
+  const level = +row.dataset.l;
+  if (event.key === 'Enter') {
+   event.preventDefault();
+   event.stopPropagation();
+   if (!input.value.trim()) { modalEl.querySelector('.btn.pri').click(); return; }
+   // Neue Zeile auf gleicher Ebene, hinter allem, was zu dieser Zeile gehört
+   const rows = [...list.querySelectorAll('.nrow')];
+   let j = rows.indexOf(row);
+   while (j + 1 < rows.length && +rows[j + 1].dataset.l > level) j++;
+   addNewRow(list, rows[j], level);
+  } else if (event.key === 'Tab') {
+   event.preventDefault();
+   event.stopPropagation();
+   row.dataset.l = event.shiftKey ? Math.max(0, level - 1) : level + 1;
+   refreshNewRows(list);
+   input.focus();
+  } else if (event.key === 'Backspace' && !input.value) {
+   event.preventDefault();
+   const rows = [...list.querySelectorAll('.nrow')];
+   const previous = rows[rows.indexOf(row) - 1];
+   row.remove();
+   refreshNewRows(list);
+   (previous ? previous.querySelector('input') : modalEl.querySelector('.ntitle')).focus();
+  }
+ });
+ const r = await pending;
+ if (r.v !== 'ok' || !r.vals.text) return false;
+ undoSnapshot = snapshot();
+ // Im Tab „Heute“ angelegte To-Dos kommen gleich nach „Heute“
+ const today = state.view === 'heute';
+ const [cat, area] = r.vals.place.split('|');
+ const created = createTask(r.vals.text, { goal: true, cat: cat || null, area: area || null, today, backlog: !!r.vals.bl && !today });
+ createPreTasks(created, r.vals._pre, today);
+ const count = r.vals._pre.length;
+ save();
+ render();
+ toast(count ? `Angelegt – mit ${count} Unter-To-Do${pluralS(count)}.` : 'Angelegt.', true);
+ return true;
+}
+
 /* ---------- Ziehen mit Maus oder Finger ---------- */
 // Findet das erste Element in `items`, über dessen Mitte der Zeiger (Höhe y) steht
 function itemBelow(items, dragged, y) {
@@ -1333,6 +1473,27 @@ function moveInTree(id, oldParentId, newParentId, afterId) {
  if (target === 'needs') getTask(id).prio = Math.max(getTask(id).prio, newParent.prio + 1);
  return true;
 }
+// Unter-To-Do aus seiner Karte lösen: wird ein eigenes To-Do (eigene Karte) an diesem Ort.
+// Seine eigenen Vorher-To-Dos kommen mit. order = Reihenfolge der Karten in der Ablagefläche (oder null).
+function makeOwnTask(id, oldParentId, { cat, area, bl }, order) {
+ const task = getTask(id);
+ const parent = getTask(oldParentId);
+ if (!task || !parent) return;
+ undoSnapshot = snapshot();
+ parent.needs = parent.needs.filter(x => x !== id);
+ parent.soft = parent.soft.filter(x => x !== id);
+ task.goal = true;
+ task.cat = cat || null;
+ task.area = area || null;
+ if (bl !== undefined) {
+  // Backlog/Zeitnah gilt für die ganze Kette darunter
+  [...taskAndAllBefore(id)].forEach(x => { if (!getTask(x).done) getTask(x).backlog = bl; });
+ }
+ if (order) order.forEach((x, i) => { if (getTask(x)) getTask(x).prio = order.length - i; });
+ save();
+ render();
+ toast(`„${esc(task.t)}“ ist jetzt ein eigenes To-Do.`, true);
+}
 // Umhängen ausführen, neuen Ast aufklappen, speichern und Hinweis zeigen
 function applyTreeMove(id, oldParentId, newParentLi, afterId, quiet) {
  const before = snapshot();
@@ -1370,6 +1531,8 @@ function dragTreeRow(event, grip) {
  const startY = event.clientY;
  let moved = false;
  let drop = null;
+ let outside = null;     // Ablagefläche außerhalb der Karte unter dem Zeiger
+ let beforeEl = null;    // dort: Karte, vor der es landet
  trackPointer(moveEvent => {
   if (!moved) {
    if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 6) return;
@@ -1382,6 +1545,21 @@ function dragTreeRow(event, grip) {
   ghost.style.top = moveEvent.clientY - 20 + 'px';
   const wanted = startLevel + Math.round((moveEvent.clientX - startX) / 26);
   rows.forEach(r => { r.box = r.row.getBoundingClientRect(); });  // jedes Mal neu, falls die Seite gescrollt hat
+  // Außerhalb der Karte: wird ein eigenes To-Do (Ablage in Zeitnah/Backlog einer Spalte, Kategorie-Knopf, Bereich)
+  const under = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+  const target = under && !card.contains(under) ? under.closest('[data-drop]') : null;
+  if (target !== outside) {
+   outside?.classList.remove('over');
+   outside = target;
+   outside?.classList.add('over');
+   document.body.classList.toggle('dnd', !!outside);
+  }
+  if (outside) {
+   line.style.top = '-99px';
+   const items = outside.dataset.bl !== undefined ? dropItems(outside, null) : [];
+   beforeEl = items.length ? itemBelow(items, null, moveEvent.clientY) : null;
+   return;
+  }
   drop = treeDropTarget(rows, moveEvent.clientY, wanted);
   const cardBox = card.getBoundingClientRect();
   const left = cardBox.left + 10 + drop.level * TREE_INDENT;
@@ -1392,10 +1570,24 @@ function dragTreeRow(event, grip) {
   line.remove();
   ghost.remove();
   li.classList.remove('tdrag');
-  document.body.classList.remove('treedrag');
+  document.body.classList.remove('treedrag', 'dnd');
+  outside?.classList.remove('over');
   if (!moved) return;
   ignoreClicksUntil = Date.now() + 350;
-  if (upEvent.type === 'pointercancel' || !drop || !drop.parentLi) return;
+  if (upEvent.type === 'pointercancel') return;
+  if (outside) {
+   const place = outside.dataset;
+   let order = null;
+   if (place.bl !== undefined) {
+    order = dropItems(outside, null).map(el => el.dataset.id);
+    order.splice(beforeEl ? order.indexOf(beforeEl.dataset.id) : order.length, 0, id);
+   }
+   const bereich = getBereich(place.cat);
+   const area = place.drop === 'cat' ? (bereich && bereich.subs.length ? bereich.subs[0].id : '') : place.area;
+   makeOwnTask(id, oldParentId, { cat: place.cat, area, bl: place.bl === undefined ? undefined : place.bl === '1' }, order);
+   return;
+  }
+  if (!drop || !drop.parentLi) return;
   applyTreeMove(id, oldParentId, drop.parentLi, drop.afterLi ? drop.afterLi.dataset.tid : null);
  });
 }
@@ -1500,6 +1692,7 @@ document.addEventListener('contextmenu', event => { if (touchDragging) event.pre
 // „+“ zwischen To-Dos: Eingabefeld an dieser Stelle. Enter legt das To-Do an (geht sonst nicht) und öffnet
 // gleich das nächste Feld dahinter; Escape oder leer lassen schließt es.
 function startInsert(button) {
+ if (button.dataset.act === 'insroot') { startInsertRoot(button); return; }
  const parent = getTask(button.dataset.p);
  if (!parent) return;
  const afterId = button.dataset.after || null;
@@ -1542,6 +1735,42 @@ function startInsert(button) {
   (intoId
    ? document.querySelector(`.ins[data-p="${task.id}"][data-into="${intoId}"]`)
    : document.querySelector(`.ins[data-p="${parent.id}"][data-after="${task.id}"]`))?.click();
+ };
+ input.addEventListener('keydown', event => {
+  event.stopPropagation();
+  if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+  if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+ });
+ input.addEventListener('blur', () => finish(true));
+ input.addEventListener('click', event => event.stopPropagation());
+}
+// „+“ zwischen den Karten einer Spalte: neues To-Do (eigene Karte) genau an dieser Stelle der Spalte.
+function startInsertRoot(button) {
+ const { cat, area, bl } = button.dataset;
+ const afterId = button.dataset.after || null;
+ const zone = button.closest('[data-drop]');
+ const order = zone ? dropItems(zone, null).map(el => el.dataset.id) : [];
+ const box = document.createElement('div');
+ box.className = 'insrow insrowroot';
+ box.style.setProperty('--c', button.style.getPropertyValue('--c'));
+ box.innerHTML = '<input class="tinput" placeholder="Neues To-Do" aria-label="Neues To-Do" autocomplete="off">';
+ button.replaceWith(box);
+ const input = box.querySelector('input');
+ input.focus();
+ let finished = false;
+ const finish = keep => {
+  if (finished) return;
+  finished = true;
+  const text = input.value.trim();
+  if (!keep || !text) { render(); return; }
+  undoSnapshot = snapshot();
+  const task = createTask(text, { goal: true, cat: cat || null, area: area || null, backlog: bl === '1', today: state.view === 'heute' && bl !== '1' });
+  order.splice(afterId ? order.indexOf(afterId) + 1 : 0, 0, task.id);
+  order.forEach((id, i) => { if (getTask(id)) getTask(id).prio = order.length - i; });
+  save();
+  render();
+  toast(`„${esc(text)}“ angelegt.`, true);
+  document.querySelector(`.ins[data-act="insroot"][data-cat="${cat}"][data-area="${area}"][data-bl="${bl}"][data-after="${task.id}"]`)?.click();
  };
  input.addEventListener('keydown', event => {
   event.stopPropagation();
@@ -1666,6 +1895,8 @@ async function addTask({ text = '', parent = null, mode = null, place = currentP
  const context = parent || (focusId && getTask(focusId) ? focusId : null);
  const candidates = allTasks().filter(t => !t.done);
  const asSub = mode ? mode === 'sub' : !!context;
+ // Version C: Neues To-Do ohne Zusammenhang (weißer Knopf unten, „Später einsortieren“) = Popup wie eine Karte
+ if (!asSub) return newTaskDialog(text, place);
  // Vorauswahl bei „Kommt vor“: das To-Do aus dem Zusammenhang, sonst das erste Ziel im offenen Bereich
  const preselected = context || (candidates.find(p => p.goal && isIn(p, openBereichId)) || {}).id;
  const parentTask = parent && getTask(parent);
@@ -2189,7 +2420,7 @@ async function importFile(file) {
  state = result.data;
  treeOpen.clear();
  openChains.clear();
- openBacklogs.clear();
+ closedBacklogs.clear();
  currentColumn = 0;
  startNewDayIfNeeded();
  save();
@@ -2230,9 +2461,9 @@ document.addEventListener('toggle', event => {
   if (details.open) openChains.add(details.dataset.id);
   else openChains.delete(details.dataset.id);
  }
- if (details.matches('details.bl')) {
-  if (details.open) openBacklogs.add(details.dataset.k);
-  else openBacklogs.delete(details.dataset.k);
+ if (details.matches('details.blsec')) {
+  if (details.open) closedBacklogs.delete(details.dataset.k);
+  else closedBacklogs.add(details.dataset.k);
  }
 }, true);
 // Heute-Schalter geklickt
@@ -2307,11 +2538,10 @@ document.addEventListener('click', event => {
   case 'closefocus': closeFocus(); break;
   case 'add': addTask(); break;
   case 'addsub': addTask({ parent: id, mode: 'sub' }); break;
-  case 'addhere': addTask({ mode: 'goal', place: button.dataset.cat + '|' + button.dataset.area }); break;
   case 'quick': quickNote(); break;
   case 'edit': editTask(id); break;
   case 'rename': startRename(button); break;
-  case 'ins': startInsert(button); break;
+  case 'ins': case 'insroot': startInsert(button); break;
   case 'inbox': sortInbox(); break;
   case 'menu': settingsDialog(); break;
   case 'machbar': setMachbar(state.view !== 'jetzt'); break;
