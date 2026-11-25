@@ -67,15 +67,40 @@ manifest.webmanifest   App-Name, Farben, Icons für die Installation
 icons/                 App-Icons (SVG und PNG, auch für iOS und Android)
 archiv/version-a.html  Prototyp Version A (Kategorien als Spalten), nur zum Nachschauen
 archiv/v3-voll.html    ältere, umfangreichere Fassung (Routinen, Fokus-Bereiche, Eingangskorb)
+.nojekyll              sorgt dafür, dass GitHub Pages die Dateien unverändert ausliefert
 ```
 
 ## Neue Version veröffentlichen
 Bei jeder Änderung an den App-Dateien die Versionsnummer in `sw.js` (`VERSION`) und in `js/app.js` (`APP_VERSION`) erhöhen. Sonst behalten installierte Apps die alte Fassung im Offline-Cache. Neue Dateien zusätzlich in die Liste `FILES` in `sw.js` eintragen.
 
-## Hosting (Vorschlag, noch nicht eingerichtet)
-Die App besteht nur aus statischen Dateien und braucht keinen Server-Code.
-- **Netlify** oder **Cloudflare Pages**: kostenlos, auch aus einem privaten Repository. Repository verbinden, kein Build-Befehl, Ausgabeordner ist das Hauptverzeichnis.
-- **GitHub Pages**: für private Repositorys nur mit bezahltem Tarif.
+## Hosting
+Die App wird über **GitHub Pages** veröffentlicht unter:
+
+**<https://weirdoandbo.github.io/power-to-do-list/>**
+
+Veröffentlicht wird direkt aus dem Branch `main`, Ordner `/` (Hauptverzeichnis). Es gibt keinen Build-Schritt und keinen Workflow: Was auf `main` liegt, ist ein bis zwei Minuten später online. Die leere Datei `.nojekyll` sagt GitHub, dass die Dateien unverändert ausgeliefert werden sollen.
+
+Alle Pfade in der App sind relativ (`manifest.webmanifest`, Icons, `sw.js`, `start_url` und `scope` = `./`). Deshalb läuft sie auch unter dem Unterpfad `/power-to-do-list/` mit Offline-Start und Installation.
+
+### Einmalig einrichten
+1. Das Repository muss **öffentlich** sein (GitHub Pages ist sonst nur mit bezahltem Tarif möglich): **Settings → General**, ganz unten bei „Danger Zone“ → **Change visibility** → **Change to public** und bestätigen.
+2. **Settings → Pages** (links im Menü unter „Code and automation“).
+3. Bei **Build and deployment** → **Source**: **Deploy from a branch** wählen.
+4. Bei **Branch**: `main` und Ordner `/ (root)` wählen, dann **Save**.
+5. Ein bis zwei Minuten warten. Oben auf der Seite erscheint „Your site is live at https://weirdoandbo.github.io/power-to-do-list/“. Den Fortschritt sieht man auch im Reiter **Actions** („pages build and deployment“).
+
+### Testen
+- Die Adresse im Browser öffnen. Die App sollte mit Beispieldaten erscheinen.
+- Offline: Seite einmal laden, dann Flugmodus an und neu laden. Die App muss weiter erscheinen.
+- Installation: Am Handy bzw. in Chrome/Edge wie unter „Installieren“ beschrieben.
+
+### Nach Änderungen
+Jede Änderung, die auf `main` landet, wird automatisch neu veröffentlicht. Damit installierte Apps die neue Fassung auch bekommen, **immer `VERSION` in `sw.js` erhöhen** (und `APP_VERSION` in `js/app.js` gleich setzen). Ohne neue Versionsnummer liefert der Service Worker weiter die alte Fassung aus dem Offline-Cache. Nach dem Hochladen braucht eine installierte App meist ein- bis zweimal Schließen und Öffnen, bis die neue Version angezeigt wird.
+
+### Gut zu wissen
+- GitHub Pages hat **keine Vorschau-Adressen pro Pull Request**. Änderungen sieht man online erst nach dem Mergen in `main`. Vorher lokal testen (siehe „Lokal öffnen“).
+- Alle Pages-Projekte unter `weirdoandbo.github.io` teilen sich denselben Browser-Speicher. Die App nutzt eigene Namen (`powerliste-b-v1` im localStorage, Caches `powerliste-…`), damit nichts kollidiert.
+- Die Daten bleiben auch online nur im Browser des Geräts. Auf GitHub landet nichts davon.
 
 ## Backlog
 - **Alarme an Uhrzeiten** (Idee von Bo): Ein To-do kann an eine Uhrzeit gekoppelt werden. Es gibt zwei Alarme: einen einstellbaren Ankündigungsalarm (z. B. 10, 15 oder 30 Minuten vorher, als ruhige Info, damit man rechtzeitig aufhören kann) und einen Alarm „Jetzt XY machen“. Einsatz z. B. für Pausen, Essen und Termine.
