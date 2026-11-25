@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.27-c';
+const APP_VERSION = '1.0.28-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -865,7 +865,7 @@ function bereichBarHtml(bereich) {
 function machbarSwitchHtml(bereich) {
  const on = state.view === 'jetzt';
  return `<button class="mswitch" role="switch" aria-checked="${on}" data-act="machbar" style="--c:${bereich.color}"`
-  + ` title="${on ? 'Wieder alles zeigen' : 'Nur zeigen, was du jetzt tun kannst'}"><span>Machbar</span><i></i></button>`;
+  + ` title="${on ? 'Wieder alles zeigen' : 'Nur zeigen, was du jetzt tun kannst'}"><span>Nur erledigbare To-Dos anzeigen</span><i></i></button>`;
 }
 // Bereich aufgeklappt: Kopf, Kategorie-Navigation (kleine Knöpfe) und die Spalten nebeneinander
 function bereichOpenHtml(bereich) {
@@ -874,7 +874,9 @@ function bereichOpenHtml(bereich) {
   ? `<button class="iconbtn" data-act="editcat" data-id="${bereich.id}" aria-label="Bereich ${name} bearbeiten">${ICON_PEN}</button>`
   : '';
  const head = `<div class="cathead"><button class="ct" data-act="opencat" data-cat="${bereich.id}" aria-expanded="true" title="Zuklappen">`
-  + `<i></i>${name} <small>${bereichCountsText(bereich)}</small>${ICON_CHEVRON}</button>${machbarSwitchHtml(bereich)}${editButton}</div>`;
+  + `<i></i>${name} <small>${bereichCountsText(bereich)}</small></button>${machbarSwitchHtml(bereich)}${editButton}`
+  // Version C: Pfeil zum Auf- und Zuklappen ganz rechts außen
+  + `<button class="iconbtn cattog" data-act="opencat" data-cat="${bereich.id}" aria-expanded="true" aria-label="Bereich ${name} zuklappen" title="Zuklappen">${ICON_CHEVRON}</button></div>`;
  const tabs = bereich.id
   ? `<nav class="subtabs" aria-label="Kategorien von ${name}">`
    + bereich.subs.map(k => {
