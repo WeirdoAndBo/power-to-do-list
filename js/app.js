@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.16-c';
+const APP_VERSION = '1.0.17-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -787,12 +787,12 @@ function heuteViewHtml() {
   : `<div class="empty">${emptyText}</div>`;
  const waitingHtml = waiting.length
   ? `<details class="done"><summary>Danach dran · ${waiting.length}</summary>`
-   + waiting.map(t => `<div class="drow wrow"><span>${esc(t.t)}<small>erst: ${openNeeds(t).map(id => esc(getTask(id).t)).join(', ')}</small></span>${deleteMiniHtml(t)}</div>`).join('')
+   + waiting.map(t => `<div class="drow wrow"><span>${titleHtml(t)}<small>erst: ${openNeeds(t).map(id => esc(getTask(id).t)).join(', ')}</small></span>${deleteMiniHtml(t)}</div>`).join('')
    + '</details>'
   : '';
  const doneHtml = doneToday.length
   ? `<details class="done"><summary>Heute geschafft · ${doneToday.length}</summary>`
-   + doneToday.map(t => `<div class="drow">${checkButtonHtml(t, colorOf(t))}<span>${esc(t.t)}</span>${deleteMiniHtml(t)}</div>`).join('')
+   + doneToday.map(t => `<div class="drow">${checkButtonHtml(t, colorOf(t))}<span>${titleHtml(t)}</span>${deleteMiniHtml(t)}</div>`).join('')
    + '</details>'
   : '';
  return `<section class="col daywrap" style="--c:${GRAY}"><p class="dayhead">${date}</p>
@@ -1344,7 +1344,11 @@ function dragDayCard(event, grip) {
  const cardEl = grip.closest('.card');
  const list = cardEl.parentElement;
  cardEl.classList.add('dragging');
+ const startY = event.clientY;
+ let moved = false;
  trackPointer(moveEvent => {
+  if (!moved && Math.abs(moveEvent.clientY - startY) < 4) return;
+  moved = true;
   const target = itemBelow(list.querySelectorAll('.card'), cardEl, moveEvent.clientY);
   if (target) {
    if (target.previousElementSibling !== cardEl) target.before(cardEl);
@@ -1353,6 +1357,8 @@ function dragDayCard(event, grip) {
   }
  }, () => {
   cardEl.classList.remove('dragging');
+  // Nur neu aufbauen, wenn wirklich gezogen wurde. Sonst ginge der Klick (z. B. Text bearbeiten) verloren.
+  if (!moved) return;
   saveDayOrder();
   render();
  });

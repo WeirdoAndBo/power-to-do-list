@@ -263,6 +263,25 @@ test('Reihenfolge in Heute mit Pfeiltaste ändern', async () => {
  const order = $$('#daylist .card').map(c => saved().tasks[c.dataset.id].todayOrder);
  expect(order.every((n, i) => n === i + 1), 'Reihenfolge wurde nicht gespeichert');
 });
+test('Text in „Heute“ direkt bearbeiten (auch mit der Maus angeklickt)', async () => {
+ const card = $('#daylist .card');
+ const id = card.dataset.id;
+ const old = saved().tasks[id].t;
+ const title = card.querySelector('h3 .t');
+ const box = title.getBoundingClientRect();
+ const at = { bubbles: true, clientX: box.left + 5, clientY: box.top + 5, pointerType: 'mouse', isPrimary: true, button: 0 };
+ title.dispatchEvent(new win.PointerEvent('pointerdown', at));
+ win.dispatchEvent(new win.PointerEvent('pointerup', at));
+ $(`#daylist .card[data-id="${id}"] h3 .t`).click();
+ const input = $(`#daylist .card[data-id="${id}"] .tinput`);
+ expect(input && doc.activeElement === input, 'Eingabefeld erscheint in „Heute“ nicht');
+ input.value = old + ' (neu)';
+ await pressKey(input, 'Enter');
+ expect(saved().tasks[id].t === old + ' (neu)', 'Neuer Text wurde nicht gespeichert');
+ await click(`#daylist .card[data-id="${id}"] h3 .t`);
+ $(`#daylist .card[data-id="${id}"] .tinput`).value = old;
+ await pressKey($(`#daylist .card[data-id="${id}"] .tinput`), 'Enter');
+});
 test('Heute-Schalter aus nimmt Mitgenommene wieder raus', async () => {
  await zeige(true);
  await click('.card[data-id="b"] [data-act="today"]');
