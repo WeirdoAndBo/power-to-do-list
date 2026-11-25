@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.13-c';
+const APP_VERSION = '1.0.14-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -275,7 +275,17 @@ function createTask(title, extra = {}) {
   id: uid(), t: title, needs: [], soft: [], done: false, goal: false, cat: null, prio: 0,
   created: Date.now(), doneAt: null, ...extra
  };
- state.tasks[task.id] = task;
+ state.tasks[task.id] = ensureList(task);
+ return task;
+}
+/* Version C: Listen. Beginnt der Text eines To-Dos mit „Liste:“, hat es eine einfache Abhak-Liste (task.list,
+   Einträge {id, t, done}). Die Einträge sind keine eigenen To-Dos. Nimmt man „Liste:“ wieder weg, ist die Liste
+   ausgeblendet, aber nicht gelöscht; mit „Liste:“ ist sie wieder da. */
+const LIST_PATTERN = /^\s*liste\s*:\s*/i;
+const isList = task => !!task && LIST_PATTERN.test(task.t);
+const shownTitle = task => isList(task) ? task.t.replace(LIST_PATTERN, '') || 'Liste' : task.t;
+function ensureList(task) {
+ if (isList(task) && !Array.isArray(task.list)) task.list = [];
  return task;
 }
 // Sortierung: höhere prio zuerst, sonst das ältere zuerst
@@ -482,14 +492,124 @@ function cardHtml(task, color, options = {}) {
   : '';
  const tag = options.tag || 'article';
  return `<${tag} class="card${options.cls || ''}" data-act="focus" data-id="${task.id}" ${options.attrs || ''} style="--c:${color}" tabindex="0" aria-label="${title} – im Fokusmodus öffnen">
- <div class="chead">${grip}${task.done ? '' : todaySwitchHtml(task)}<span class="sp"></span>${options.headExtra || ''}${moveButton}</div>
+ <div class="chead">${grip}${task.done ? '' : todaySwitchHtml(task)}<span class="sp"></span>${listCountHtml(task)}${options.headExtra || ''}${moveButton}</div>
  <div class="cbody">${checkButtonHtml(task, color)}<div class="ctext"><h3>${titleHtml(task)}</h3>${options.tree === undefined ? chainBoxHtml(task) + waitingHtml : ''}</div><span class="cacts">${taskActionsHtml(task)}</span></div>
- ${options.tree === undefined ? (task.done ? '' : insertHtml(task.id, '', color)) : options.tree}</${tag}>`;
+ ${listHtml(task, color)}${options.tree === undefined ? (task.done ? '' : insertHtml(task.id, '', color)) : options.tree}</${tag}>`;
 }
 // Titel eines To-Dos. Antippen = direkt hier bearbeiten (Enter speichert, Escape bricht ab), siehe startRename.
 function titleHtml(task) {
- return `<span class="t" data-act="rename" data-id="${task.id}" tabindex="0" role="button" aria-label="${esc(task.t)} – Text bearbeiten">${esc(task.t)}</span>`;
+ const listMark = isList(task) ? `<span class="lmark" title="Liste">Liste</span>` : '';
+ return `${listMark}<span class="t" data-act="rename" data-id="${task.id}" tabindex="0" role="button" aria-label="${esc(task.t)} – Text bearbeiten">${esc(shownTitle(task))}</span>`;
 }
+// Abhak-Liste unter einem Listen-To-Do: offene Punkte oben, erledigte blass darunter, ganz unten ein Feld für
+// den nächsten Punkt (Enter = hinzufügen und gleich weiter). Punkt antippen = Text bearbeiten (leer = löschen).
+function listHtml(task, color) {
+ if (!isList(task)) return '';
+ const items = [...(task.list || [])].sort((a, b) => a.done - b.done);
+ const itemsHtml = items.map(item => `<div class="litem${item.done ? ' ldone' : ''}">`
+  + `<button class="lcheck" role="checkbox" aria-checked="${!!item.done}" data-act="lcheck" data-id="${task.id}" data-i="${item.id}" aria-label="${esc(item.t)} ${item.done ? 'wieder öffnen' : 'abhaken'}">${ICON_TICK}</button>`
+  + `<span class="lt" data-act="lren" data-id="${task.id}" data-i="${item.id}" tabindex="0" role="button" aria-label="${esc(item.t)} – Text bearbeiten">${esc(item.t)}</span>`
+  + `<button class="mini del ldel" data-act="ldel" data-id="${task.id}" data-i="${item.id}" aria-label="${esc(item.t)} aus der Liste löschen" title="Löschen">${ICON_TRASH}</button></div>`).join('');
+ const add = task.done ? '' : `<input class="tinput linput" data-id="${task.id}" placeholder="+ Punkt" aria-label="Neuer Punkt in ${esc(shownTitle(task))}" autocomplete="off">`;
+ return `<div class="llist" data-act="none" style="--c:${color}">${itemsHtml}${add}</div>`;
+}
+// „3/7“ im Kopf einer Listen-Karte
+function listCountHtml(task) {
+ if (!isList(task) || !(task.list || []).length) return '';
+ const done = task.list.filter(item => item.done).length;
+ return `<small class="lcount" title="${done} von ${task.list.length} abgehakt">${done}/${task.list.length}</small>`;
+}
+const listItem = (task, itemId) => (task && task.list || []).find(item => item.id === itemId);
+function focusListInput(taskId) {
+ const input = document.querySelector(`.linput[data-id="${taskId}"]`);
+ if (input) input.focus();
+ return !!input;
+}
+function addListItem(task, text) {
+ ensureList(task);
+ task.list.push({ id: uid(), t: text, done: false });
+}
+function toggleListItem(taskId, itemId) {
+ const item = listItem(getTask(taskId), itemId);
+ if (!item) return;
+ undoSnapshot = snapshot();
+ item.done = !item.done;
+ save();
+ render();
+}
+function deleteListItem(taskId, itemId) {
+ const task = getTask(taskId);
+ if (!listItem(task, itemId)) return;
+ undoSnapshot = snapshot();
+ task.list = task.list.filter(item => item.id !== itemId);
+ save();
+ render();
+ toast('Punkt gelöscht.', true);
+}
+// Punkt direkt bearbeiten: Enter speichert, Escape bricht ab, leer = löschen
+function startItemEdit(el) {
+ const task = getTask(el.dataset.id);
+ const item = listItem(task, el.dataset.i);
+ if (!item || el.querySelector('input')) return;
+ const input = document.createElement('input');
+ input.className = 'tinput';
+ input.value = item.t;
+ input.setAttribute('aria-label', 'Punkt bearbeiten');
+ input.setAttribute('autocomplete', 'off');
+ el.textContent = '';
+ el.append(input);
+ input.focus();
+ let finished = false;
+ const finish = keep => {
+  if (finished) return;
+  finished = true;
+  const text = input.value.trim();
+  if (keep && text !== item.t) {
+   undoSnapshot = snapshot();
+   if (text) item.t = text;
+   else task.list = task.list.filter(x => x !== item);
+   save();
+  }
+  render();
+ };
+ input.addEventListener('keydown', event => {
+  event.stopPropagation();
+  if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+  if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+ });
+ input.addEventListener('blur', () => finish(true));
+ input.addEventListener('click', event => event.stopPropagation());
+}
+// Feld „+ Punkt“: Enter fügt hinzu und bleibt im Feld, Escape oder Enter im leeren Feld beendet
+document.addEventListener('keydown', event => {
+ const input = event.target;
+ if (!input.classList || !input.classList.contains('linput')) return;
+ event.stopPropagation();
+ if (event.key === 'Escape') { input.value = ''; input.blur(); return; }
+ if (event.key !== 'Enter') return;
+ event.preventDefault();
+ const text = input.value.trim();
+ const task = getTask(input.dataset.id);
+ if (!text || !task) { input.blur(); return; }
+ input.value = '';
+ undoSnapshot = snapshot();
+ addListItem(task, text);
+ save();
+ render();
+ focusListInput(task.id);
+}, true);
+document.addEventListener('focusout', event => {
+ const input = event.target;
+ if (!input.classList || !input.classList.contains('linput')) return;
+ const text = input.value.trim();
+ const task = getTask(input.dataset.id);
+ if (!text || !task) return;
+ input.value = '';
+ undoSnapshot = snapshot();
+ addListItem(task, text);
+ save();
+ setTimeout(render);
+});
 // Version C: hinter jedem To-Do der kleine Mülleimer (und in Zeilen davor der Heute-Schalter).
 // Neue To-Dos kommen über das „+“, das zwischen den To-Dos erscheint (insertHtml).
 function taskActionsHtml(task) {
@@ -624,7 +744,7 @@ function treeNodeHtml(task, color, path, level, viaSoft, parentId = null, inCard
  // Innerhalb einer Kette kein eigener „danach“-Streifen (sonst stapeln sich leere Streifen am Kettenende)
  const insertAfter = inCard && parentId && !linked ? insertHtml(parentId, task.id, color) : '';
  return `<li data-tid="${task.id}" data-k="${esc(key)}" data-l="${level}" style="--c:${color}">${row}
- ${insertFirst}${childList}${insertAfter}</li>`;
+ ${listHtml(task, color)}${insertFirst}${childList}${insertAfter}</li>`;
 }
 // Schalter „Machbar“ aus: eine Kategorie-Spalte mit den Zielen als Wurzeln
 function uebersichtColumnHtml(bereich, kategorie) {
@@ -857,8 +977,8 @@ function renderFocus() {
  focusEl.innerHTML = `<div class="ftop"><small>FOKUSMODUS</small><span class="fbtns">`
   + `<button class="iconbtn" data-act="del" data-id="${task.id}" aria-label="${esc(task.t)} löschen" title="Löschen">${ICON_TRASH}</button>`
   + `<button class="iconbtn" data-act="closefocus" aria-label="Fokusmodus schließen">${ICON_CLOSE}</button></span></div>
- <div class="fmain">${hint ? `<p class="goal">${hint}</p>` : ''}<h1>${esc(task.t)}</h1>
- ${beforeHtml}
+ <div class="fmain">${hint ? `<p class="goal">${hint}</p>` : ''}<h1>${esc(shownTitle(task))}</h1>
+ ${listHtml(task, color)}${beforeHtml}
  <div class="bigcheck">${checkButtonHtml(task, color)}<span>${task.done ? 'Geschafft' : 'Abhaken, wenn es geschafft ist'}</span></div>
  ${addButton}</div>
  <div class="fbot"><button class="plus" data-act="quick"><span>+</span> Neues To-Do</button></div>`;
@@ -1100,6 +1220,9 @@ async function newTaskDialog(text = '', place = currentPlace()) {
  const modalEl = $('#modal');
  const list = modalEl.querySelector('.nlist');
  refreshNewRows(list);
+ // Die Zuhörer gelten nur für dieses Popup (sonst sammeln sie sich bei jedem Öffnen an)
+ const listening = new AbortController();
+ const once = { signal: listening.signal };
  // Farbe der Karte folgt dem gewählten Bereich
  modalEl.querySelector('[data-pick=cat]').addEventListener('change', event => {
   const chosen = getBereich(event.target.value);
@@ -1115,7 +1238,7 @@ async function newTaskDialog(text = '', place = currentPlace()) {
    row.remove();
    refreshNewRows(list);
   }
- }, true);
+ }, { capture: true, signal: listening.signal });
  modalEl.addEventListener('keydown', event => {
   const input = event.target;
   if (input.name === 'text' && event.key === 'Enter') {
@@ -1152,19 +1275,22 @@ async function newTaskDialog(text = '', place = currentPlace()) {
    refreshNewRows(list);
    (previous ? previous.querySelector('input') : modalEl.querySelector('.ntitle')).focus();
   }
- });
+ }, once);
  const r = await pending;
+ listening.abort();
  if (r.v !== 'ok' || !r.vals.text) return false;
  undoSnapshot = snapshot();
  // Im Tab „Heute“ angelegte To-Dos kommen gleich nach „Heute“
  const today = state.view === 'heute';
  const [cat, area] = r.vals.place.split('|');
  const created = createTask(r.vals.text, { goal: true, cat: cat || null, area: area || null, today, backlog: !!r.vals.bl && !today });
- createPreTasks(created, r.vals._pre, today);
  const count = r.vals._pre.length;
+ // Titel „Liste: …“: die Zeilen werden Punkte der Liste statt Unter-To-Dos
+ if (isList(created)) r.vals._pre.forEach(entry => addListItem(created, entry.t));
+ else createPreTasks(created, r.vals._pre, today);
  save();
  render();
- toast(count ? `Angelegt – mit ${count} Unter-To-Do${pluralS(count)}.` : 'Angelegt.', true);
+ toast(!count ? 'Angelegt.' : isList(created) ? `Liste angelegt – mit ${count} Punkt${count === 1 ? '' : 'en'}.` : `Angelegt – mit ${count} Unter-To-Do${pluralS(count)}.`, true);
  return true;
 }
 
@@ -1640,7 +1766,7 @@ function dragTargetAt(target) {
 document.addEventListener('pointerdown', event => {
  if (event.button > 0 || !$('#modal').hidden || !$('#focus').hidden) return;
  // Wird gerade ein Text bearbeitet: erst speichern (baut die Seite neu auf), nicht gleich ziehen
- if (document.activeElement && document.activeElement.classList.contains('tinput') && event.target !== document.activeElement) {
+ if (document.activeElement && document.activeElement.classList.contains('tinput') && !document.activeElement.classList.contains('linput') && event.target !== document.activeElement) {
   document.activeElement.blur();
   return;
  }
@@ -1730,7 +1856,8 @@ function startInsert(button) {
   document.querySelectorAll('.tcard').forEach(card => { if (card.contains(box)) treeOpen.set(card.dataset.k, true); });
   save();
   render();
-  toast(`„${esc(text)}“ eingefügt.`, true);
+  toast(`„${esc(shownTitle(task))}“ eingefügt.`, true);
+  if (isList(task) && focusListInput(task.id)) return;
   // Gleich weiter: nächstes Feld direkt dahinter
   (intoId
    ? document.querySelector(`.ins[data-p="${task.id}"][data-into="${intoId}"]`)
@@ -1769,7 +1896,8 @@ function startInsertRoot(button) {
   order.forEach((id, i) => { if (getTask(id)) getTask(id).prio = order.length - i; });
   save();
   render();
-  toast(`„${esc(text)}“ angelegt.`, true);
+  toast(`„${esc(shownTitle(task))}“ angelegt.`, true);
+  if (isList(task) && focusListInput(task.id)) return;
   document.querySelector(`.ins[data-act="insroot"][data-cat="${cat}"][data-area="${area}"][data-bl="${bl}"][data-after="${task.id}"]`)?.click();
  };
  input.addEventListener('keydown', event => {
@@ -1801,10 +1929,13 @@ function startRename(titleEl) {
   const text = input.value.trim();
   if (keep && text && text !== task.t) {
    undoSnapshot = snapshot();
+   const becameList = !isList(task) && LIST_PATTERN.test(text);
    task.t = text;
+   ensureList(task);
    save();
    render();
-   toast('Gespeichert.', true);
+   toast(becameList ? 'Jetzt eine Liste. Punkte unten eintippen.' : 'Gespeichert.', true);
+   if (becameList) focusListInput(task.id);
   } else {
    render();
   }
@@ -2372,7 +2503,8 @@ const isOptionalIdList = value => value == null || (Array.isArray(value) && valu
 function isValidTask(key, task) {
  return task && typeof task === 'object' && ID_PATTERN.test(key) && task.id === key && typeof task.t === 'string'
   && isOptionalIdList(task.needs) && isOptionalIdList(task.soft)
-  && isOptionalId(task.cat) && isOptionalId(task.area) && isOptionalId(task.todayBy);
+  && isOptionalId(task.cat) && isOptionalId(task.area) && isOptionalId(task.todayBy)
+  && (task.list == null || (Array.isArray(task.list) && task.list.every(item => item && typeof item.t === 'string' && typeof item.id === 'string')));
 }
 function isValidBereich(bereich) {
  const validKategorien = bereich.subs == null
@@ -2541,6 +2673,9 @@ document.addEventListener('click', event => {
   case 'quick': quickNote(); break;
   case 'edit': editTask(id); break;
   case 'rename': startRename(button); break;
+  case 'lcheck': toggleListItem(id, button.dataset.i); break;
+  case 'ldel': deleteListItem(id, button.dataset.i); break;
+  case 'lren': startItemEdit(button); break;
   case 'ins': case 'insroot': startInsert(button); break;
   case 'inbox': sortInbox(); break;
   case 'menu': settingsDialog(); break;
@@ -2563,6 +2698,11 @@ document.addEventListener('keydown', event => {
  if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('.t[data-act="rename"]')) {
   event.preventDefault();
   startRename(event.target);
+  return;
+ }
+ if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('.lt[data-act="lren"]')) {
+  event.preventDefault();
+  startItemEdit(event.target);
   return;
  }
  if (event.key === 'Enter' && event.target.matches('.card')) openFocus(event.target.dataset.id);

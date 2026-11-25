@@ -218,6 +218,24 @@ test('Rückgängig nimmt das Anlegen zurück', async () => {
  await click('#undo');
  expect(!Object.values(saved().tasks).some(t => t.t === 'Test-Ziel'), 'Ziel ist noch da');
 });
+test('Popup: Titel „Liste: …“ macht aus den Zeilen Listenpunkte', async () => {
+ const before = Object.keys(saved().tasks).length;
+ await click('.dock .plus');
+ await type('#modal [name=text]', 'Liste: Packen');
+ await pressKey($('#modal [name=text]'), 'Enter');
+ const rowInput = n => $$('#modal .nrow input')[n];
+ rowInput(0).value = 'Zahnbürste';
+ await pressKey(rowInput(0), 'Enter');
+ rowInput(1).value = 'Ladekabel';
+ await pressKey(rowInput(1), 'Enter');
+ await pressKey(rowInput(2), 'Enter');
+ const tasks = Object.values(saved().tasks);
+ const created = tasks.find(t => t.t === 'Liste: Packen');
+ expect(tasks.length === before + 1 && created && created.list.length === 2, 'Liste mit 2 Punkten wurde nicht angelegt');
+ expect(toastText().includes('2 Punkten'), 'Hinweis „mit 2 Punkten“ fehlt');
+ await click('#undo');
+ expect(!Object.values(saved().tasks).some(t => t.t === 'Liste: Packen'), 'Rückgängig nimmt die Liste nicht zurück');
+});
 test('Abhaken, „Cool, geschafft!“ und wieder öffnen', async () => {
  await click('.card[data-id="c"] .check');
  expect(saved().tasks.c.done, '„c“ ist nicht erledigt');
@@ -339,6 +357,34 @@ test('Text direkt bearbeiten: antippen, tippen, Enter', async () => {
  await click('.card[data-id="b"] h3 .t');
  $('.card[data-id="b"] .tinput').value = 'Text überlegen';
  await pressKey($('.card[data-id="b"] .tinput'), 'Enter');
+});
+test('Liste: „Liste:“ vor den Text, Punkte eintippen, abhaken, löschen', async () => {
+ await click('.card[data-id="b"] h3 .t');
+ $('.card[data-id="b"] .tinput').value = 'Liste: Baumarkt';
+ await pressKey($('.card[data-id="b"] .tinput'), 'Enter');
+ const field = () => $('.card[data-id="b"] .linput');
+ expect(field() && doc.activeElement === field(), 'Feld für den ersten Punkt ist nicht gleich offen');
+ expect($('.card[data-id="b"] h3 .t').textContent === 'Baumarkt' && $('.card[data-id="b"] .lmark'), 'Titel ohne „Liste:“ und mit Listen-Kennzeichen fehlt');
+ const before = Object.keys(saved().tasks).length;
+ field().value = 'Öl';
+ await pressKey(field(), 'Enter');
+ expect(doc.activeElement === field(), 'Nach Enter ist das Feld nicht mehr bereit');
+ field().value = 'Magnete';
+ await pressKey(field(), 'Enter');
+ await pressKey(field(), 'Escape');
+ let list = saved().tasks.b.list;
+ expect(list.length === 2 && list[0].t === 'Öl', 'Punkte wurden nicht gespeichert');
+ expect(Object.keys(saved().tasks).length === before, 'Punkte sind eigene To-Dos geworden');
+ expect($('.card[data-id="b"] .lcount').textContent === '0/2', 'Zähler 0/2 im Kopf fehlt');
+ await click(`.card[data-id="b"] .lcheck[data-i="${list[0].id}"]`);
+ expect(saved().tasks.b.list[0].done && $('.card[data-id="b"] .lcount').textContent === '1/2', 'Abhaken klappt nicht');
+ expect($('#focus').hidden, 'Abhaken hat den Fokusmodus geöffnet');
+ await click(`.card[data-id="b"] .ldel[data-i="${list[1].id}"]`);
+ expect(saved().tasks.b.list.length === 1, 'Punkt wurde nicht gelöscht');
+ await click('.card[data-id="b"] h3 .t');
+ $('.card[data-id="b"] .tinput').value = 'Text überlegen';
+ await pressKey($('.card[data-id="b"] .tinput'), 'Enter');
+ expect(!$('.card[data-id="b"] .llist') && saved().tasks.b.list.length === 1, 'Ohne „Liste:“ soll die Liste ausgeblendet, aber nicht gelöscht sein');
 });
 test('Übersicht: Ziel-Karte hat Heute und ⋯ im Kopf, + und Mülleimer hinter dem Titel', async () => {
  await zeige(false);

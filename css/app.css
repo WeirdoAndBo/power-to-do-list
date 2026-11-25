@@ -449,3 +449,23 @@ details.blsec .bempty{padding:6px 8px 12px}
 .nrow .field:focus{border-bottom-color:var(--c)}
 .nins{width:calc(100% - var(--l,0) * 20px);margin-left:calc(var(--l,0) * 20px)}
 .ncard .ins span{background:var(--c)}
+
+/* Version C: Listen („Liste: …“) – einfache Abhak-Punkte unter dem Titel, keine eigenen To-Dos */
+.lmark{display:inline-block;vertical-align:2px;margin-right:6px;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:color-mix(in srgb,var(--c) 75%,var(--ink));background:color-mix(in srgb,var(--c) 14%,var(--card));border-radius:6px;padding:1px 6px}
+.lcount{font-size:12px;font-weight:600;color:var(--mute);margin-right:4px}
+.llist{margin:4px 0 2px 34px;display:flex;flex-direction:column;cursor:default}
+.tree li>.llist{margin:-6px 0 6px 30px}
+.litem{display:flex;align-items:center;gap:8px;min-height:30px}
+.lcheck{flex:none;width:16px;height:16px;border-radius:4px;box-shadow:inset 0 0 0 1.6px color-mix(in srgb,var(--c) 60%,var(--mute));display:grid;place-items:center}
+.lcheck svg{width:10px;height:10px;opacity:0;color:#fff}
+.lcheck[aria-checked=true]{background:color-mix(in srgb,var(--c) 70%,var(--mute));box-shadow:none}
+.lcheck[aria-checked=true] svg{opacity:1}
+.lt{flex:1;min-width:0;font-size:14.5px;cursor:text;overflow-wrap:anywhere}
+.ldone .lt{color:var(--mute);text-decoration:line-through}
+.litem .ldel{opacity:0;width:26px;height:26px}
+.litem:hover .ldel,.litem:focus-within .ldel{opacity:1}
+@media (hover:none){.litem .ldel{opacity:.5}}
+.linput.tinput{margin:2px 0 0;padding:4px 0 4px 24px;font-size:14.5px;box-shadow:none;background:transparent;color:var(--ink)}
+.linput.tinput::placeholder{color:var(--mute)}
+.linput.tinput:focus{box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--c) 60%,transparent)}
+#focus .llist{margin:8px 0 18px;font-size:17px}

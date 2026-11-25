@@ -116,6 +116,7 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | Fokusmodus                             | `openFocus`, `renderFocus`, `closeFocus`       |
 | Popup und Hinweis unten                | `modal`, `buttonHtml`, `toast`                 |
 | Abhaken                                | `toggleDone`                                   |
+| Listen („Liste: …“)                    | `LIST_PATTERN`, `isList`, `shownTitle`, `listHtml`, `listCountHtml`, `startItemEdit`; optionales Feld `task.list = [{ id, t, done }]` (Datenformat bleibt 1) |
 | Neues To-Do / Ziel                     | `addTask`, `quickNote`, `askBefore`, `createPreTasks`; Weißer Knopf = `newTaskDialog` (Popup wie eine Karte, Zeilen `.nrow`); „+“ zwischen Karten einer Spalte = `data-act="insroot"` → `startInsertRoot`; Unter-To-Do aus der Karte ziehen = `makeOwnTask`; Backlog-Abschnitt = `backlogSectionHtml` |
 | Bearbeiten, Löschen                    | `editTask`, `deleteTask`, `deleteWithUndo`; Papierkorb-Knöpfe: `data-act="del"`, kleine Variante `deleteMiniHtml` |
 | Verschieben, Backlog                   | `moveTo`, `moveMenu`, Ziehen am Griff (`.mgrip`, Abschnitt „Ziehen“) |
