@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.31-c';
+const APP_VERSION = '1.0.32-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -94,7 +94,7 @@ let focusId = null;             // To-Do, das gerade im Fokusmodus offen ist
 let lastRenderedBereich;        // welcher Bereich beim letzten render() offen war
 let ignoreClicksUntil = 0;      // Zeitpunkt, bis zu dem Klicks ignoriert werden (direkt nach dem Ziehen)
 const treeOpen = new Map();     // auf-/zugeklappte Äste in der Übersicht
-const closedBacklogs = new Set(); // zugeklappte Backlog-Abschnitte (Version C: sonst offen)
+const openBacklogs = new Set(); // aufgeklappte Backlog-Abschnitte (Version C: sonst zu)
 const openChains = new Set();   // aufgeklappte Ziel-Ketten auf Karten
 
 /* ---------- Tag ---------- */
@@ -164,7 +164,7 @@ function seed() {
    Backlog (kategorie.inbox). Sie lässt sich umbenennen und löschen und mit dem Auge im Kategorie-Knopf ein- und
    ausblenden (kategorie.hidden). bereich.sammlung merkt sich, dass sie schon einmal angelegt wurde, damit sie
    nach dem Löschen nicht wiederkommt. */
-const newSammlung = () => ({ id: uid(), name: 'Sammlung', icon: '📥', inbox: true });
+const newSammlung = () => ({ id: uid(), name: 'Sammlung', icon: 'inbox', inbox: true });
 function addSammlung(bereich) {
  if (bereich.sammlung) return;
  bereich.subs.unshift(newSammlung());
@@ -390,14 +390,56 @@ function placeOf(task) {
  return bereichId + '|' + (bereichId ? kategorieIn(task, bereichId) : '');
 }
 // Lesbarer Name eines Orts, z. B. „Arbeit · Akquise“
-// Version C: Kategorien können ein Emoji vor dem Namen haben (kategorie.icon, optional)
-const KATEGORIE_ICONS = ['💼', '📞', '💰', '📊', '📝', '📅', '📣', '💡', '🛠️', '💻', '🏠', '🧹', '🛒', '🍳', '🌱', '🐾',
- '❤️', '🏃', '🧘', '💊', '👨‍👩‍👧', '🎉', '✈️', '🚗', '📚', '🎨', '🎵', '📷', '⚽', '🧾', '📦'];
-const katName = kategorie => (kategorie.icon ? kategorie.icon + ' ' : '') + kategorie.name;
-function iconPickerHtml(selected = '') {
- return `<div class="icons" role="radiogroup" aria-label="Emoji">`
-  + `<label class="noicon" title="Kein Emoji"><input type="radio" name="icon" value=""${selected ? '' : ' checked'}>–</label>`
-  + KATEGORIE_ICONS.map(icon => `<label><input type="radio" name="icon" value="${icon}"${icon === selected ? ' checked' : ''}>${icon}</label>`).join('')
+// Version C: Kategorien können ein Symbol vor dem Namen haben (kategorie.icon, optional).
+// Dezente Linien-Symbole (SVG, 24er-Raster), sie nehmen die Farbe des Bereichs an.
+const KATEGORIE_ICONS = {
+ briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
+ mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+ phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+ money: '<circle cx="12" cy="12" r="9"/><path d="M15 9a3.5 3.5 0 1 0 0 6M8 11h5M8 13h5"/>',
+ chart: '<path d="M4 4v16h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/>',
+ pen: '<path d="M14 4l6 6L9 21H3v-6z"/><path d="M12 6l6 6"/>',
+ calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+ checklist: '<path d="M10 6h10M10 12h10M10 18h10"/><path d="M3.5 6l1.5 1.5L7.5 5M3.5 12l1.5 1.5 2.5-2.5M3.5 18l1.5 1.5 2.5-2.5"/>',
+ megaphone: '<path d="M3 10v4l12 5V5z"/><path d="M15 9a3 3 0 0 1 0 6M6 15l1 5h3l-1-4"/>',
+ bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"/>',
+ wrench: '<path d="M15 4a5 5 0 0 0-4.6 6.9L4 17.3V20h2.7l6.4-6.4A5 5 0 0 0 20 9l-3 1-2-2 1-3z"/>',
+ laptop: '<rect x="5" y="5" width="14" height="10" rx="1.5"/><path d="M3 19h18"/>',
+ receipt: '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h7"/>',
+ box: '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
+ home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10M10 20v-6h4v6"/>',
+ sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16v4M17 18h4"/>',
+ cart: '<path d="M3 4h2l2.5 11h11L21 8H6.5"/><circle cx="9" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/>',
+ pot: '<path d="M4 10h16v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M2 10h20M9 4v3M12 3v4M15 4v3"/>',
+ leaf: '<path d="M5 19c0-9 5-14 15-14 0 10-5 15-14 15"/><path d="M5 19l8-8"/>',
+ heart: '<path d="M12 20s-8-4.6-8-10.5A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8 2.5C20 15.4 12 20 12 20z"/>',
+ activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+ pill: '<rect x="2.5" y="8.5" width="19" height="7" rx="3.5" transform="rotate(-45 12 12)"/><path d="M9.5 9.5l5 5"/>',
+ people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
+ gift: '<rect x="3" y="8" width="18" height="5" rx="1"/><path d="M5 13v8h14v-8M12 8v13M12 8S10 3 7.5 4.5 9 8 12 8zM12 8s2-5 4.5-3.5S15 8 12 8z"/>',
+ pin: '<path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+ book: '<path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0 0 4h13v-2"/>',
+ palette: '<path d="M12 3a9 9 0 1 0 0 18c1 0 1.5-.7 1.5-1.5 0-1.2-1-1.5-1-2.5s.7-1.5 1.5-1.5H17a4 4 0 0 0 4-4c0-4.7-4-8.5-9-8.5z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/>',
+ music: '<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+ camera: '<path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="13.5" r="3.5"/>',
+ star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
+ inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1.5 2.5h5L16 13h5"/>'
+};
+// Früher gewählte Emojis zeigen das passende Linien-Symbol (gespeichert bleibt, was da ist)
+const EMOJI_ICONS = { '💼': 'briefcase', '📞': 'phone', '💰': 'money', '📊': 'chart', '📝': 'pen', '📅': 'calendar', '📣': 'megaphone',
+ '💡': 'bulb', '🛠️': 'wrench', '💻': 'laptop', '🏠': 'home', '🧹': 'sparkle', '🛒': 'cart', '🍳': 'pot', '🌱': 'leaf', '🐾': 'heart',
+ '❤️': 'heart', '🏃': 'activity', '🧘': 'heart', '💊': 'pill', '👨‍👩‍👧': 'people', '🎉': 'gift', '✈️': 'pin', '🚗': 'pin', '📚': 'book',
+ '🎨': 'palette', '🎵': 'music', '📷': 'camera', '⚽': 'activity', '🧾': 'receipt', '📦': 'box', '📥': 'inbox' };
+const iconKey = kategorie => kategorie && kategorie.icon ? (KATEGORIE_ICONS[kategorie.icon] ? kategorie.icon : EMOJI_ICONS[kategorie.icon] || '') : '';
+const iconSvg = key => `<svg class="kico" viewBox="0 0 24 24" aria-hidden="true">${KATEGORIE_ICONS[key]}</svg>`;
+const katName = kategorie => kategorie.name;
+// Name mit Symbol davor, für Reiter und Spaltenkopf (HTML)
+const katLabelHtml = kategorie => (iconKey(kategorie) ? iconSvg(iconKey(kategorie)) : '') + esc(kategorie.name);
+function iconPickerHtml(selected = '', color = '') {
+ const key = iconKey({ icon: selected });
+ return `<div class="icons" role="radiogroup" aria-label="Symbol"${color ? ` style="--c:${color}"` : ''}>`
+  + `<label class="noicon" title="Kein Symbol"><input type="radio" name="icon" value=""${key ? '' : ' checked'}>–</label>`
+  + Object.keys(KATEGORIE_ICONS).map(k => `<label title="${k}"><input type="radio" name="icon" value="${k}"${k === key ? ' checked' : ''}>${iconSvg(k)}</label>`).join('')
   + '</div>';
 }
 function placeName(bereichId, kategorieId) {
@@ -642,7 +684,7 @@ function taskActionsHtml(task) {
 // Karten lassen sich zwischen Zeitnah und Backlog hin und her ziehen (auch auf die zugeklappte Überschrift).
 function backlogSectionHtml(bereich, kategorie, count, inner) {
  const key = bereich.id + '|' + kategorie.id;
- return `<details class="blsec zone" data-drop="zone" data-cat="${bereich.id}" data-area="${kategorie.id}" data-bl="1" data-k="${esc(key)}"${closedBacklogs.has(key) ? '' : ' open'}>`
+ return `<details class="blsec zone" data-drop="zone" data-cat="${bereich.id}" data-area="${kategorie.id}" data-bl="1" data-k="${esc(key)}"${openBacklogs.has(key) ? ' open' : ''}>`
   + `<summary class="zlabel">Backlog · ${count}</summary>${inner}</details>`;
 }
 // Unsichtbarer Streifen zwischen den Karten einer Spalte: neues To-Do ganz oben (eigene Karte) an dieser Stelle.
@@ -884,9 +926,9 @@ function bereichOpenHtml(bereich) {
     const eye = k.inbox
      ? `<span class="eye" data-act="eye" data-id="${bereich.id}" data-s="${k.id}" role="button" tabindex="0" aria-label="${esc(k.name)} ${k.hidden ? 'einblenden' : 'ausblenden'}" title="${k.hidden ? 'Einblenden' : 'Ausblenden'}">${k.hidden ? ICON_EYE_OFF : ICON_EYE}</span>`
      : '';
-    if (k.hidden) return `<button class="tab off" data-act="eye" data-id="${bereich.id}" data-s="${k.id}" style="--c:${bereich.color}" aria-label="${esc(k.name)} einblenden">${esc(katName(k))}${eye}</button>`;
+    if (k.hidden) return `<button class="tab off" data-act="eye" data-id="${bereich.id}" data-s="${k.id}" style="--c:${bereich.color}" aria-label="${esc(k.name)} einblenden">${katLabelHtml(k)}${eye}</button>`;
     return `<button class="tab" data-act="gocol" data-i="${i}" data-drop="zone" data-cat="${bereich.id}" data-area="${k.id}"`
-     + ` style="--c:${bereich.color}" aria-current="${i === currentColumn}">${esc(katName(k))}${eye}</button>`;
+     + ` style="--c:${bereich.color}" aria-current="${i === currentColumn}">${katLabelHtml(k)}${eye}</button>`;
    }).join('')
    + `<button class="tab new" data-act="newsub" data-id="${bereich.id}">+ Kategorie</button></nav>`
   : '';
@@ -896,7 +938,7 @@ function bereichOpenHtml(bereich) {
    ? `<button class="colgrip" data-cat="${bereich.id}" data-s="${kategorie.id}" aria-label="Kategorie ${esc(kategorie.name)} verschieben, mit Pfeil links oder rechts">${ICON_GRIP}</button>`
    : '';
   const columnHead = bereich.subs.length
-   ? `<div class="colhead">${columnGrip}<h2>${esc(katName(kategorie))}</h2><button class="iconbtn" data-act="editsub" data-id="${bereich.id}" data-s="${kategorie.id}"`
+   ? `<div class="colhead">${columnGrip}<h2 style="--c:${bereich.color}">${katLabelHtml(kategorie)}</h2><button class="iconbtn" data-act="editsub" data-id="${bereich.id}" data-s="${kategorie.id}"`
     + ` aria-label="Kategorie ${esc(kategorie.name)} bearbeiten">${ICON_PEN}</button></div>`
    : '';
   const content = kategorie.inbox ? sammlungColumnHtml(bereich, kategorie)
@@ -2385,19 +2427,37 @@ function unlinkBefore(task, beforeId) {
 async function linkExisting(task, asBefore) {
  const choices = asBefore ? canPrecede(task.id) : canFollow(task.id);
  const pending = modal(`<h2>${asBefore ? 'Was muss vorher erledigt sein?' : 'Wozu gehört es noch?'}</h2><p>Auch aus anderen Bereichen.</p>`
-  + (choices.length ? `<input class="field" name="q" placeholder="Suchen …" autocomplete="off" aria-label="Suchen"><select class="field" name="o" size="6">${taskOptionsHtml(choices)}</select>${kindChoiceHtml()}` : '<p>Gerade passt nichts.</p>')
+  + (choices.length ? `<label class="lbl">Bereich</label><select class="field" name="lb" aria-label="Bereich"></select>`
+   + `<div class="lkat"><label class="lbl">Kategorie</label><select class="field" name="lk" aria-label="Kategorie"></select></div>`
+   + `<label class="lbl">To-Do</label><select class="field" name="o" aria-label="To-Do"></select>${kindChoiceHtml()}` : '<p>Gerade passt nichts.</p>')
   + `<div class="btns">${buttonHtml('', 'Zurück', 'ghost')}${choices.length ? buttonHtml('ok', 'Verknüpfen', 'pri') : ''}</div>`);
- // Suche: filtert die Liste beim Tippen
- const search = $('#modal [name=q]');
- const select = $('#modal [name=o]');
- if (search && select) {
-  if (select.options.length) select.selectedIndex = 0;
-  search.addEventListener('input', () => {
-   const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
-   const matching = choices.filter(t => words.every(w => t.t.toLowerCase().includes(w)));
-   select.innerHTML = taskOptionsHtml(matching);
-   if (select.options.length) select.selectedIndex = 0;
-  });
+ // Version C: Schritt für Schritt wählen – erst Bereich, dann Kategorie, dann das To-Do.
+ // Es stehen nur Bereiche und Kategorien zur Wahl, in denen auch etwas Passendes liegt.
+ const bereichSelect = $('#modal [name=lb]');
+ const kategorieSelect = $('#modal [name=lk]');
+ const taskSelect = $('#modal [name=o]');
+ if (bereichSelect) {
+  const option = (value, text, selected) => `<option value="${value}"${selected ? ' selected' : ''}>${esc(text)}</option>`;
+  const [ownBereich, ownKategorie] = placeOf(task).split('|');
+  const bereiche = visibleBereiche().filter(b => choices.some(t => isIn(t, b.id)));
+  const fillTasks = () => {
+   const bereich = getBereich(bereichSelect.value);
+   const inPlace = choices.filter(t => isIn(t, bereichSelect.value, bereich && bereich.subs.length ? kategorieSelect.value : ''));
+   taskSelect.innerHTML = taskOptionsHtml(inPlace);
+  };
+  const fillKategorien = preferred => {
+   const bereich = getBereich(bereichSelect.value);
+   const kategorien = bereich ? bereich.subs.filter(k => choices.some(t => isIn(t, bereich.id, k.id))) : [];
+   const chosen = kategorien.find(k => k.id === preferred) || kategorien[0];
+   kategorieSelect.innerHTML = kategorien.map(k => option(k.id, k.name, k === chosen)).join('');
+   kategorieSelect.closest('.lkat').hidden = !kategorien.length;
+   fillTasks();
+  };
+  const startBereich = bereiche.find(b => b.id === ownBereich) || bereiche[0];
+  bereichSelect.innerHTML = bereiche.map(b => option(b.id, b.name, b === startBereich)).join('');
+  fillKategorien(ownKategorie);
+  bereichSelect.addEventListener('change', () => fillKategorien(''));
+  kategorieSelect.addEventListener('change', fillTasks);
  }
  const q = await pending;
  if (q.v !== 'ok' || !q.vals.o || !getTask(q.vals.o)) return;
@@ -2615,7 +2675,7 @@ async function kategorieDialog(bereichId, kategorieId) {
   : '';
  const r = await modal(`<h2>${kategorie ? 'Kategorie bearbeiten' : 'Neue Kategorie'}</h2><p>in ${esc(bereich.name)}</p>
   <input class="field" name="name" value="${esc(kategorie ? kategorie.name : '')}" placeholder="z. B. Akquise" autocomplete="off" aria-label="Name">
-  <label class="lbl">Emoji</label>${iconPickerHtml(kategorie && kategorie.icon)}
+  <label class="lbl">Symbol</label>${iconPickerHtml(kategorie && kategorie.icon, bereich.color)}
   ${firstHint}
   ${actions}
   <div class="btns">${kategorie ? buttonHtml('del', 'Löschen', 'ghost') : buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', kategorie ? 'Fertig' : 'Anlegen', 'pri')}</div>`);
@@ -2894,7 +2954,7 @@ async function importFile(file) {
  state = result.data;
  treeOpen.clear();
  openChains.clear();
- closedBacklogs.clear();
+ openBacklogs.clear();
  currentColumn = 0;
  startNewDayIfNeeded();
  save();
@@ -2936,8 +2996,8 @@ document.addEventListener('toggle', event => {
   else openChains.delete(details.dataset.id);
  }
  if (details.matches('details.blsec')) {
-  if (details.open) closedBacklogs.delete(details.dataset.k);
-  else closedBacklogs.add(details.dataset.k);
+  if (details.open) openBacklogs.add(details.dataset.k);
+  else openBacklogs.delete(details.dataset.k);
  }
 }, true);
 // Heute-Schalter geklickt

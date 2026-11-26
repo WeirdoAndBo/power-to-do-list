@@ -531,3 +531,14 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
 .mbar::before{content:'';position:absolute;left:0;right:0;top:50%;height:2px;margin-top:-1px;border-radius:1px;background:color-mix(in srgb,var(--c) 45%,transparent)}
 .mbar button{position:relative;display:inline-flex;align-items:center;gap:4px;padding:3px 10px 3px 4px;border-radius:14px;font-size:12.5px;font-weight:600;color:color-mix(in srgb,var(--c) 75%,var(--ink));background:color-mix(in srgb,var(--c) 12%,var(--card))}
 .mbar button span{width:20px;height:20px;border-radius:50%;background:var(--c);color:#fff;display:grid;place-items:center;font-size:15px;line-height:1}
+
+/* Version C: Übersicht und „Nur startklare“ mit gleichen Abständen (Karten-Liste wie .list: Raster, 10px Abstand) */
+.col ul.tree:has(>li.card){display:grid;gap:10px;margin:0;padding:0}
+.col ul.tree:has(>li.card)>li.card{margin:0}
+.col ul.tree:has(>li.card)>li.insroot{margin:-11px 0}
+.col ul.tree:has(>li.card)>li.insroot:first-child{margin-top:-4px}
+
+/* Version C: Linien-Symbole der Kategorien in der Farbe des Bereichs */
+.kico{width:16px;height:16px;flex:none;fill:none;stroke:var(--c,currentColor);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:6px}
+.colhead h2 .kico{width:18px;height:18px;vertical-align:-3px}
+.icons label .kico{width:20px;height:20px;margin:0}

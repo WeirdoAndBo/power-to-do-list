@@ -320,8 +320,11 @@ test('Ins Backlog verschieben und zurück', async () => {
  await click('#modal [data-v="one"]');
  expect(saved().tasks.b.backlog, '„b“ ist nicht im Backlog');
  // Version C: Backlog ist ein eigener Abschnitt mit denselben Karten; zurück nach Zeitnah per Ziehen
+ const section = $('.col[aria-label="Akquise"] details.blsec');
+ expect(section && !section.open, 'Backlog-Abschnitt ist nicht eingeklappt');
+ await click(section.querySelector('summary'));
  const card = $('.col[aria-label="Akquise"] details.blsec .card[data-id="b"]');
- expect(card && $('.col[aria-label="Akquise"] details.blsec').open, '„b“ steht nicht als Karte im offenen Backlog-Abschnitt');
+ expect(card && $('.col[aria-label="Akquise"] details.blsec').open, '„b“ steht nicht als Karte im aufgeklappten Backlog-Abschnitt');
  const top = $('.col[aria-label="Akquise"] .list.zone[data-bl="0"] > .card').getBoundingClientRect();
  await dragTo(card.querySelector('.ctext'), top.x + 40, top.y + 8);
  expect(!saved().tasks.b.backlog, '„b“ ist nicht zurück in Zeitnah');
@@ -437,12 +440,17 @@ test('🔗 im Bearbeitungsfeld: ein vorhandenes To-Do muss vorher erledigt sein'
  await click(link);
  expect(modalOpen() && $('#modal [data-v="addk"]') && $('#modal [data-v="addp"]'), 'Popup „Verbindungen“ fehlt');
  await click('#modal [data-v="addk"]');
- const search = $('#modal [name=q]');
- expect(search && $('#modal [name=o]'), 'Suche oder Auswahl fehlt');
- const target = Object.values(saved().tasks).find(t => t.id !== 'b' && !t.done && $(`#modal [name=o] option[value="${t.id}"]`));
- search.value = target.t;
- search.dispatchEvent(new Event('input', { bubbles: true }));
- expect($('#modal [name=o]').value === target.id || $$('#modal [name=o] option').some(o => o.value === target.id), 'Suche findet das To-Do nicht');
+ const bereichSelect = $('#modal [name=lb]');
+ expect(bereichSelect && $('#modal [name=lk]') && $('#modal [name=o]'), 'Auswahl Bereich → Kategorie → To-Do fehlt');
+ // Erst die Kategorie wechseln: die To-Do-Liste zeigt dann nur deren To-Dos
+ const kategorien = $$('#modal [name=lk] option').map(o => o.value);
+ expect(kategorien.length >= 1, 'keine Kategorie zur Auswahl');
+ const kategorieSelect = $('#modal [name=lk]');
+ kategorieSelect.value = kategorien.at(-1);
+ kategorieSelect.dispatchEvent(new Event('change', { bubbles: true }));
+ const shown = $$('#modal [name=o] option').map(o => o.value);
+ expect(shown.length && shown.every(id => saved().tasks[id]), 'To-Do-Liste zur Kategorie ist leer');
+ const target = saved().tasks[shown[0]];
  $('#modal [name=o]').value = target.id;
  await click('#modal [data-v="ok"]');
  expect(saved().tasks.b.needs.includes(target.id) || saved().tasks.b.soft.includes(target.id), 'Verbindung wurde nicht angelegt');
@@ -718,18 +726,18 @@ test('Kategorie duplizieren: Kopie mit ihren offenen To-Dos', async () => {
  await click('#undo');
  expect(!saved().cats[0].subs.some(k => k.name === 'Akquise (Kopie)') && Object.keys(saved().tasks).length === before, 'Rückgängig entfernt die Kopie nicht');
 });
-test('Kategorie bekommt ein Emoji aus der Auswahl', async () => {
+test('Kategorie bekommt ein Linien-Symbol aus der Auswahl', async () => {
  await click('[data-act="editsub"][data-s="orga"]');
- const pick = $('#modal input[name=icon][value="📅"]');
- expect(pick, 'Emoji-Auswahl fehlt');
+ const pick = $('#modal input[name=icon][value="calendar"]');
+ expect(pick && pick.parentElement.querySelector('svg'), 'Symbol-Auswahl fehlt');
  pick.checked = true;
  await click('#modal [data-v="ok"]');
- expect(saved().cats[0].subs.find(k => k.id === 'orga').icon === '📅', 'Emoji wurde nicht gespeichert');
- expect([...doc.querySelectorAll('.colhead h2')].some(h => h.textContent === '📅 Orga'), 'Emoji steht nicht vor dem Namen');
+ expect(saved().cats[0].subs.find(k => k.id === 'orga').icon === 'calendar', 'Symbol wurde nicht gespeichert');
+ expect([...doc.querySelectorAll('.colhead h2')].some(h => h.textContent === 'Orga' && h.querySelector('svg.kico')), 'Symbol steht nicht vor dem Namen');
  await click('[data-act="editsub"][data-s="orga"]');
  $('#modal input[name=icon][value=""]').checked = true;
  await click('#modal [data-v="ok"]');
- expect(!saved().cats[0].subs.find(k => k.id === 'orga').icon, 'Emoji lässt sich nicht wieder entfernen');
+ expect(!saved().cats[0].subs.find(k => k.id === 'orga').icon, 'Symbol lässt sich nicht wieder entfernen');
 });
 test('Kategorie löschen nur nach Sicherheitsfrage', async () => {
  await click('[data-act="editsub"][data-s="orga"]');
