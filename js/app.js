@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.30-c';
+const APP_VERSION = '1.0.31-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -974,7 +974,33 @@ document.addEventListener('click', event => {
  const li = row.parentElement;
  const wasSelected = li.classList.contains('tsel');
  document.querySelectorAll('.tsel').forEach(x => x.classList.remove('tsel'));
- if (!wasSelected) li.classList.add('tsel');
+ document.querySelectorAll('.mbar').forEach(x => x.remove());
+ if (wasSelected) return;
+ li.classList.add('tsel');
+ // Eine Linie mit bis zu drei „+“ nebeneinander: davor / parallel / danach.
+ // Jedes „+“ klickt den passenden (versteckten) Streifen, dort erscheint dann Frage und Eingabefeld.
+ const strips = [...li.children].filter(x => x.classList.contains('ins'));
+ const kindOf = strip => strip.classList.contains('parallel') ? 1 : strip.classList.contains('deeper') || strip.classList.contains('inchain') ? 0 : 2;
+ const labels = ['davor', 'parallel', 'danach'];
+ strips.sort((a, b) => kindOf(a) - kindOf(b));
+ if (!strips.length) return;
+ const bar = document.createElement('div');
+ bar.className = 'mbar';
+ bar.dataset.act = 'none';
+ strips.forEach(strip => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.innerHTML = `<span aria-hidden="true">+</span>${labels[kindOf(strip)]}`;
+  b.setAttribute('aria-label', strip.getAttribute('aria-label'));
+  b.addEventListener('click', e => {
+   e.stopPropagation();
+   bar.remove();
+   strip.style.display = 'block';
+   strip.click();
+  });
+  bar.append(b);
+ });
+ row.after(bar);
 }, true);
 // Blendet die Kanten der Spalten aus, wenn man seitlich weiterwischen kann (CSS-Klassen ovf, ovf-l, ovf-r)
 function updateColumnEdges() {
