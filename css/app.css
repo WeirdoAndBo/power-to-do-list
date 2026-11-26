@@ -514,7 +514,7 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
 #modal select[size]{height:auto;padding:4px}
 .card h3 .t.editing,.row .tw .t.editing{display:flex;align-items:center;gap:4px;width:100%}
 
-/* Version C: Pfeil des Bereichs ganz rechts; Schalter heißt „Nur erledigbare To-Dos anzeigen“ */
+/* Version C: Pfeil des Bereichs ganz rechts; Schalter heißt „Nur startklare To-Dos anzeigen“ */
 .cathead .cattog svg{transform:rotate(90deg);color:var(--mute)}
 .mswitch span{white-space:nowrap}
 @media(max-width:520px){.cathead{flex-wrap:wrap;row-gap:4px}.cathead .ct{min-width:0}.cathead .mswitch{order:10;margin:0 0 6px 6px}}
