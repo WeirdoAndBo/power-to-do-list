@@ -34,7 +34,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.7';
+const APP_VERSION = '1.0.8';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -2158,6 +2158,43 @@ document.addEventListener('visibilitychange', () => {
   toast('Neuer Tag. „Heute“ ist wieder leer.');
  }
 });
-// Offline-Betrieb: Der Service Worker legt alle Dateien der App lokal ab. Er greift nur über http(s), nicht bei file://.
-if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {});
+// Offline-Betrieb und Updates: Der Service Worker legt alle Dateien der App lokal ab. Er greift nur über http(s), nicht bei file://.
+// Updates: Beim Start und jedes Mal, wenn die App wieder in den Vordergrund kommt, fragt sie nach einer neuen Fassung.
+// Ist eine da, lädt sich die App einmal neu. Die Liste bleibt dabei erhalten, denn sie liegt im localStorage
+// und ist schon gespeichert (save() nach jeder Änderung). Ist gerade ein Popup oder der Fokusmodus offen (oder wird gezogen), wartet das Neuladen,
+// bis die App das nächste Mal im Hintergrund ist, damit nichts Halbgetipptes verloren geht.
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+ const UPDATE_FLAG = 'powerliste-update-geladen';
+ const hadController = !!navigator.serviceWorker.controller;
+ let reloadPending = false;
+ let reloading = false;
+ const reloadNow = () => {
+  if (reloading) return;
+  reloading = true;
+  try { sessionStorage.setItem(UPDATE_FLAG, '1'); } catch (e) {}
+  location.reload();
+ };
+ navigator.serviceWorker.addEventListener('controllerchange', () => {
+  if (!hadController) return; // allererste Installation: nichts neu zu laden
+  const busy = !$('#modal').hidden || !$('#focus').hidden || document.querySelector('.dragging');
+  if (busy) reloadPending = true;
+  else reloadNow();
+ });
+ document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && reloadPending) reloadNow();
+ });
+ navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(registration => {
+  document.addEventListener('visibilitychange', () => {
+   if (document.visibilityState === 'visible') registration.update().catch(() => {});
+  });
+ }).catch(() => {});
+ try {
+  if (sessionStorage.getItem(UPDATE_FLAG)) {
+   sessionStorage.removeItem(UPDATE_FLAG);
+   if (!hadOpenToday) toast(`Neue Version ${APP_VERSION} geladen. Deine Liste ist unverändert.`);
+  }
+ } catch (e) {}
+ // Den Browser bitten, die gespeicherte Liste nicht bei Platzmangel von selbst zu löschen.
+ navigator.storage?.persist?.().catch(() => {});
+}
 }

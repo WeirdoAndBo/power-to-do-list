@@ -74,7 +74,7 @@ archiv/v3-voll.html    ältere, umfangreichere Fassung (Routinen, Fokus-Bereiche
 ```
 
 ## Neue Version veröffentlichen
-Bei jeder Änderung an den App-Dateien die Versionsnummer in `sw.js` (`VERSION`) und in `js/app.js` (`APP_VERSION`) erhöhen. Sonst behalten installierte Apps die alte Fassung im Offline-Cache. Neue Dateien zusätzlich in die Liste `FILES` in `sw.js` eintragen.
+Bei jeder Änderung an den App-Dateien die Versionsnummer in `sw.js` (`VERSION`) und in `js/app.js` (`APP_VERSION`) erhöhen. Dann lädt sich eine offene App von selbst neu, sobald sie wieder in den Vordergrund kommt, und zeigt kurz „Neue Version … geladen“. Neue Dateien zusätzlich in die Liste `FILES` in `sw.js` eintragen.
 
 ## Hosting
 Die App wird über **GitHub Pages** veröffentlicht unter:
@@ -98,7 +98,7 @@ Alle Pfade in der App sind relativ (`manifest.webmanifest`, Icons, `sw.js`, `sta
 - Installation: Am Handy bzw. in Chrome/Edge wie unter „Installieren“ beschrieben.
 
 ### Nach Änderungen
-Jede Änderung, die auf `main` landet, wird automatisch neu veröffentlicht. Damit installierte Apps die neue Fassung auch bekommen, **immer `VERSION` in `sw.js` erhöhen** (und `APP_VERSION` in `js/app.js` gleich setzen). Ohne neue Versionsnummer liefert der Service Worker weiter die alte Fassung aus dem Offline-Cache. Nach dem Hochladen braucht eine installierte App meist ein- bis zweimal Schließen und Öffnen, bis die neue Version angezeigt wird.
+Jede Änderung, die auf `main` landet, wird automatisch neu veröffentlicht. Der Service Worker holt die App-Dateien immer zuerst aus dem Netz und nimmt den Offline-Cache nur, wenn kein Netz da ist. Neue Fassungen kommen also ohne Cache-Leeren an. Trotzdem **immer `VERSION` in `sw.js` erhöhen** (und `APP_VERSION` in `js/app.js` gleich setzen): Daran merkt eine gerade offene App, dass es etwas Neues gibt, und lädt sich einmal selbst neu (bei offenem Popup oder Fokusmodus erst, wenn die App das nächste Mal im Hintergrund war). Die Liste im localStorage bleibt dabei unangetastet; der Service Worker räumt nur seine eigenen Caches `powerliste-…` auf.
 
 ### Gut zu wissen
 - GitHub Pages hat **keine Vorschau-Adressen pro Pull Request**. Änderungen sieht man online erst nach dem Mergen in `main`. Vorher lokal testen (siehe „Lokal öffnen“).
