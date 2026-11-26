@@ -518,3 +518,10 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
 .cathead .cattog svg{transform:rotate(90deg);color:var(--mute)}
 .mswitch span{white-space:nowrap}
 @media(max-width:520px){.cathead{flex-wrap:wrap;row-gap:4px}.cathead .ct{min-width:0}.cathead .mswitch{order:10;margin:0 0 6px 6px}}
+
+/* Version C, Handy: nur die markierten „+“-Linien zeigen (siehe markTouchStrips in app.js) */
+@media(hover:none){
+ .ins{display:none}
+ .ins.tvis,.insroot.tvis .ins,.insroot.last .ins,li.tsel>.ins,.nins{display:block}
+ li.tsel>.row{background:color-mix(in srgb,var(--c) 10%,transparent);border-radius:8px}
+}

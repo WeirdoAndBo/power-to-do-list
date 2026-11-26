@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.29-c';
+const APP_VERSION = '1.0.30-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -949,8 +949,33 @@ function render() {
  }
  lastRenderedBereich = state.openCat;
  updateColumnEdges();
+ markTouchStrips();
  if (!$('#focus').hidden) renderFocus();
 }
+/* Version C, Handy (ohne Maus, kein Drüberfahren): Statt aller „+“-Linien ist pro Stelle nur eine zu sehen
+   (Klasse .tvis): die unterste einer Spalten-Liste und die unterste in jeder Karte. Antippt man eine Zeile
+   in einer Karte (nicht den Text), erscheinen genau ihre „+“ (Klasse .tsel am <li>). */
+function markTouchStrips() {
+ // Im Backlog bleibt das „+“ versteckt (wie am Desktop)
+ document.querySelectorAll('#acc [data-drop="zone"]:not([data-bl="1"])').forEach(zone => {
+  const strips = [...zone.querySelectorAll('.insroot')].filter(x => x.closest('[data-drop="zone"]') === zone);
+  if (strips.length) strips.at(-1).classList.add('tvis');
+ });
+ document.querySelectorAll('#acc .card').forEach(card => {
+  const own = [...card.querySelectorAll(`.ins[data-p="${card.dataset.id}"]`)];
+  if (own.length) own.at(-1).classList.add('tvis');
+ });
+}
+document.addEventListener('click', event => {
+ if (matchMedia('(hover:hover)').matches) return;
+ const row = event.target.closest && event.target.closest('.tcard li > .row');
+ const act = event.target.closest('[data-act]');
+ if (!row || event.target.closest('button, input, .t') || (act && act.dataset.act !== 'none')) return;
+ const li = row.parentElement;
+ const wasSelected = li.classList.contains('tsel');
+ document.querySelectorAll('.tsel').forEach(x => x.classList.remove('tsel'));
+ if (!wasSelected) li.classList.add('tsel');
+}, true);
 // Blendet die Kanten der Spalten aus, wenn man seitlich weiterwischen kann (CSS-Klassen ovf, ovf-l, ovf-r)
 function updateColumnEdges() {
  const cols = $('#cols');
