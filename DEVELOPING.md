@@ -151,7 +151,7 @@ python3 -m http.server 8000
 
 im Projektordner ausführen und <http://localhost:8000> öffnen. Nur `index.html` doppelklicken geht auch, dann laufen aber Service Worker und Installation nicht.
 
-Tipp: Beim Entwickeln in den Entwicklertools des Browsers unter „Anwendung“ bzw. „Application“ → „Service Workers“ den Haken „Update on reload“ setzen. Sonst zeigt der Browser womöglich noch die alte Fassung aus dem Offline-Cache.
+Der Service Worker arbeitet „Netz zuerst“: Normales Neuladen zeigt immer die aktuellen Dateien. Der Offline-Cache wird nur benutzt, wenn kein Netz da ist oder das Netz länger als 4 Sekunden braucht.
 
 Die eigenen Daten im Browser zurücksetzen: Entwicklertools → „Anwendung“ → „Local Storage“ → Eintrag `powerliste-b-v1` löschen, oder in der App Einstellungen → „Beispiel wiederherstellen“.
 
@@ -169,12 +169,13 @@ Einen neuen Test ergänzen: in `tests/test.html` einen Block `test('Name', async
 4. In der Übersicht Äste auf- und zuklappen. Ein Unter-To-Do am Griff hoch/runter ziehen (Reihenfolge, auch in eine andere Karte) und nach rechts/links (Ebene). Die farbige Linie zeigt, wo es landet.
 5. Eine Kategorie-Spalte am Griff im Spaltenkopf ziehen (am Rand scrollt es seitlich mit). Nach dem Neuladen bleibt die Reihenfolge.
 6. Fenster schmal ziehen (Handy-Breite): nichts ragt seitlich heraus, Kategorien lassen sich wischen.
-7. Offline: Seite laden, dann in den Entwicklertools unter „Netzwerk“ auf „Offline“ stellen und neu laden. Die App muss erscheinen.
-8. Entwicklertools → „Konsole“: Es dürfen keine roten Fehler stehen.
+7. Update: App offen lassen, `VERSION`/`APP_VERSION` erhöhen, zu einem anderen Tab wechseln und zurück. Die App lädt sich neu, zeigt „Neue Version … geladen“, und die Liste ist unverändert.
+8. Offline: Seite laden, dann in den Entwicklertools unter „Netzwerk“ auf „Offline“ stellen und neu laden. Die App muss erscheinen.
+9. Entwicklertools → „Konsole“: Es dürfen keine roten Fehler stehen.
 
 ## Nach jeder Änderung: Versionsnummer erhöhen
 
-Installierte Apps holen sich neue Dateien erst, wenn sich der Service Worker ändert. Deshalb bei jeder Änderung an App-Dateien:
+Die Dateien kommen dank „Netz zuerst“ auch ohne neue Nummer an. Die neue Nummer in `sw.js` ist aber das Zeichen für eine offene App, sich selbst neu zu laden (Hinweis „Neue Version … geladen“), und sie erneuert den Offline-Cache. Deshalb bei jeder Änderung an App-Dateien:
 
 1. `VERSION` in `sw.js` erhöhen (z. B. `1.0.0` → `1.0.1`).
 2. `APP_VERSION` in `js/app.js` auf denselben Wert setzen (steht in den Einstellungen der App).
