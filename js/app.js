@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.40-c';
+const APP_VERSION = '1.0.42-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -959,10 +959,8 @@ function bereichOpenHtml(bereich) {
   const columnGrip = columnsOf(bereich).length > 1
    ? `<button class="colgrip" data-cat="${bereich.id}" data-s="${kategorie.id}" aria-label="Kategorie ${esc(kategorie.name)} verschieben, mit Pfeil links oder rechts">${ICON_GRIP}</button>`
    : '';
-  // 1.0.38: Die Sammlung hat oben ein Auge zum Ausblenden. Wieder einblenden: Pfeil lange drücken → Menü.
-  const hideEye = kategorie.inbox
-   ? `<button class="iconbtn ceye" data-act="eye" data-id="${bereich.id}" data-s="${kategorie.id}" aria-label="${esc(kategorie.name)} ausblenden" title="Ausblenden (wieder einblenden: Pfeil lange drücken)">${ICON_EYE}</button>`
-   : '';
+  // 1.0.41: Das Auge oben in der Sammlung (1.0.38) ist wieder weg. Am Handy ist die Sammlung immer zu sehen.
+  const hideEye = '';
   const columnHead = bereich.subs.length
    ? `<div class="colhead">${columnGrip}<h2 style="--c:${bereich.color}">${katLabelHtml(kategorie)}</h2>${hideEye}<button class="iconbtn" data-act="editsub" data-id="${bereich.id}" data-s="${kategorie.id}"`
     + ` aria-label="Kategorie ${esc(kategorie.name)} bearbeiten">${ICON_PEN}</button></div>`
@@ -3758,6 +3756,12 @@ $('#name').addEventListener('keydown', event => { if (event.key === 'Enter') eve
 
 /* ---------- Start: Daten laden, ggf. neuen Tag beginnen, anzeigen ---------- */
 state = load();
+// 1.0.41: Am Handy lässt sich die Sammlung nicht mehr ausblenden. Wer sie dort ausgeblendet hatte, sieht sie wieder.
+if (isNarrow()) {
+ let shown = false;
+ state.cats.forEach(b => (b.subs || []).forEach(k => { if (k.inbox && k.hidden) { k.hidden = false; shown = true; } }));
+ if (shown) save();
+}
 const hadOpenToday = startNewDayIfNeeded();
 render();
 armExitGuard();
