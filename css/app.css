@@ -271,23 +271,6 @@ body.treedrag{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .plus{pointer-events:auto;height:56px;padding:0 24px 0 18px;border-radius:28px;background:var(--acc);color:var(--accInk);display:flex;gap:8px;align-items:center;font-weight:600;font-size:16px;box-shadow:0 8px 24px rgb(0 0 0/.18)}
 .plus span{font-size:26px;line-height:1;font-weight:400}
 
-/* ---------- Fokusmodus (Vollbild für ein To-Do) ---------- */
-#focus{position:fixed;inset:0;z-index:30;background:color-mix(in srgb,var(--c) 16%,var(--bg));display:flex;flex-direction:column;overflow:auto}
-#focus[hidden]{display:none}
-.ftop{display:flex;align-items:center;justify-content:space-between;padding:20px max(5vw,18px)}
-.ftop .fbtns{display:flex;gap:4px}
-.ftop small{font-size:13px;font-weight:700;letter-spacing:.14em;color:color-mix(in srgb,var(--c) 60%,var(--ink))}
-.fmain{flex:1;width:min(600px,100%);margin:0 auto;padding:4vh 22px 40px;display:flex;flex-direction:column;justify-content:center;gap:18px}
-.fmain .goal{margin:0;color:var(--mute);font-size:15px}
-.fmain h1{margin:0;font-size:clamp(28px,6vw,44px);line-height:1.12;letter-spacing:-.01em;text-wrap:balance}
-.bigcheck{display:flex;align-items:center;gap:14px;margin-top:8px;align-self:flex-start;padding:6px 18px 6px 6px;border-radius:40px;background:var(--card);box-shadow:var(--shadow);font-size:16px;color:var(--mute)}
-.bigcheck .check{width:44px;height:44px}.bigcheck .check svg{width:22px;height:22px}
-.before{display:grid;gap:6px}
-.before p{margin:0;color:var(--mute);font-size:14px}
-.before .drow{background:color-mix(in srgb,var(--card) 70%,transparent);border-radius:14px;padding:8px 12px}
-.before .drow span{text-decoration:none;color:var(--ink)}
-.softbtn{align-self:flex-start;min-height:44px;padding:0 18px;border-radius:22px;background:color-mix(in srgb,var(--card) 70%,transparent);font-size:15px}
-.fbot{display:flex;justify-content:center;padding:18px 0 calc(28px + env(safe-area-inset-bottom))}
 
 /* ---------- Popup (auf dem Handy als Blatt von unten) ---------- */
 #modal{position:fixed;inset:0;z-index:40;background:rgb(15 18 22/.32);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -470,7 +453,6 @@ details.blsec .bempty{padding:6px 8px 12px}
 .linput.tinput{margin:2px 0 0;padding:4px 0 4px 24px;font-size:14.5px;box-shadow:none;background:transparent;color:var(--ink)}
 .linput.tinput::placeholder{color:var(--mute)}
 .linput.tinput:focus{box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--c) 60%,transparent)}
-#focus .llist{margin:8px 0 18px;font-size:17px}
 
 /* Version C: Frage neben dem „+“ zwischen den To-Dos (nur beim Drüberfahren, am Handy nicht) */
 .ins em{position:absolute;left:calc(50% + 15px);top:50%;transform:translateY(-50%);font-style:normal;font-size:11.5px;font-weight:600;line-height:1;white-space:nowrap;padding:3px 7px;border-radius:8px;color:color-mix(in srgb,var(--c) 70%,var(--ink));background:color-mix(in srgb,var(--c) 12%,var(--card));pointer-events:none}
@@ -641,3 +623,70 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
  .zlabel.zsoon{display:none}
 }
 @media(max-width:380px){.cathead{flex-wrap:nowrap}.cathead .mswitch{order:0;margin:0}.cdel span{display:none}.cdel{padding:0 10px}}
+
+/* ============================================================================
+   Version C 1.0.35 – Handy: Schnelleingabe, neue Kategorie, Bereichsname
+   ============================================================================ */
+:root{--orange:light-dark(#e8892f,#f0a050);--orangeInk:#fff}
+/* Karte kurz aufleuchten lassen (showCard in app.js) */
+.flash{animation:flash 1.3s ease-out}
+@keyframes flash{0%,40%{box-shadow:0 0 0 3px var(--c)}100%{box-shadow:var(--shadow)}}
+/* Schnelleingabe und leere Spalte „+ Neue Kategorie“ gibt es nur am Handy */
+.qbar,.coladd{display:none}
+/* Popup „Neues To-Do“ am Handy: mehrere Karten, Leiste „+ davor / + danach“ unter der aktuellen Zeile */
+.mcards{display:grid;gap:10px;margin:14px 0 6px}
+.mcard{margin:0;display:grid;gap:0}
+.mrow{display:flex;align-items:center;gap:8px;padding-left:calc(var(--l,0) * 22px);position:relative}
+.mrow:not([data-l="0"])::before{content:"";position:absolute;left:calc(var(--l) * 22px - 11px);top:0;bottom:0;width:2px;background:color-mix(in srgb,var(--c) 30%,transparent)}
+.mrow .field{flex:1;min-height:42px;padding:8px 6px;font-size:15px;border:0;box-shadow:none;background:transparent;border-bottom:1px solid var(--line);border-radius:0}
+.mrow[data-l="0"] .field{font-size:17px;font-weight:600;border-bottom-color:transparent}
+.mrow .field:focus{outline:none;border-bottom-color:var(--c)}
+.mrow .mini.del{opacity:0;pointer-events:none}
+.mrow.cur .mini.del{opacity:.6;pointer-events:auto}
+.nbar{margin-right:0;margin-top:4px;margin-bottom:4px}
+
+@media(max-width:600px){
+ /* Schnelleingabe statt Knopf: runde Pfeile links/rechts, rundes Feld in der Mitte, kleiner Pfeil darunter */
+ .dock .plus{display:none}
+ .dock{padding:6px 0 calc(4px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 35%)}
+ .qbar{display:grid;pointer-events:auto;width:min(100%,520px);padding:0 12px;justify-items:center}
+ .qlabel{margin:0 0 4px;max-width:100%;padding:1px 10px;border-radius:10px;font-size:12px;font-weight:600;color:color-mix(in srgb,var(--c) 70%,var(--ink));background:color-mix(in srgb,var(--c) 12%,var(--bg));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .qrow{display:flex;align-items:center;gap:8px;width:100%}
+ .qarrow{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--orange);color:var(--orangeInk);box-shadow:0 4px 12px rgb(0 0 0/.16);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation;transition:opacity .15s,background .15s}
+ .qarrow.off{background:color-mix(in srgb,var(--mute) 30%,var(--bg));color:var(--mute);box-shadow:none;opacity:.7}
+ .qarrow:not(.off):active{transform:scale(.94)}
+ .qin{flex:1;min-width:0;height:44px;padding:0 18px;border-radius:22px;border:0;background:var(--acc);color:var(--accInk);font-size:16px;font-weight:600;box-shadow:0 6px 18px rgb(0 0 0/.16)}
+ .qin::placeholder{color:color-mix(in srgb,var(--accInk) 70%,transparent);font-weight:600}
+ .qin:focus{outline:none;box-shadow:0 6px 18px rgb(0 0 0/.16),0 0 0 3px color-mix(in srgb,var(--c) 60%,transparent)}
+ .qmore{width:56px;height:20px;display:grid;place-items:center;color:var(--mute);border-radius:10px}
+ .qmore svg{transition:transform .25s}
+ .qbar.open .qmore svg{transform:rotate(180deg)}
+ /* Ausfahren: der Block wächst nach oben, darunter erscheinen die Einsortier-Optionen */
+ .qopts{width:100%;max-height:0;overflow:hidden;opacity:0;transition:max-height .28s ease,opacity .2s,padding .28s;border-radius:18px;background:var(--card);box-shadow:var(--shadow);padding:0 14px}
+ .qbar.open .qopts{max-height:330px;opacity:1;padding:4px 14px 12px;margin-top:2px}
+ .qbar.open{background:none}
+ .qopts .lbl{margin-top:6px}
+ .qopts .field{min-height:42px;padding:8px 12px;font-size:16px}
+ .qline{display:flex;align-items:center;gap:12px;margin-top:8px}
+ .qline .seg{flex:1;margin:0}
+ .qline .seg label{min-height:36px}
+ .qline .opt{min-height:40px;gap:8px;font-size:15px}
+ .qfull{display:block;margin:6px auto 0;font-size:14px}
+ #toast{bottom:calc(var(--dockh,96px) + 6px)}
+
+ /* Die Pfeile neben den Spalten entfallen: die Spalten haben die volle Breite */
+ .colarrow{display:none}
+ .colwrap:not(.noarrows){display:block;padding:0 max(4vw,16px)}
+ /* „+“-Linien nur noch innerhalb der Karten. Neue Karten kommen über die Schnelleingabe unten. */
+ .insroot,.tree>li.insroot,.insroot.last{display:none}
+
+ /* Leere Spalte am Ende: „+ Neue Kategorie“ */
+ .cat .col.coladd{display:grid;place-items:center;min-height:180px;background:transparent;box-shadow:none;border:2px dashed color-mix(in srgb,var(--c) 35%,transparent)}
+ .addcol{display:grid;justify-items:center;gap:8px;padding:20px;font-size:15px;font-weight:600;color:color-mix(in srgb,var(--c) 70%,var(--ink))}
+ .addcol span{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:30px;line-height:1;font-weight:400;color:#fff;background:var(--c)}
+
+ /* Bereichsname lesbar: darf zweizeilig werden, der Schalter heißt nur noch „Startklar“ */
+ .cname{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-height:1.2;font-size:17px;padding:4px 6px;overflow-wrap:anywhere}
+ .cathead .mswitch{padding:0 6px 0 10px}
+}
+@media(max-width:380px){.cathead{flex-wrap:nowrap}.cathead .mswitch{order:0;margin:0}}

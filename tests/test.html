@@ -212,29 +212,40 @@ test('Kategorie-Navigation: alle Kategorien sichtbar, Klick springt zur Spalte',
  await sleep(150);
  expect(cols.scrollLeft < 5, 'Zurück zur ersten Spalte ging nicht');
 });
-test('Handy: nichts ragt seitlich heraus, Pfeile statt Kategorie-Knöpfe, kein „zeitnah“', async () => {
+test('Handy: nichts ragt seitlich heraus, Schnelleingabe statt Pfeilen an den Spalten, kein „zeitnah“', async () => {
  frame.style.width = '360px';
  await sleep(200);
  try {
   expect(doc.documentElement.scrollWidth <= win.innerWidth + 1, 'Seite ist breiter als der Bildschirm');
   expect($('.subtabs').offsetParent === null, 'Kategorie-Knöpfe sind am Handy noch sichtbar');
   expect(!/zeitnah/i.test($('.cat.open').innerText), 'Wort „zeitnah“ steht noch im Bereich');
-  expect($('.mswitch .sm').offsetParent !== null && $('.mswitch .lg').offsetParent === null, 'Schalter heißt nicht kurz „Startklare To-Dos“');
+  expect($('.mswitch .sm').offsetParent !== null && $('.mswitch .sm').textContent === 'Startklar', 'Schalter heißt nicht kurz „Startklar“');
   expect($('.cathead [data-act="editcat"]').offsetParent === null, 'Stift am Bereichsnamen ist am Handy noch sichtbar');
-  const next = $('.colarrow.next');
-  expect(next && next.offsetParent !== null, 'Pfeil zur nächsten Kategorie fehlt');
+  expect(!$('.colarrow') || $('.colarrow').offsetParent === null, 'Pfeile neben den Spalten sind noch da');
+  expect($('.dock .plus').offsetParent === null && $('#qin').offsetParent !== null, 'Unten steht noch der Knopf statt der Eingabezeile');
+  expect(!$$('#acc .insroot').some(x => x.offsetParent !== null), '„+“-Linie für neue Karten zwischen den Karten ist noch sichtbar');
+  const cols = $('#cols');
+  const prev = $('.qarrow.prev'), next = $('.qarrow.next');
+  expect(prev.classList.contains('off') && !next.classList.contains('off'), 'Linker Pfeil am Anfang nicht ausgegraut');
   await click(next);
   await sleep(150);
-  const cols = $('#cols');
-  expect(cols.children[1].classList.contains('jump'), 'Pfeil springt nicht zur nächsten Kategorie');
+  expect(cols.children[1].classList.contains('jump'), 'Runder Pfeil springt nicht zur nächsten Kategorie');
   // Rechtsklick (wie langes Drücken): Menü mit allen Kategorien
-  $('.colarrow.next').dispatchEvent(new win.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  next.dispatchEvent(new win.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
   await sleep(60);
   const items = $$('.ctxmenu [data-act="gocol"]');
-  expect(items.length === cols.children.length, 'Menü zeigt nicht alle Kategorien');
-  await click(items[2]);
+  const real = $$('#cols > .col:not(.coladd)');
+  expect(items.length === real.length, 'Menü zeigt nicht alle Kategorien');
+  await click(items.at(-1));
   await sleep(150);
-  expect(cols.children[2].classList.contains('jump') && !$('.ctxmenu'), 'Menü springt nicht zur Kategorie');
+  expect(real.at(-1).classList.contains('jump') && !$('.ctxmenu'), 'Menü springt nicht zur Kategorie');
+  expect(next.classList.contains('off'), 'Rechter Pfeil an der letzten Kategorie nicht ausgegraut');
+  // Leere Spalte am Ende mit „+ Neue Kategorie“
+  const add = $('#cols > .coladd [data-act="newsub"]');
+  expect(add && add.offsetParent !== null, 'Leere Spalte „+ Neue Kategorie“ fehlt');
+  await click(add);
+  expect(modalOpen(), '„+ Neue Kategorie“ öffnet kein Popup');
+  await click('#modal [data-v=""]');
   // Name im Kopf bearbeiten; „Bereich löschen“ fragt nach, Abbrechen löscht nichts
   await click('.cname');
   expect($('.cnamein') && $('.cdel').offsetParent !== null, 'Name lässt sich nicht bearbeiten oder „Bereich löschen“ fehlt');
@@ -259,7 +270,90 @@ test('Handy: nichts ragt seitlich heraus, Pfeile statt Kategorie-Knöpfe, kein �
   await click('#modal [data-v=""]');
   if (modalOpen()) { win.document.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape' })); await sleep(60); }
  } finally {
-  if ($('.colarrow.prev')) { win.eval('goToColumn(0)'); await sleep(150); }
+  win.eval('goToColumn(0)'); await sleep(150);
+  frame.style.width = '';
+  await sleep(200);
+ }
+});
+test('Handy: Schnelleingabe legt in der sichtbaren Spalte an, ausgefahren auch woanders und ins Backlog', async () => {
+ frame.style.width = '360px';
+ await sleep(200);
+ try {
+  const fin = $$('#cols > .col').findIndex(c => c.getAttribute('aria-label') === 'Finanzen');
+  win.eval(`goToColumn(${fin})`); await sleep(150);
+  expect($('#qlabel').textContent.includes('Finanzen'), 'Name der sichtbaren Spalte steht nicht über der Eingabe');
+  const qin = $('#qin');
+  qin.value = 'Schnell 1';
+  await pressKey(qin, 'Enter');
+  qin.value = 'Schnell 2';
+  await pressKey(qin, 'Enter');
+  const tasks = Object.values(saved().tasks);
+  const s1 = tasks.find(t => t.t === 'Schnell 1'), s2 = tasks.find(t => t.t === 'Schnell 2');
+  expect(s1 && s2 && s1.cat === 'arbeit' && s1.area === 'fin' && !s1.backlog, 'To-Do liegt nicht in Arbeit · Finanzen');
+  expect(qin.value === '' && doc.activeElement === qin, 'Feld ist nach Enter nicht leer und bereit');
+  const order = $$('.col[aria-label="Finanzen"] .card').map(c => c.dataset.id);
+  expect(order.at(-1) === s2.id && order.at(-2) === s1.id, 'Neue To-Dos stehen nicht unten in der Reihenfolge des Tippens');
+  // Ausfahren: Ort und Backlog selbst wählen
+  await click('.qmore');
+  expect($('#qbar').classList.contains('open') && $('#qopts [data-pick=cat]'), 'Einsortier-Optionen fahren nicht aus');
+  const bereich = $('#qopts [data-pick=cat]');
+  bereich.value = 'privat';
+  bereich.dispatchEvent(new Event('change', { bubbles: true }));
+  $('#qopts [name=bl]').checked = true;
+  $('#qopts [name=bl]').dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(30);
+  expect($('#qlabel').textContent.includes('Privat') && $('#qlabel').textContent.includes('Backlog'), 'Ziel über der Eingabe zeigt nicht Privat · Backlog');
+  qin.value = 'Schnell Privat';
+  await pressKey(qin, 'Enter');
+  const sp = Object.values(saved().tasks).find(t => t.t === 'Schnell Privat');
+  expect(sp && sp.cat === 'privat' && sp.area === 'haus' && sp.backlog, 'To-Do liegt nicht in Privat · Haushalt · Backlog');
+  await click('.qmore');
+  expect(!$('#qbar').classList.contains('open'), 'Optionen fahren nicht wieder ein');
+  await click('#undo');
+  expect(!Object.values(saved().tasks).some(t => t.t === 'Schnell Privat'), 'Rückgängig nimmt das Anlegen nicht zurück');
+ } finally {
+  win.eval('goToColumn(0)'); await sleep(150);
+  frame.style.width = '';
+  await sleep(200);
+ }
+});
+test('Handy: Popup „Neues To-Do“ – Enter legt ein weiteres To-Do an, „+ davor/danach“', async () => {
+ frame.style.width = '360px';
+ await sleep(200);
+ try {
+  const before = Object.keys(saved().tasks).length;
+  const orga = $$('#cols > .col').findIndex(c => c.getAttribute('aria-label') === 'Orga');
+  win.eval(`goToColumn(${orga})`); await sleep(150);
+  // Weg über die Schnelleingabe: ausfahren → „Mehrere mit davor/danach …“
+  await click('.qmore');
+  await click('#qopts [data-act="qfull"]');
+  expect(modalOpen() && $('#modal .mcard'), 'Popup für mehrere To-Dos geht nicht auf');
+  const rows = () => $$('#modal .mrow');
+  const inp = n => rows()[n].querySelector('input');
+  inp(0).value = 'Erstes';
+  await pressKey(inp(0), 'Enter');
+  expect($$('#modal .mcard').length === 2 && doc.activeElement === inp(1), 'Enter legt kein zweites To-Do an');
+  inp(1).value = 'Zweites';
+  await click('#modal .nbar [data-madd="before"]');
+  expect(rows()[2].dataset.l === '1' && doc.activeElement === inp(2), '„+ davor“ legt keine Zeile darunter an');
+  inp(2).value = 'Vor Zweitem';
+  inp(1).focus();
+  await sleep(30);
+  await click('#modal .nbar [data-madd="after"]');
+  expect(rows()[1].dataset.l === '0' && rows()[2].dataset.l === '1' && rows()[3].dataset.l === '2', '„+ danach“ schiebt nicht richtig ein');
+  inp(1).value = 'Danach';
+  await pressKey(inp(1), 'Enter');
+  await pressKey(inp(4), 'Enter'); // leere Zeile = fertig
+  expect(!modalOpen(), 'Enter in leerer Zeile legt nicht an');
+  const tasks = Object.values(saved().tasks);
+  expect(tasks.length === before + 4, 'Es wurden nicht genau 4 To-Dos angelegt');
+  const t1 = tasks.find(t => t.t === 'Erstes'), d = tasks.find(t => t.t === 'Danach'), z = tasks.find(t => t.t === 'Zweites'), v = tasks.find(t => t.t === 'Vor Zweitem');
+  expect(t1.goal && t1.area === 'orga' && !t1.needs.length, '„Erstes“ ist kein eigenes To-Do in Orga');
+  expect(d.goal && d.needs[0] === z.id && z.needs[0] === v.id && !z.goal, 'Kette Vor Zweitem → Zweites → Danach stimmt nicht');
+  await click('#undo');
+  expect(Object.keys(saved().tasks).length === before, 'Rückgängig nimmt nicht alles zurück');
+ } finally {
+  win.eval('goToColumn(0)'); await sleep(150);
   frame.style.width = '';
   await sleep(200);
  }
@@ -387,12 +481,6 @@ test('Löschen mit Rückgängig', async () => {
  await click('#undo');
  expect(saved().tasks.ex, '„ex“ ist nach Rückgängig nicht zurück');
 });
-test('Fokusmodus öffnen und mit Escape schließen', async () => {
- await click('.card[data-id="ex"] h3');
- expect(!$('#focus').hidden, 'Fokusmodus ging nicht auf');
- await pressKey(doc.body, 'Escape');
- expect($('#focus').hidden, 'Fokusmodus ging nicht zu');
-});
 test('„+“ zwischen den Karten einer Spalte legt dort ein neues To-Do an', async () => {
  expect(!$('[data-act="addhere"]'), 'Knopf „+ Neues To-Do“ unten in der Spalte ist noch da');
  await click('.ins[data-act="insroot"][data-cat="arbeit"][data-area="fin"][data-bl="0"][data-after=""]');
@@ -404,14 +492,6 @@ test('„+“ zwischen den Karten einer Spalte legt dort ein neues To-Do an', as
  const created = Object.values(saved().tasks).find(t => t.t === 'Neu in Finanzen');
  expect(created && created.cat === 'arbeit' && created.area === 'fin', 'To-Do liegt nicht in Arbeit · Finanzen');
  expect($(`#acc .card[data-id="${created.id}"]`).closest('.col').getAttribute('aria-label') === 'Finanzen', 'Karte steht nicht in der Spalte Finanzen');
-});
-test('Löschen im Fokusmodus (mit Rückgängig)', async () => {
- await click('.card[data-id="ex"] h3');
- await click('#focus [data-act="del"]');
- expect($('#focus').hidden, 'Fokusmodus ist noch offen');
- expect(!saved().tasks.ex, '„ex“ wurde nicht gelöscht');
- await click('#undo');
- expect(saved().tasks.ex, '„ex“ ist nach Rückgängig nicht zurück');
 });
 test('Löschen in „Heute geschafft“', async () => {
  await click('[data-view="heute"]');
@@ -444,7 +524,6 @@ test('Text direkt bearbeiten: antippen, tippen, Enter', async () => {
  await click(title);
  const input = $('.card[data-id="b"] .tinput');
  expect(input && doc.activeElement === input, 'Eingabefeld erscheint nicht');
- expect($('#focus').hidden, 'Antippen des Titels hat den Fokusmodus geöffnet');
  input.value = 'Text gut überlegen';
  await pressKey(input, 'Enter');
  expect(saved().tasks.b.t === 'Text gut überlegen', 'Neuer Text wurde nicht gespeichert');
@@ -477,7 +556,6 @@ test('Liste: „Liste:“ vor den Text, Punkte eintippen, abhaken, löschen', as
  expect($('.card[data-id="b"] .lcount').textContent === '0/2', 'Zähler 0/2 im Kopf fehlt');
  await click(`.card[data-id="b"] .lcheck[data-i="${list[0].id}"]`);
  expect(saved().tasks.b.list[0].done && $('.card[data-id="b"] .lcount').textContent === '1/2', 'Abhaken klappt nicht');
- expect($('#focus').hidden, 'Abhaken hat den Fokusmodus geöffnet');
  await click(`.card[data-id="b"] .ldel[data-i="${list[1].id}"]`);
  expect(saved().tasks.b.list.length === 1, 'Punkt wurde nicht gelöscht');
  await click('.card[data-id="b"] h3 .t');

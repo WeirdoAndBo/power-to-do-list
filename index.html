@@ -29,8 +29,18 @@
  <main id="acc"></main>
  <p class="foot">Alles bleibt nur auf diesem Gerät. Kein Konto, kein Tracking.</p>
 </div>
-<div class="dock"><button class="plus" data-act="add"><span>+</span> Neues To-Do</button></div>
-<div id="focus" hidden></div>
+<div class="dock"><button class="plus" data-act="add"><span>+</span> Neues To-Do</button>
+ <div class="qbar" id="qbar">
+  <p class="qlabel" id="qlabel" aria-live="polite"></p>
+  <div class="qrow">
+   <button type="button" class="qarrow prev" data-act="qstep" data-d="-1" aria-label="Vorherige Kategorie (lange drücken: alle Kategorien)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+   <input class="qin" id="qin" placeholder="Neues To-Do" autocomplete="off" enterkeyhint="send" aria-label="Neues To-Do">
+   <button type="button" class="qarrow next" data-act="qstep" data-d="1" aria-label="Nächste Kategorie (lange drücken: alle Kategorien)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+  </div>
+  <button type="button" class="qmore" data-act="qmore" aria-expanded="false" aria-controls="qopts" aria-label="Wohin einsortieren?"><svg width="18" height="12" viewBox="0 0 24 14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10l7-6 7 6"/></svg></button>
+  <div class="qopts" id="qopts" inert></div>
+ </div>
+</div>
 <div id="modal" hidden></div>
 <div id="toast" role="status" hidden></div>
 <input type="file" id="importFile" accept=".json,application/json" hidden>
