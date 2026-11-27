@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.43-c';
+const APP_VERSION = '1.0.44-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -1198,7 +1198,17 @@ document.addEventListener('pointermove', event => {
 // Version C 1.0.40, Handy: Bereichskopf (oder zugeklappte Leiste) lange drücken = Popup „Bereich bearbeiten“
 // (Name, Farbe, Löschen). Nicht auf dem Schalter „Nur Startklares“.
 let headPress = null;
+// 1.0.44: Nach dem langen Drücken markiert das Handy sonst Text im Popup (z. B. „bearbeiten“). Kurz keine Textauswahl.
+let noSelectUntil = 0;
+let swallowHoldClick = false;  // der Klick, der beim Loslassen nach dem langen Drücken noch kommt
+document.addEventListener('selectstart', event => { if (Date.now() < noSelectUntil) event.preventDefault(); }, true);
+['pointerup', 'touchend'].forEach(type => document.addEventListener(type, () => {
+ // Kommt nach dem Loslassen kein Klick (je nach Handy), darf der nächste echte Tipp nicht verschluckt werden
+ if (swallowHoldClick) setTimeout(() => { swallowHoldClick = false; }, 350);
+ if (Date.now() < noSelectUntil) setTimeout(() => { if (!document.activeElement?.matches?.('input,textarea')) getSelection()?.removeAllRanges(); }, 0);
+}, true));
 document.addEventListener('pointerdown', event => {
+ swallowHoldClick = false;  // neuer Finger = neuer Klick
  clearTimeout(headPress?.timer);
  headPress = null;
  if (!isNarrow() || event.button > 0 || !event.target.closest) return;
@@ -1214,7 +1224,9 @@ document.addEventListener('pointerdown', event => {
    headPress = null;
    ignoreClicksUntil = Date.now() + 600;  // Loslassen ist kein Klick (klappt nicht zu)
    if (navigator.vibrate) try { navigator.vibrate(10); } catch (e) {}
-   bereichDialog(id);
+   noSelectUntil = Date.now() + 1500;
+   swallowHoldClick = true;
+   bereichDialog(id, true);
   }, LONG_PRESS_MS)
  };
 }, true);
@@ -1629,6 +1641,8 @@ function modal(html) {
   };
   document.addEventListener('keydown', onKeyDown);
   modalEl.onclick = event => {
+   // Loslassen nach langem Drücken (Popup ging unter dem Finger auf) ist kein Klick ins Popup
+   if (swallowHoldClick) { swallowHoldClick = false; return; }
    const rowButton = event.target.closest('[data-row]');
    if (rowButton) { preRowAction(rowButton); return; }
    const button = event.target.closest('[data-v]');
@@ -3181,15 +3195,18 @@ async function deleteBereichFromHead(id) {
  } finally { deletingBereich = false; }
 }
 // Bereich anlegen (ohne id) oder bearbeiten/löschen (mit id)
-async function bereichDialog(id) {
+// fromHold = über langes Drücken geöffnet: kein Fokus ins Namensfeld (keine Tastatur, nichts markiert)
+async function bereichDialog(id, fromHold = false) {
  const bereich = id ? getBereich(id) : null;
  const currentColor = bereich ? bereich.color : COLORS[state.cats.length % COLORS.length];
  const colorChoices = COLORS.map((color, i) => `<label style="--c:${color}" aria-label="Farbe ${i + 1}">`
   + `<input type="radio" name="color" value="${color}"${currentColor === color ? ' checked' : ''}></label>`).join('');
- const r = await modal(`<h2>${bereich ? 'Bereich bearbeiten' : 'Neuer Bereich'}</h2>
+ const pending = modal(`<h2>${bereich ? 'Bereich bearbeiten' : 'Neuer Bereich'}</h2>
   <input class="field" name="name" value="${esc(bereich ? bereich.name : '')}" placeholder="z. B. Freund*innen" aria-label="Name" autocomplete="off">
   <label class="lbl">Farbe</label><div class="swatches">${colorChoices}</div>
   <div class="btns">${bereich ? buttonHtml('del', 'Bereich löschen', 'ghost danger') : buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', bereich ? 'Fertig' : 'Anlegen', 'pri')}</div>`);
+ if (fromHold) { document.activeElement?.blur?.(); getSelection()?.removeAllRanges(); }
+ const r = await pending;
  if (r.v === 'del') { await deleteBereich(id); return; }
  if (r.v !== 'ok' || !r.vals.name) return;
  undoSnapshot = snapshot();
