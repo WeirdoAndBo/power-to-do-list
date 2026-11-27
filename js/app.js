@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.33-c';
+const APP_VERSION = '1.0.34-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -96,6 +96,7 @@ let ignoreClicksUntil = 0;      // Zeitpunkt, bis zu dem Klicks ignoriert werden
 const treeOpen = new Map();     // auf-/zugeklappte Äste in der Übersicht
 const openBacklogs = new Set(); // aufgeklappte Backlog-Abschnitte (Version C: sonst zu)
 const openChains = new Set();   // aufgeklappte Ziel-Ketten auf Karten
+let editingBereichName = null;  // Handy: ID des Bereichs, dessen Name gerade im Kopf bearbeitet wird
 
 /* ---------- Tag ---------- */
 // Mitternacht des Tages, in dem der Zeitpunkt liegt
@@ -690,6 +691,10 @@ function backlogSectionHtml(bereich, kategorie, count, inner) {
 // Unsichtbarer Streifen zwischen den Karten einer Spalte: neues To-Do ganz oben (eigene Karte) an dieser Stelle.
 // Version C: Die Frage aus dem Eingabefeld steht beim Drüberfahren klein neben dem „+“ (insertLabelHtml).
 const ROOT_QUESTION = 'Neues To-Do';
+// Version C 1.0.34: Am Handy gibt es das Wort „zeitnah“ nicht. Was nicht im Backlog liegt, ist einfach dran.
+// wideNarrow(a, b) zeigt a am Desktop und b am Handy (CSS-Klassen .wide/.narrow, Grenze 600px).
+const wideNarrow = (wide, narrow) => `<span class="wide">${wide}</span>` + (narrow ? `<span class="narrow">${narrow}</span>` : '');
+const BACK_FROM_BACKLOG = wideNarrow('in Zeitnah', 'aus dem Backlog');
 const insertQuestion = parent => parent && parent.goal ? 'Was gehört dazu?' : 'Was muss vorher passieren?';
 const insertLabelHtml = question => `<span aria-hidden="true">+</span><em aria-hidden="true">${esc(question)}</em>`;
 // last = Linie unter dem Hinweis einer leeren Liste (Zeitnah, Sammlung): immer sichtbar
@@ -743,7 +748,7 @@ function machbarColumnHtml(bereich, kategorie) {
   + (backlogTop.length
    ? backlogTop.map(t => cardHtml(t, bereich.color, { move: true }) + insertRootHtml(bereich, kategorie, t.id, 'div', true)).join('')
    : `<div class="empty" style="--c:${bereich.color}">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</div>` + insertRootHtml(bereich, kategorie, '', 'div', true)) + '</div>';
- return `<p class="zlabel">Zeitnah</p><div class="list zone" ${dropTarget} data-bl="0">${doableHtml}</div>
+ return `<p class="zlabel zsoon">Zeitnah</p><div class="list zone" ${dropTarget} data-bl="0">${doableHtml}</div>
  ${backlogSectionHtml(bereich, kategorie, backlogAll.length, backlogHtml)}${doneBoxHtml(done, bereich.color)}`;
 }
 // Tab „Übersicht“: ein Knoten im Baum, ruft sich für seine Vorher-To-Dos selbst auf.
@@ -835,7 +840,7 @@ function uebersichtColumnHtml(bereich, kategorie) {
  const backlog = roots.filter(t => !t.done && t.backlog).sort(byPrio);
  const done = roots.filter(t => t.done);
  const nodes = (tasks, level) => tasks.map(t => treeNodeHtml(t, bereich.color, bereich.id, level)).join('');
- const emptyText = backlog.length ? 'Gerade nichts zeitnah.' : `Noch nichts in ${esc(kategorie.name || bereich.name)}.`;
+ const emptyText = backlog.length ? `Gerade nichts ${wideNarrow('zeitnah', 'dran')}.` : `Noch nichts in ${esc(kategorie.name || bereich.name)}.`;
  // Ablageflächen fürs Ziehen von Karten (wie mit Schalter „Machbar“ an)
  const dropTarget = `data-drop="zone" data-cat="${bereich.id}" data-area="${kategorie.id}"`;
  const soonHtml = soon.length
@@ -847,7 +852,7 @@ function uebersichtColumnHtml(bereich, kategorie) {
  const doneHtml = done.length
   ? `<details class="done"><summary>Erledigt · ${done.length}</summary><ul class="tree">${nodes(done, 1)}</ul></details>`
   : '';
- return `<p class="zlabel">Zeitnah</p><div class="list zone tzone" ${dropTarget} data-bl="0">${soonHtml}</div>
+ return `<p class="zlabel zsoon">Zeitnah</p><div class="list zone tzone" ${dropTarget} data-bl="0">${soonHtml}</div>
  ${backlogHtml}${doneHtml}`;
 }
 // Spalte „Sammlung“: alle offenen To-Dos dieser Kategorie als Karten, ohne Zeitnah/Backlog. Neues über „+“.
@@ -920,10 +925,20 @@ function bereichOpenHtml(bereich) {
  const editButton = bereich.id
   ? `<button class="iconbtn" data-act="editcat" data-id="${bereich.id}" aria-label="Bereich ${name} bearbeiten">${ICON_PEN}</button>`
   : '';
- const head = `<div class="cathead"><button class="ct" data-act="opencat" data-cat="${bereich.id}" aria-expanded="true" title="Zuklappen">`
-  + `<i></i>${name} <small>${bereichCountsText(bereich)}</small></button>${machbarSwitchHtml(bereich)}${editButton}`
+ // Handy (Version C 1.0.34): kein Stift. Punkt antippen = Farbe wählen, Name antippen = Name bearbeiten.
+ // Beim Bearbeiten steht rechts, deutlich abgesetzt, „Bereich löschen“ (mit Sicherheitsfrage).
+ // Am Desktop bleibt alles wie vorher (.ct zum Zuklappen, Stift öffnet das Popup).
+ const editing = bereich.id && editingBereichName === bereich.id;
+ const mobileTitle = !bereich.id ? ''
+  : editing
+   ? `<div class="ctm"><i></i><input class="cnamein" data-catname="${bereich.id}" value="${name}" aria-label="Name des Bereichs" autocomplete="off" enterkeyhint="done"></div>`
+    + `<span class="csep" aria-hidden="true"></span><button class="cdel" data-act="catdel" data-id="${bereich.id}" aria-label="Ganzen Bereich ${name} löschen">${ICON_TRASH}<span>Bereich löschen</span></button>`
+   : `<div class="ctm"><button class="cdot" data-act="catcolor" data-id="${bereich.id}" aria-label="Farbe von ${name} ändern" title="Farbe ändern"><i></i></button>`
+    + `<button class="cname" data-act="catname" data-id="${bereich.id}" aria-label="Name von ${name} ändern" title="Name ändern">${name}</button></div>`;
+ const head = `<div class="cathead${editing ? ' editing' : ''}"><button class="ct${bereich.id ? '' : ' keep'}" data-act="opencat" data-cat="${bereich.id}" aria-expanded="true" title="Zuklappen">`
+  + `<i></i>${name} <small>${bereichCountsText(bereich)}</small></button>${mobileTitle}${editing ? '' : machbarSwitchHtml(bereich) + editButton}`
   // Version C: Pfeil zum Auf- und Zuklappen ganz rechts außen
-  + `<button class="iconbtn cattog" data-act="opencat" data-cat="${bereich.id}" aria-expanded="true" aria-label="Bereich ${name} zuklappen" title="Zuklappen">${ICON_CHEVRON}</button></div>`;
+  + (editing ? '' : `<button class="iconbtn cattog" data-act="opencat" data-cat="${bereich.id}" aria-expanded="true" aria-label="Bereich ${name} zuklappen" title="Zuklappen">${ICON_CHEVRON}</button>`) + `</div>`;
  const tabs = bereich.id
   ? `<nav class="subtabs" aria-label="Kategorien von ${name}">`
    + bereich.subs.map(k => {
@@ -937,16 +952,11 @@ function bereichOpenHtml(bereich) {
    }).join('')
    + `<button class="tab new" data-act="newsub" data-id="${bereich.id}">+ Kategorie</button></nav>`
   : '';
- // Handy: statt der vielen Kategorie-Knöpfe ein einziges Auswahlfeld zum Hinspringen (Knöpfe per CSS ausgeblendet)
- const jump = bereich.id && bereich.subs.length
-  ? `<label class="katjump" style="--c:${bereich.color}"><span class="vh">Zu Kategorie springen</span><select data-jump="${bereich.id}">`
-   + bereich.subs.map(k => {
-    const i = columnsOf(bereich).indexOf(k);
-    return k.hidden
-     ? `<option value="show:${esc(k.id)}">${esc(k.name)} (einblenden)</option>`
-     : `<option value="${i}"${i === currentColumn ? ' selected' : ''}>${esc(k.name)}</option>`;
-   }).join('')
-   + `<option value="new">+ Kategorie</option></select>${ICON_CHEVRON}</label>`
+ // Handy: statt der Kategorie-Knöpfe dezente Pfeile links und rechts neben den Spalten.
+ // Kurz tippen = eine Spalte weiter, lange drücken = Menü mit allen Kategorien (siehe openKatMenu).
+ const arrow = (dir, label) => bereich.id
+  ? `<button class="colarrow ${dir > 0 ? 'next' : 'prev'}" data-act="colstep" data-d="${dir}" data-id="${bereich.id}" aria-haspopup="menu"`
+   + ` aria-label="${label} (lange drücken: alle Kategorien)" title="${label} · lange drücken: alle Kategorien">${ICON_CHEVRON}</button>`
   : '';
  const columns = columnsOf(bereich).map(kategorie => {
   // Griff zum Umsortieren der Spalten, nur wenn es mehr als eine Spalte gibt
@@ -963,14 +973,14 @@ function bereichOpenHtml(bereich) {
  }).join('');
  return `<section class="cat open" style="--c:${bereich.color}" aria-label="${name}">
  ${head}
- ${jump}
  ${tabs}
- <div class="cols" id="cols">${columns}</div></section>`;
+ <div class="colwrap${bereich.id ? '' : ' noarrows'}">${arrow(-1, 'Vorherige Kategorie')}<div class="cols" id="cols">${columns}</div>${arrow(1, 'Nächste Kategorie')}</div></section>`;
 }
 
 /* ---------- Seite aufbauen ---------- */
 // Baut die ganze Seite aus state neu auf. Nach jeder Änderung an state aufrufen (nach save()).
 function render() {
+ closeKatMenu();
  document.body.classList.toggle('noanim', !state.anim);
  const nameField = $('#name');
  if (document.activeElement !== nameField) nameField.value = state.name;
@@ -1078,8 +1088,6 @@ function updateColumnEdges() {
 // Markiert den Knopf der Kategorie-Spalte Nr. index in der Kategorie-Navigation als aktuell
 function markCurrentTab(index) {
  document.querySelectorAll('.tab[data-i]').forEach(b => b.setAttribute('aria-current', +b.dataset.i === index));
- const jump = document.querySelector('select[data-jump]');
- if (jump && jump.querySelector(`option[value="${index}"]`)) jump.value = String(index);
 }
 // Zu Kategorie-Spalte Nr. index wischen/scrollen. Mit highlight leuchtet die Spalte kurz auf
 // (Klick in der Kategorie-Navigation), damit man sieht, wo man gelandet ist.
@@ -1102,6 +1110,148 @@ function goToColumn(index, highlight = false) {
  markCurrentTab(index);
 }
 addEventListener('resize', updateColumnEdges);
+
+/* ---------- Handy: Pfeile neben den Spalten und Menü mit allen Kategorien (Version C 1.0.34) ----------
+   Kurz tippen auf ‹ oder › = eine Spalte weiter (am Ende geht es vorne wieder los).
+   Lange drücken (oder Rechtsklick) = kleines Menü mit allen Kategorien, ausgeblendeten zum Einblenden
+   und „+ Kategorie“. Die Einträge sind normale Knöpfe mit data-act und laufen durch den Klick-Verteiler unten. */
+const LONG_PRESS_MS = 450;
+let longPress = null;          // { timer, x, y, button } solange ein Pfeil gedrückt gehalten wird
+let swallowArrowClick = false; // Loslassen nach langem Drücken ist kein Klick
+function stepColumn(direction, button) {
+ const count = columnsOf(visibleBereiche().find(b => b.id === state.openCat)).length;
+ if (count < 2) { openKatMenu(button); return; }
+ goToColumn((currentColumn + direction + count) % count, true);
+}
+function closeKatMenu() {
+ const menu = document.querySelector('.ctxmenu');
+ if (menu) menu.remove();
+}
+// Kleines Menü neben einem Knopf (anchor). html = Inhalt. Links vom Bildschirm-Mittelpunkt öffnet es nach rechts.
+function openPopMenu(anchor, html, label) {
+ closeKatMenu();
+ const menu = document.createElement('div');
+ menu.className = 'ctxmenu';
+ menu.setAttribute('role', 'menu');
+ menu.setAttribute('aria-label', label);
+ const bereichEl = anchor.closest('.cat');
+ if (bereichEl) menu.style.setProperty('--c', bereichEl.style.getPropertyValue('--c'));
+ menu.innerHTML = html;
+ document.body.append(menu);
+ const r = anchor.getBoundingClientRect();
+ const width = menu.offsetWidth;
+ const left = r.left + r.width / 2 < innerWidth / 2 ? r.right + 6 : r.left - width - 6;
+ menu.style.left = Math.max(8, Math.min(left, innerWidth - width - 8)) + 'px';
+ const top = Math.max(8, Math.min(r.top, innerHeight - menu.offsetHeight - 8));
+ menu.style.top = top + 'px';
+ menu.querySelector('button')?.focus({ preventScroll: true });
+}
+function openKatMenu(anchor) {
+ const bereich = getBereich(anchor.dataset.id);
+ if (!bereich) return;
+ const columns = columnsOf(bereich);
+ const items = bereich.subs.map(k => {
+  const i = columns.indexOf(k);
+  return k.hidden
+   ? `<button role="menuitem" class="off" data-act="eye" data-id="${bereich.id}" data-s="${k.id}">${katLabelHtml(k)}<small>einblenden</small></button>`
+   : `<button role="menuitem" data-act="gocol" data-i="${i}"${i === currentColumn ? ' aria-current="true"' : ''}>${katLabelHtml(k)}</button>`;
+ }).join('') + `<hr><button role="menuitem" class="new" data-act="newsub" data-id="${bereich.id}">+ Kategorie</button>`;
+ openPopMenu(anchor, items, `Kategorien von ${bereich.name}`);
+ if (navigator.vibrate) try { navigator.vibrate(10); } catch (e) {}
+}
+// Farbe des Bereichs: Punkt im Kopf antippen → Farbfelder
+function openColorMenu(anchor) {
+ const bereich = getBereich(anchor.dataset.id);
+ if (!bereich) return;
+ openPopMenu(anchor, `<div class="cmswatch">` + COLORS.map((color, i) => `<button role="menuitemradio" data-act="setcolor" data-id="${bereich.id}" data-color="${color}"`
+  + ` style="--c:${color}" aria-checked="${color === bereich.color}" aria-label="Farbe ${i + 1}"></button>`).join('') + `</div>`, `Farbe von ${bereich.name}`);
+}
+function setBereichColor(id, color) {
+ const bereich = getBereich(id);
+ if (!bereich || !COLORS.includes(color) || bereich.color === color) return;
+ undoSnapshot = snapshot();
+ bereich.color = color;
+ save();
+ render();
+}
+document.addEventListener('pointerdown', event => {
+ // Tippen außerhalb des Menüs schließt es
+ const menu = document.querySelector('.ctxmenu');
+ if (menu && !menu.contains(event.target)) closeKatMenu();
+ const arrow = event.target.closest && event.target.closest('.colarrow');
+ if (!arrow || event.button > 0) return;
+ swallowArrowClick = false;
+ clearTimeout(longPress?.timer);
+ longPress = {
+  x: event.clientX, y: event.clientY, button: arrow,
+  timer: setTimeout(() => { swallowArrowClick = true; longPress = null; openKatMenu(arrow); }, LONG_PRESS_MS)
+ };
+}, true);
+document.addEventListener('pointermove', event => {
+ if (longPress && Math.hypot(event.clientX - longPress.x, event.clientY - longPress.y) > 10) { clearTimeout(longPress.timer); longPress = null; }
+}, true);
+['pointerup', 'pointercancel'].forEach(type => document.addEventListener(type, () => {
+ if (longPress) { clearTimeout(longPress.timer); longPress = null; }
+}, true));
+// Rechtsklick oder Kontextmenü-Taste auf einem Pfeil: gleiches Menü. Am Handy kein Browser-Menü beim langen Drücken.
+document.addEventListener('contextmenu', event => {
+ const arrow = event.target.closest && event.target.closest('.colarrow');
+ if (!arrow) return;
+ event.preventDefault();
+ if (!document.querySelector('.ctxmenu')) { swallowArrowClick = event.pointerType === 'touch' || !!longPress; openKatMenu(arrow); }
+});
+// Menü mit Escape schließen, mit Pfeiltasten durch die Einträge gehen
+document.addEventListener('keydown', event => {
+ const menu = document.querySelector('.ctxmenu');
+ if (!menu) return;
+ if (event.key === 'Escape') { event.stopPropagation(); closeKatMenu(); return; }
+ if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+  const items = [...menu.querySelectorAll('button')];
+  const i = items.indexOf(document.activeElement);
+  const step = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1;
+  items[(i + step + items.length) % items.length]?.focus();
+  event.preventDefault();
+  event.stopPropagation();
+ }
+}, true);
+
+/* ---------- Handy: Name des Bereichs direkt im Kopf bearbeiten (Version C 1.0.34) ---------- */
+let nameCommitTimer;
+function startBereichRename(id) {
+ editingBereichName = id;
+ render();
+ const field = document.querySelector('.cnamein');
+ if (field) { field.focus(); field.select(); }
+}
+// Übernimmt den Namen aus dem Feld (leer = alter Name bleibt) und beendet das Bearbeiten
+function commitBereichRename(keep = true) {
+ clearTimeout(nameCommitTimer);
+ const field = document.querySelector('.cnamein');
+ const bereich = getBereich(editingBereichName);
+ editingBereichName = null;
+ if (keep && field && bereich) {
+  const value = field.value.trim();
+  if (value && value !== bereich.name) {
+   undoSnapshot = snapshot();
+   bereich.name = value;
+   save();
+  }
+ }
+ render();
+}
+document.addEventListener('keydown', event => {
+ if (!event.target.matches || !event.target.matches('.cnamein')) return;
+ if (event.key === 'Enter') { event.preventDefault(); commitBereichRename(true); }
+ if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); commitBereichRename(false); }
+}, true);
+// Verlässt man das Feld, wird der Name kurz danach übernommen. Kurz danach, damit ein Tipp auf
+// „Bereich löschen“ noch ankommt, bevor die Seite neu aufgebaut wird.
+document.addEventListener('focusout', event => {
+ if (!event.target.matches || !event.target.matches('.cnamein')) return;
+ clearTimeout(nameCommitTimer);
+ nameCommitTimer = setTimeout(() => { if (editingBereichName && !deletingBereich) commitBereichRename(true); }, 250);
+});
+let deletingBereich = false;
 // Beim Wischen durch die Spalten den passenden Knopf in der Kategorie-Navigation markieren
 // (14 = Abstand zwischen Spalten in px, siehe .cat .cols in app.css)
 document.addEventListener('scroll', event => {
@@ -2423,7 +2573,7 @@ function editDialogHtml(task) {
   : '';
  return `<h2>Bearbeiten</h2>
    <input class="field" name="text" value="${esc(task.t)}" aria-label="Titel" autocomplete="off">
-   <p>${esc(placeName(...placeOf(task).split('|')))} · ${task.backlog ? 'Backlog' : 'Zeitnah'} <button class="link" data-v="move">Verschieben …</button></p>
+   <p>${esc(placeName(...placeOf(task).split('|')))} · ${task.backlog ? 'Backlog' : wideNarrow('Zeitnah', 'Aktuell')} <button class="link" data-v="move">Verschieben …</button></p>
    <label class="lbl">Kommt vorher</label>
    ${beforeRows}
    <button class="link" data-v="addk">+ Ein To-Do, das schon da ist, kommt vorher</button>
@@ -2585,6 +2735,41 @@ function deleteTask(id) {
  }
  if (focusId === id) closeFocus();
 }
+// Bereich löschen, nach Sicherheitsfrage. Die To-Dos bleiben und stehen danach unter „Ohne Bereich“.
+// Gibt true zurück, wenn gelöscht wurde.
+async function deleteBereich(id) {
+ const bereich = getBereich(id);
+ if (!bereich) return false;
+ const count = allTasks().filter(t => !t.done && isIn(t, id)).length;
+ if (!await confirmDelete(`Ganzen Bereich „${esc(bereich.name)}“ löschen?`,
+  `Der Bereich und alle Kategorien darin sind dann weg.${count === 1 ? ' Das offene To-Do bleibt und steht danach unter „Ohne Bereich“.' : count ? ` Die ${count} offenen To-Dos bleiben und stehen danach unter „Ohne Bereich“.` : ''}`)) return false;
+ // Die To-Dos bleiben, sie stehen danach unter „Ohne Bereich“ (oder erben vom Ziel)
+ undoSnapshot = snapshot();
+ state.cats = state.cats.filter(b => b !== bereich);
+ if (state.openCat === id) state.openCat = state.cats[0] ? state.cats[0].id : null;
+ allTasks().forEach(t => { if (t.cat === id) t.cat = null; });
+ save();
+ render();
+ toast('Bereich gelöscht. Die To-Dos sind noch da.', true);
+ return true;
+}
+// Handy: „Bereich löschen“ im Kopf, während der Name bearbeitet wird
+async function deleteBereichFromHead(id) {
+ deletingBereich = true;
+ clearTimeout(nameCommitTimer);
+ const field = document.querySelector('.cnamein');
+ const typed = field ? field.value : null;
+ try {
+  const deleted = await deleteBereich(id);
+  if (!deleted) {
+   // Abgebrochen: weiter im Bearbeiten, mit dem bisher Getippten
+   editingBereichName = id;
+   render();
+   const again = document.querySelector('.cnamein');
+   if (again) { if (typed !== null) again.value = typed; again.focus(); }
+  } else editingBereichName = null;
+ } finally { deletingBereich = false; }
+}
 // Bereich anlegen (ohne id) oder bearbeiten/löschen (mit id)
 async function bereichDialog(id) {
  const bereich = id ? getBereich(id) : null;
@@ -2595,20 +2780,7 @@ async function bereichDialog(id) {
   <input class="field" name="name" value="${esc(bereich ? bereich.name : '')}" placeholder="z. B. Freund*innen" aria-label="Name" autocomplete="off">
   <label class="lbl">Farbe</label><div class="swatches">${colorChoices}</div>
   <div class="btns">${bereich ? buttonHtml('del', 'Löschen', 'ghost') : buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', bereich ? 'Fertig' : 'Anlegen', 'pri')}</div>`);
- if (r.v === 'del') {
-  const count = allTasks().filter(t => !t.done && isIn(t, id)).length;
-  if (!await confirmDelete(`Bereich „${esc(bereich.name)}“ löschen?`,
-   `Alle Kategorien darin sind dann weg.${count === 1 ? ' Das offene To-Do bleibt und steht danach unter „Ohne Bereich“.' : count ? ` Die ${count} offenen To-Dos bleiben und stehen danach unter „Ohne Bereich“.` : ''}`)) return;
-  // Die To-Dos bleiben, sie stehen danach unter „Ohne Bereich“ (oder erben vom Ziel)
-  undoSnapshot = snapshot();
-  state.cats = state.cats.filter(b => b !== bereich);
-  if (state.openCat === id) state.openCat = state.cats[0] ? state.cats[0].id : null;
-  allTasks().forEach(t => { if (t.cat === id) t.cat = null; });
-  save();
-  render();
-  toast('Bereich gelöscht. Die To-Dos sind noch da.', true);
-  return;
- }
+ if (r.v === 'del') { await deleteBereich(id); return; }
  if (r.v !== 'ok' || !r.vals.name) return;
  undoSnapshot = snapshot();
  if (bereich) {
@@ -2850,7 +3022,7 @@ async function moveTo(id, { cat, area, bl }) {
    // Zurück nach Zeitnah: die Vorher-To-Dos im Backlog kommen mit
    const ids = [id, ...[...taskAndAllBefore(id)].filter(x => x !== id && getTask(x).backlog && !getTask(x).done)];
    ids.forEach(x => { getTask(x).backlog = false; });
-   messages.push(ids.length > 1 ? `ist mit ${ids.length - 1} Vorher-To-Do${ids.length > 2 ? 's' : ''} zurück in Zeitnah` : 'ist zurück in Zeitnah');
+   messages.push(ids.length > 1 ? `ist mit ${ids.length - 1} Vorher-To-Do${ids.length > 2 ? 's' : ''} zurück ${BACK_FROM_BACKLOG}` : `ist zurück ${BACK_FROM_BACKLOG}`);
   }
  }
  if (!messages.length) return false;
@@ -2899,7 +3071,7 @@ async function moveMenu(id) {
  const task = getTask(id);
  if (!task) return;
  const r = await modal(`<h2>Verschieben</h2><p>${esc(task.t)}</p>
-  <div class="seg" role="radiogroup" aria-label="Zeitnah oder Backlog"><label><input type="radio" name="bl" value="0"${task.backlog ? '' : ' checked'}>Zeitnah</label><label><input type="radio" name="bl" value="1"${task.backlog ? ' checked' : ''}>Backlog</label></div>
+  <div class="seg" role="radiogroup" aria-label="Zeitnah oder Backlog"><label><input type="radio" name="bl" value="0"${task.backlog ? '' : ' checked'}>${wideNarrow('Zeitnah', 'Aktuell')}</label><label><input type="radio" name="bl" value="1"${task.backlog ? ' checked' : ''}>Backlog</label></div>
   ${placePickerHtml(placeOf(task))}
   <p><button class="link" data-v="more">Details und Verbindungen …</button></p>
   <div class="btns">${buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', 'Fertig', 'pri')}</div>`);
@@ -2911,7 +3083,7 @@ async function moveMenu(id) {
 // Einstellungen (Knopf ··· oben rechts)
 async function settingsDialog() {
  const r = await modal(`<h2>Einstellungen</h2><label class="opt"><input type="checkbox" name="anim"${state.anim ? ' checked' : ''}> Sanfte Animationen</label>
-  <p>Version B: Bereiche übereinander, Kategorien zum Wischen, Zeitnah und Backlog. Alles bleibt nur auf diesem Gerät.</p>
+  <p>Version B: Bereiche übereinander, Kategorien zum Wischen, ${wideNarrow('Zeitnah und ', '')}Backlog. Alles bleibt nur auf diesem Gerät.</p>
   <label class="lbl">Datensicherung</label>
   <p>Speichere ab und zu eine Sicherung als Datei. Damit holst du deine Liste auch auf ein anderes Gerät.</p>
   <div class="btns" style="justify-content:flex-start;margin-top:10px">${buttonHtml('export', 'Sicherung speichern')}${buttonHtml('import', 'Sicherung laden')}</div>
@@ -3038,14 +3210,6 @@ $('#importFile').addEventListener('change', event => {
 // Bereich gewählt → passende Kategorien anzeigen. Ergebnis landet im Feld name="place".
 document.addEventListener('change', event => {
  const field = event.target;
- // Handy: Auswahlfeld „Zu Kategorie springen“ im Kopf des Bereichs
- if (field.matches && field.matches('select[data-jump]')) {
-  const bereichId = field.dataset.jump;
-  if (field.value === 'new') { field.value = String(currentColumn); kategorieDialog(bereichId); }
-  else if (field.value.startsWith('show:')) toggleKategorieHidden(bereichId, field.value.slice(5));
-  else goToColumn(+field.value, true);
-  return;
- }
  if (field.matches && field.matches('#modal [name=what]')) {
   const titleField = $('#modal [name=text]');
   if (titleField) titleField.placeholder = field.value === 'goal' ? 'Was willst du erreichen? z. B. Neue Kund*innen gewinnen' : 'Was ist zu tun?';
@@ -3080,9 +3244,9 @@ function toggleToday(id, button) {
  const wasInBacklog = !!task.backlog;
  const count = setToday(id, !task.today);
  if (count > 0 && task.today) {
-  toast(`Mit ${count} Vorher-To-Do${pluralS(count)} in „Heute“.` + (wasInBacklog ? ' Aus dem Backlog nach Zeitnah geholt.' : ''));
+  toast(`Mit ${count} Vorher-To-Do${pluralS(count)} in „Heute“.` + (wasInBacklog ? ` Aus dem Backlog${wideNarrow(' nach Zeitnah', '')} geholt.` : ''));
  } else if (wasInBacklog && task.today) {
-  toast('In „Heute“ und aus dem Backlog nach Zeitnah geholt.');
+  toast(`In „Heute“ und aus dem Backlog${wideNarrow(' nach Zeitnah', '')} geholt.`);
  }
  save();
  // Im Tab „Heute“ gleitet die Karte erst sanft hinaus
@@ -3137,6 +3301,7 @@ document.addEventListener('click', event => {
  const button = event.target.closest('[data-act]');
  if (!button) return;
  const id = button.dataset.id;
+ if (button.closest('.ctxmenu')) closeKatMenu();
  switch (button.dataset.act) {
   case 'check': toggleDone(id); break;
   case 'block': askBefore(id); break;
@@ -3157,10 +3322,18 @@ document.addEventListener('click', event => {
   case 'menu': settingsDialog(); break;
   case 'machbar': setMachbar(state.view !== 'jetzt'); break;
   case 'gocol': goToColumn(+button.dataset.i, true); break;
+  case 'colstep':
+   if (swallowArrowClick) { swallowArrowClick = false; break; }
+   stepColumn(+button.dataset.d, button);
+   break;
+  case 'catcolor': openColorMenu(button); break;
+  case 'setcolor': setBereichColor(id, button.dataset.color); break;
+  case 'catname': startBereichRename(id); break;
+  case 'catdel': deleteBereichFromHead(id); break;
   case 'eye': toggleKategorieHidden(id, button.dataset.s); break;
   case 'newcat': bereichDialog(); break;
   case 'editcat': bereichDialog(id); break;
-  case 'opencat': toggleBereich(button.dataset.cat); break;
+  case 'opencat': editingBereichName = null; toggleBereich(button.dataset.cat); break;
   case 'newsub': kategorieDialog(id); break;
   case 'editsub': kategorieDialog(id, button.dataset.s); break;
   case 'move': case 'mgrip': moveMenu(id); break;

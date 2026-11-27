@@ -212,29 +212,54 @@ test('Kategorie-Navigation: alle Kategorien sichtbar, Klick springt zur Spalte',
  await sleep(150);
  expect(cols.scrollLeft < 5, 'Zurück zur ersten Spalte ging nicht');
 });
-test('Handy: nichts ragt seitlich heraus, Auswahlfeld statt Kategorie-Knöpfe', async () => {
+test('Handy: nichts ragt seitlich heraus, Pfeile statt Kategorie-Knöpfe, kein „zeitnah“', async () => {
  frame.style.width = '360px';
  await sleep(200);
  try {
   expect(doc.documentElement.scrollWidth <= win.innerWidth + 1, 'Seite ist breiter als der Bildschirm');
   expect($('.subtabs').offsetParent === null, 'Kategorie-Knöpfe sind am Handy noch sichtbar');
-  expect(!/zeitnah/.test($('.cathead').textContent.replace(/\s+/g, ' ')) || $('.cathead .ct small').offsetParent === null, 'Anzahl „zeitnah“ steht noch im Bereichskopf');
+  expect(!/zeitnah/i.test($('.cat.open').innerText), 'Wort „zeitnah“ steht noch im Bereich');
   expect($('.mswitch .sm').offsetParent !== null && $('.mswitch .lg').offsetParent === null, 'Schalter heißt nicht kurz „Startklare To-Dos“');
-  const jump = $('select[data-jump]');
-  expect(jump && jump.offsetParent !== null, 'Auswahlfeld für Kategorien fehlt');
-  jump.value = '2';
-  jump.dispatchEvent(new Event('change', { bubbles: true }));
+  expect($('.cathead [data-act="editcat"]').offsetParent === null, 'Stift am Bereichsnamen ist am Handy noch sichtbar');
+  const next = $('.colarrow.next');
+  expect(next && next.offsetParent !== null, 'Pfeil zur nächsten Kategorie fehlt');
+  await click(next);
   await sleep(150);
   const cols = $('#cols');
-  expect(cols.children[2].classList.contains('jump'), 'Auswahlfeld springt nicht zur Kategorie');
+  expect(cols.children[1].classList.contains('jump'), 'Pfeil springt nicht zur nächsten Kategorie');
+  // Rechtsklick (wie langes Drücken): Menü mit allen Kategorien
+  $('.colarrow.next').dispatchEvent(new win.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  await sleep(60);
+  const items = $$('.ctxmenu [data-act="gocol"]');
+  expect(items.length === cols.children.length, 'Menü zeigt nicht alle Kategorien');
+  await click(items[2]);
+  await sleep(150);
+  expect(cols.children[2].classList.contains('jump') && !$('.ctxmenu'), 'Menü springt nicht zur Kategorie');
+  // Name im Kopf bearbeiten; „Bereich löschen“ fragt nach, Abbrechen löscht nichts
+  await click('.cname');
+  expect($('.cnamein') && $('.cdel').offsetParent !== null, 'Name lässt sich nicht bearbeiten oder „Bereich löschen“ fehlt');
+  await click('.cdel');
+  expect(modalOpen(), 'Keine Sicherheitsfrage vor dem Löschen des Bereichs');
+  await click('#modal [data-v=""]');
+  await sleep(60);
+  expect(saved().cats.some(b => b.id === 'arbeit'), 'Bereich wurde trotz Abbrechen gelöscht');
+  const input = $('.cnamein');
+  input.value = 'Arbeit 2';
+  input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await sleep(60);
+  expect(saved().cats.find(b => b.id === 'arbeit').name === 'Arbeit 2', 'Neuer Name wurde nicht gespeichert');
+  await click('.cname');
+  const back = $('.cnamein');
+  back.value = 'Arbeit';
+  back.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await sleep(60);
   await click('[data-act="newcat"]');
   const box = $('#modal .box').getBoundingClientRect();
   expect(box.left >= 0 && box.right <= win.innerWidth + 1, 'Popup ist breiter als der Bildschirm');
   await click('#modal [data-v=""]');
   if (modalOpen()) { win.document.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape' })); await sleep(60); }
  } finally {
-  const jump = $('select[data-jump]');
-  if (jump) { jump.value = '0'; jump.dispatchEvent(new Event('change', { bubbles: true })); await sleep(150); }
+  if ($('.colarrow.prev')) { win.eval('goToColumn(0)'); await sleep(150); }
   frame.style.width = '';
   await sleep(200);
  }
