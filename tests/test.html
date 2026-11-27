@@ -256,6 +256,7 @@ test('Handy: nichts ragt seitlich heraus, Schnelleingabe statt Pfeilen an den Sp
    $('.cname').dispatchEvent(new win.PointerEvent('pointerdown', { bubbles: true, clientX: r.left + 5, clientY: r.top + 5, pointerType: 'touch' }));
    await sleep(550);
    win.document.dispatchEvent(new win.PointerEvent('pointerup', { bubbles: true }));
+   await sleep(400);  // Klick beim Loslassen wird kurz verschluckt
   };
   await holdHead();
   expect(modalOpen() && $('#modal [name=name]') && $('#modal [data-v="del"]'), 'Langes Drücken auf den Kopf öffnet kein Popup mit Name und Löschen');

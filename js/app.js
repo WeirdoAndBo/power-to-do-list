@@ -1203,6 +1203,8 @@ let noSelectUntil = 0;
 let swallowHoldClick = false;  // der Klick, der beim Loslassen nach dem langen Drücken noch kommt
 document.addEventListener('selectstart', event => { if (Date.now() < noSelectUntil) event.preventDefault(); }, true);
 ['pointerup', 'touchend'].forEach(type => document.addEventListener(type, () => {
+ // Kommt nach dem Loslassen kein Klick (je nach Handy), darf der nächste echte Tipp nicht verschluckt werden
+ if (swallowHoldClick) setTimeout(() => { swallowHoldClick = false; }, 350);
  if (Date.now() < noSelectUntil) setTimeout(() => { if (!document.activeElement?.matches?.('input,textarea')) getSelection()?.removeAllRanges(); }, 0);
 }, true));
 document.addEventListener('pointerdown', event => {
