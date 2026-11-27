@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.37-c';
+const APP_VERSION = '1.0.38-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -916,7 +916,7 @@ function bereichBarHtml(bereich) {
 function machbarSwitchHtml(bereich) {
  const on = state.view === 'jetzt';
  return `<button class="mswitch" role="switch" aria-checked="${on}" data-act="machbar" style="--c:${bereich.color}"`
-  + ` title="${on ? 'Wieder alles zeigen' : 'Nur zeigen, was du jetzt tun kannst'}"><span class="lg">Nur startklare To-Dos anzeigen</span><span class="sm">Startklar</span><i></i></button>`;
+  + ` title="${on ? 'Wieder alles zeigen' : 'Nur zeigen, was du jetzt tun kannst'}"><span class="lg">Nur startklare To-Dos anzeigen</span><span class="sm">Nur Startklares</span><i></i></button>`;
 }
 // Bereich aufgeklappt: Kopf, Kategorie-Navigation (kleine Knöpfe) und die Spalten nebeneinander
 function bereichOpenHtml(bereich) {
@@ -962,8 +962,12 @@ function bereichOpenHtml(bereich) {
   const columnGrip = columnsOf(bereich).length > 1
    ? `<button class="colgrip" data-cat="${bereich.id}" data-s="${kategorie.id}" aria-label="Kategorie ${esc(kategorie.name)} verschieben, mit Pfeil links oder rechts">${ICON_GRIP}</button>`
    : '';
+  // 1.0.38: Die Sammlung hat oben ein Auge zum Ausblenden. Wieder einblenden: Pfeil lange drücken → Menü.
+  const hideEye = kategorie.inbox
+   ? `<button class="iconbtn ceye" data-act="eye" data-id="${bereich.id}" data-s="${kategorie.id}" aria-label="${esc(kategorie.name)} ausblenden" title="Ausblenden (wieder einblenden: Pfeil lange drücken)">${ICON_EYE}</button>`
+   : '';
   const columnHead = bereich.subs.length
-   ? `<div class="colhead">${columnGrip}<h2 style="--c:${bereich.color}">${katLabelHtml(kategorie)}</h2><button class="iconbtn" data-act="editsub" data-id="${bereich.id}" data-s="${kategorie.id}"`
+   ? `<div class="colhead">${columnGrip}<h2 style="--c:${bereich.color}">${katLabelHtml(kategorie)}</h2>${hideEye}<button class="iconbtn" data-act="editsub" data-id="${bereich.id}" data-s="${kategorie.id}"`
     + ` aria-label="Kategorie ${esc(kategorie.name)} bearbeiten">${ICON_PEN}</button></div>`
    : '';
   const content = kategorie.inbox ? sammlungColumnHtml(bereich, kategorie)
@@ -1242,7 +1246,7 @@ function updateQuickBar() {
  const kategorie = bereich && bereich.subs.find(k => k.id === kategorieId);
  const where = kategorie ? kategorie.name : placeName(bereichId, kategorieId);
  // 1.0.37: kurz halten, das Feld ist schmal. Für Vorlesehilfen steht es ausführlich im aria-label.
- const hint = heute && !quickOpen ? 'Neu für Heute' : `Neu in ${where}${backlog ? ' · Backlog' : ''}`;
+ const hint = heute && !quickOpen ? '+ für „Heute“' : `+ in „${where}“${backlog ? ' · Backlog' : ''}`;
  const input = $('#qin');
  input.placeholder = hint;
  input.setAttribute('aria-label', heute && !quickOpen ? 'Neues To-Do für Heute' : `Neues To-Do in ${where}${backlog ? ', Backlog' : ''}`);
@@ -1275,7 +1279,11 @@ function placeDockAboveKeyboard() {
  const dock = document.querySelector('.dock');
  if (!view || !dock) return;
  const covered = Math.max(0, Math.round(innerHeight - view.height - view.offsetTop));
- dock.style.transform = covered ? `translateY(${-covered}px)` : '';
+ // 1.0.38: Nur wenn das eigene Feld (oder die Optionen) aktiv ist, rutscht die Leiste über die Tastatur.
+ // Tippt man woanders (Titel, Popup …), bleibt sie unten und ist ausgeblendet.
+ const own = covered && dock.contains(document.activeElement);
+ dock.style.transform = own ? `translateY(${-covered}px)` : '';
+ dock.classList.toggle('kbhide', !!covered && !own);
  document.documentElement.style.setProperty('--kb', covered + 'px');
 }
 window.visualViewport?.addEventListener('resize', placeDockAboveKeyboard);
@@ -2493,12 +2501,17 @@ document.addEventListener('pointerdown', event => {
   touchDragging = true;
   lifted?.classList.add('held');
   try { navigator.vibrate?.(12); } catch (e) {}
-  const end = () => {
+  const end = upEvent => {
    touchDragging = false;
    lifted?.classList.remove('held');
    ignoreClicksUntil = Date.now() + 350;  // Loslassen nach dem Halten ist kein Klick
    removeEventListener('pointerup', end);
    removeEventListener('pointercancel', end);
+   // 1.0.38: Gehalten und ohne zu ziehen losgelassen = Menü der Karte (Backlog / Verschieben nach …).
+   // Ersetzt am Handy die drei Punkte im Kartenkopf.
+   const still = upEvent && upEvent.type === 'pointerup' && Math.hypot(upEvent.clientX - startX, upEvent.clientY - startY) < 10;
+   const id = lifted && lifted.matches('.card') && lifted.querySelector(':scope > .chead [data-act="move"]') ? lifted.dataset.id : null;
+   if (still && id) setTimeout(() => moveMenu(id), 30);
   };
   addEventListener('pointerup', end);
   addEventListener('pointercancel', end);

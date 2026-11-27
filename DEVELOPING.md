@@ -120,6 +120,7 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | Handy: Schnelleingabe unten            | `#qbar` in `index.html`; `updateQuickBar` (Hinweistext mit Ziel), `quickStep`, `setQuickOpen`, `quickAdd` (Enter oder Haken `.qok`), `closeQuickOptions`; Toast steht über der Leiste (`--dockh`, `syncDockHeight`). Tastatur: `interactive-widget=resizes-visual` im Viewport-Tag (Seite wird nicht neu angeordnet), `placeDockAboveKeyboard` schiebt Leiste und Popups per `visualViewport` über die Tastatur (`--kb`). Nicht `overlays-content`: dann meldet Android die Tastatur nicht |
 | Handy: Popup „Neues To-Do“ für mehrere | `newTasksDialogMobile` (wird von `newTaskDialog` bei `isNarrow()` aufgerufen), Zeilen `.mrow`, Karten `.mcard`, `mAdd` (davor/danach), `mReadCards` |
 | Handy: leere Spalte „+ Neue Kategorie“ | `.coladd` am Ende von `bereichOpenHtml` (Desktop: ausgeblendet) |
+| Handy: Kartenkopf und Haupt-To-Do in einer Zeile | nur CSS (`.chead`/`.cbody` mit `display:contents`, Reihenfolge per `order`, Abschnitt 1.0.38 in `app.css`); Menü per langem Drücken: `end` im Abschnitt „Ziehen“ Nr. 6 ruft `moveMenu` |
 | Karte zeigen und aufleuchten lassen    | `showCard` (statt Fokusmodus nach „Jetzt machen“) |
 | „+ davor / parallel / danach“ am Handy | Leiste `.mbar` (Klick-Listener nach `markTouchStrips`), „danach“ = Streifen `.chainafter` in `treeNodeHtml` |
 | Abhaken                                | `toggleDone`                                   |

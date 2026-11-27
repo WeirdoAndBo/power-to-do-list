@@ -700,3 +700,27 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
  .cathead .mswitch{padding:0 6px 0 10px}
 }
 @media(max-width:380px){.cathead{flex-wrap:nowrap}.cathead .mswitch{order:0;margin:0}}
+
+/* ============================================================================
+   Version C 1.0.38 – Handy: Kartenkopf und Haupt-To-Do in einer Zeile
+   Kopfleiste (.chead) und Körper (.cbody) lösen sich auf (display:contents), ihre Teile stehen in
+   einer Zeile: Häkchen · Titel · Listenstand · Heute · Pfeil mit Anzahl · Mülleimer. Die drei Punkte
+   entfallen, ihr Menü öffnet sich mit langem Drücken auf die Karte (app.js, Abschnitt Ziehen Nr. 6).
+   ============================================================================ */
+.ceye{width:38px;height:38px}
+@media(max-width:600px){
+ .card{display:flex;flex-wrap:wrap;align-items:flex-start;column-gap:4px;padding:10px 8px 10px 12px}
+ .card>.chead,.card>.cbody{display:contents}
+ .card>:not(.chead):not(.cbody){order:10;flex:1 0 100%;min-width:0}
+ .card .cbody>.check{order:1;flex:none;margin-right:6px}
+ .card .cbody>.ctext{order:2;flex:1 1 0;min-width:0;align-self:center}
+ .card .chead>.lcount{order:3;align-self:center}
+ .card .chead>.today{order:4;margin:0;align-self:center;min-height:30px;padding:0 4px;gap:4px;background:transparent;font-size:12px}
+ .card .chead>.today span{font-size:11px}
+ .card .chead>.today[aria-checked=true]{background:transparent}
+ .card .chead>.cardtog{order:5;align-self:center}
+ .card .cbody>.cacts{order:6;margin:0;align-self:center}
+ .card .chead>.sp,.card .chead>.cgrip,.card .chead>.hbtn[data-act=move]{display:none}
+ /* Leiste unten ausblenden, solange die Tastatur für ein anderes Feld offen ist */
+ .dock.kbhide{visibility:hidden}
+}
