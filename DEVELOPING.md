@@ -110,11 +110,13 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | Übersicht mit Schalter aus             | `uebersichtColumnHtml`, `treeNodeHtml` (Ziel ganz oben = `cardHtml` mit `options.tree`; Zeilen nicht eingerückt, Ebene als `.lvl`-Punkte) |
 | Unter-To-Dos in der Übersicht umsortieren | `moveInTree`, `treeDropTarget`, `applyTreeMove`, Ziehen am Griff (`.tgrip`, Abschnitt „Ziehen“ Nr. 5), Pfeiltasten |
 | Bereiche und Kategorien (Akkordeon)    | `bereichBarHtml`, `bereichOpenHtml`, `bereichDialog`, `kategorieDialog` |
-| Kategorie-Navigation (Knöpfe über den Spalten) | `subtabs` in `bereichOpenHtml`, `goToColumn` (Sprung + Aufleuchten), `markCurrentTab` |
+| Kategorie-Navigation (Knöpfe über den Spalten) | `subtabs` in `bereichOpenHtml`, `goToColumn` (Sprung + Aufleuchten), `markCurrentTab`; am Handy (bis 600 px) stattdessen das Auswahlfeld `select[data-jump]` |
 | Kategorie-Spalten umsortieren          | `moveKategorie`, Ziehen am Griff (`.colgrip`, Abschnitt „Ziehen“), Pfeiltasten, „Nach links/rechts“ in `kategorieDialog` |
 | Ganze Seite neu aufbauen               | `render`                                       |
 | Fokusmodus                             | `openFocus`, `renderFocus`, `closeFocus`       |
 | Popup und Hinweis unten                | `modal`, `buttonHtml`, `toast`                 |
+| Zurück-Taste am Handy schließt erst Popup/Fokusmodus | `syncBackGuard`, `popstate`-Listener vor `modal` |
+| „+ davor / parallel / danach“ am Handy | Leiste `.mbar` (Klick-Listener nach `markTouchStrips`), „danach“ = Streifen `.chainafter` in `treeNodeHtml` |
 | Abhaken                                | `toggleDone`                                   |
 | Listen („Liste: …“)                    | `LIST_PATTERN`, `isList`, `shownTitle`, `listHtml`, `listCountHtml`, `startItemEdit`; optionales Feld `task.list = [{ id, t, done }]` (Datenformat bleibt 1) |
 | Neues To-Do / Ziel                     | `addTask`, `quickNote`, `askBefore`, `createPreTasks`; Weißer Knopf = `newTaskDialog` (Popup wie eine Karte, Zeilen `.nrow`); „+“ zwischen Karten einer Spalte = `data-act="insroot"` → `startInsertRoot`; Unter-To-Do aus der Karte ziehen = `makeOwnTask`; Backlog-Abschnitt = `backlogSectionHtml` |

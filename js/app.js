@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.32-c';
+const APP_VERSION = '1.0.33-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -818,8 +818,13 @@ function treeNodeHtml(task, color, path, level, viaSoft, parentId = null, inCard
  const insertParallel = inCard && chainDown && !linked && !task.done
   ? insertHtml(task.id, children[0][0].id, color, ' deeper parallel', '', 'Was muss parallel vorher passieren?')
   : '';
+ // Handy, „+ danach“: neues To-Do kommt in die Kette zwischen dieses To-Do und das darüber
+ // (darüber braucht dann das neue, das neue braucht dieses). Streifen bleibt unsichtbar, nur die Leiste klickt ihn.
+ const insertChainAfter = inCard && parentId
+  ? insertHtml(parentId, '', color, ' chainafter', task.id, 'Was kommt danach?')
+  : '';
  return `<li data-tid="${task.id}" data-k="${esc(key)}" data-l="${level}" style="--c:${color}">${row}
- ${listHtml(task, color)}${insertFirst}${childList}${insertParallel}${insertAfter}</li>`;
+ ${listHtml(task, color)}${insertFirst}${childList}${insertParallel}${insertAfter}${insertChainAfter}</li>`;
 }
 // Schalter „Machbar“ aus: eine Kategorie-Spalte mit den Zielen als Wurzeln
 function uebersichtColumnHtml(bereich, kategorie) {
@@ -907,7 +912,7 @@ function bereichBarHtml(bereich) {
 function machbarSwitchHtml(bereich) {
  const on = state.view === 'jetzt';
  return `<button class="mswitch" role="switch" aria-checked="${on}" data-act="machbar" style="--c:${bereich.color}"`
-  + ` title="${on ? 'Wieder alles zeigen' : 'Nur zeigen, was du jetzt tun kannst'}"><span>Nur startklare To-Dos anzeigen</span><i></i></button>`;
+  + ` title="${on ? 'Wieder alles zeigen' : 'Nur zeigen, was du jetzt tun kannst'}"><span class="lg">Nur startklare To-Dos anzeigen</span><span class="sm">Startklare To-Dos</span><i></i></button>`;
 }
 // Bereich aufgeklappt: Kopf, Kategorie-Navigation (kleine Knöpfe) und die Spalten nebeneinander
 function bereichOpenHtml(bereich) {
@@ -932,6 +937,17 @@ function bereichOpenHtml(bereich) {
    }).join('')
    + `<button class="tab new" data-act="newsub" data-id="${bereich.id}">+ Kategorie</button></nav>`
   : '';
+ // Handy: statt der vielen Kategorie-Knöpfe ein einziges Auswahlfeld zum Hinspringen (Knöpfe per CSS ausgeblendet)
+ const jump = bereich.id && bereich.subs.length
+  ? `<label class="katjump" style="--c:${bereich.color}"><span class="vh">Zu Kategorie springen</span><select data-jump="${bereich.id}">`
+   + bereich.subs.map(k => {
+    const i = columnsOf(bereich).indexOf(k);
+    return k.hidden
+     ? `<option value="show:${esc(k.id)}">${esc(k.name)} (einblenden)</option>`
+     : `<option value="${i}"${i === currentColumn ? ' selected' : ''}>${esc(k.name)}</option>`;
+   }).join('')
+   + `<option value="new">+ Kategorie</option></select>${ICON_CHEVRON}</label>`
+  : '';
  const columns = columnsOf(bereich).map(kategorie => {
   // Griff zum Umsortieren der Spalten, nur wenn es mehr als eine Spalte gibt
   const columnGrip = columnsOf(bereich).length > 1
@@ -947,6 +963,7 @@ function bereichOpenHtml(bereich) {
  }).join('');
  return `<section class="cat open" style="--c:${bereich.color}" aria-label="${name}">
  ${head}
+ ${jump}
  ${tabs}
  <div class="cols" id="cols">${columns}</div></section>`;
 }
@@ -1004,7 +1021,7 @@ function markTouchStrips() {
   if (strips.length) strips.at(-1).classList.add('tvis');
  });
  document.querySelectorAll('#acc .card').forEach(card => {
-  const own = [...card.querySelectorAll(`.ins[data-p="${card.dataset.id}"]`)];
+  const own = [...card.querySelectorAll(`.ins[data-p="${card.dataset.id}"]:not(.chainafter)`)];
   if (own.length) own.at(-1).classList.add('tvis');
  });
 }
@@ -1021,7 +1038,11 @@ document.addEventListener('click', event => {
  li.classList.add('tsel');
  // Eine Linie mit bis zu drei „+“ nebeneinander: davor / parallel / danach.
  // Jedes „+“ klickt den passenden (versteckten) Streifen, dort erscheint dann Frage und Eingabefeld.
- const strips = [...li.children].filter(x => x.classList.contains('ins'));
+ // „danach“ = in die Kette nach diesem To-Do (.chainafter), nicht als weiteres Unter-To-Do daneben
+ let strips = [...li.children].filter(x => x.classList.contains('ins'));
+ if (strips.some(x => x.classList.contains('chainafter'))) {
+  strips = strips.filter(x => x.classList.contains('chainafter') || x.classList.contains('parallel') || x.classList.contains('deeper') || x.classList.contains('inchain'));
+ }
  const kindOf = strip => strip.classList.contains('parallel') ? 1 : strip.classList.contains('deeper') || strip.classList.contains('inchain') ? 0 : 2;
  const labels = ['davor', 'parallel', 'danach'];
  strips.sort((a, b) => kindOf(a) - kindOf(b));
@@ -1057,6 +1078,8 @@ function updateColumnEdges() {
 // Markiert den Knopf der Kategorie-Spalte Nr. index in der Kategorie-Navigation als aktuell
 function markCurrentTab(index) {
  document.querySelectorAll('.tab[data-i]').forEach(b => b.setAttribute('aria-current', +b.dataset.i === index));
+ const jump = document.querySelector('select[data-jump]');
+ if (jump && jump.querySelector(`option[value="${index}"]`)) jump.value = String(index);
 }
 // Zu Kategorie-Spalte Nr. index wischen/scrollen. Mit highlight leuchtet die Spalte kurz auf
 // (Klick in der Kategorie-Navigation), damit man sieht, wo man gelandet ist.
@@ -1103,12 +1126,14 @@ document.addEventListener('pointerdown', event => {
 function openFocus(id) {
  focusId = id;
  $('#focus').hidden = false;
+ syncBackGuard();
  document.body.style.overflow = 'hidden';
  renderFocus();
  setTimeout(() => $('#focus .bigcheck .check')?.focus(), 30);
 }
 function closeFocus() {
  $('#focus').hidden = true;
+ syncBackGuard();
  document.body.style.overflow = '';
  focusId = null;
  render();
@@ -1160,6 +1185,41 @@ function readModalValues(modalEl) {
  });
  return values;
 }
+/* ---------- Zurück-Taste (Android, auch in der installierten App) ----------
+   Ist ein Popup oder der Fokusmodus offen, legt die App einen eigenen Eintrag in den Verlauf.
+   Die Zurück-Taste nimmt dann diesen Eintrag weg: Das schließt zuerst das Popup (wie „Abbrechen“),
+   dann den Fokusmodus. Erst wenn nichts mehr offen ist, verlässt „Zurück“ die App.
+   Wird ein Popup auf anderem Weg geschlossen (Knopf, Escape), nimmt die App ihren Eintrag selbst wieder weg. */
+let closeOpenModal = null;   // schließt das gerade offene Popup (wie Abbrechen)
+let backGuard = false;       // liegt gerade ein eigener Eintrag im Verlauf?
+let ignoreNextPop = false;   // nächstes popstate kommt von uns selbst (history.back), nichts tun
+const layerOpen = () => !$('#modal').hidden || !$('#focus').hidden;
+// Erst nach einem Moment prüfen: Oft folgt auf ein geschlossenes Popup sofort das nächste.
+function syncBackGuard() {
+ setTimeout(() => {
+  if (layerOpen() && !backGuard) {
+   try { history.pushState({ powerliste: 'popup' }, ''); backGuard = true; } catch (e) {}
+  } else if (!layerOpen() && backGuard) {
+   backGuard = false;
+   ignoreNextPop = true;
+   history.back();
+  }
+ }, 0);
+}
+addEventListener('popstate', () => {
+ if (ignoreNextPop) {
+  ignoreNextPop = false;
+  // Wurde inzwischen schon das nächste Popup geöffnet, braucht es wieder einen Eintrag
+  if (history.state?.powerliste !== 'popup') { backGuard = false; syncBackGuard(); }
+  return;
+ }
+ if (!backGuard) return;
+ backGuard = false;
+ if (!$('#modal').hidden && closeOpenModal) closeOpenModal(null);
+ else if (!$('#focus').hidden) closeFocus();
+ syncBackGuard(); // ist darunter noch etwas offen (z. B. Fokusmodus), kommt ein neuer Eintrag
+});
+
 // modal(html): zeigt ein Popup und wartet, bis es geschlossen wird. Ergebnis: {v, vals}
 //   v = data-v des gedrückten Knopfs (null bei Escape/Klick daneben)
 //   vals = Werte aller Felder mit name="…" im Popup, _pre = Einträge der Vorher-Liste
@@ -1174,6 +1234,7 @@ function modal(html) {
   (modalEl.querySelector('input.field') || modalEl.querySelector('.btn.pri') || modalEl.querySelector('button'))?.focus();
 
   const close = value => {
+   if (closeOpenModal === close) closeOpenModal = null;
    const vals = readModalValues(modalEl);
    modalEl.hidden = true;
    modalEl.innerHTML = '';
@@ -1181,7 +1242,10 @@ function modal(html) {
    document.removeEventListener('keydown', onKeyDown);
    previousFocus?.focus?.();
    resolve({ v: value, vals });
+   syncBackGuard();
   };
+  closeOpenModal = close;
+  syncBackGuard();
   // Escape schließt. Enter im Titel oder in einer Vorher-Zeile fügt eine neue Vorher-Zeile an,
   // sonst drückt Enter den Hauptknopf.
   const onKeyDown = event => {
@@ -2019,7 +2083,9 @@ function startInsert(button) {
   toast(`„${esc(shownTitle(task))}“ eingefügt.`, true);
   if (isList(task) && focusListInput(task.id)) return;
   // Gleich weiter: nächstes Feld direkt dahinter
-  (intoId
+  (button.classList.contains('chainafter')
+   ? document.querySelector(`.ins.chainafter[data-p="${parent.id}"][data-into="${task.id}"]`)
+   : intoId
    ? document.querySelector(`.ins[data-p="${task.id}"][data-into="${intoId}"]`)
    : document.querySelector(`.ins[data-p="${parent.id}"][data-after="${task.id}"]`))?.click();
  };
@@ -2972,6 +3038,14 @@ $('#importFile').addEventListener('change', event => {
 // Bereich gewählt → passende Kategorien anzeigen. Ergebnis landet im Feld name="place".
 document.addEventListener('change', event => {
  const field = event.target;
+ // Handy: Auswahlfeld „Zu Kategorie springen“ im Kopf des Bereichs
+ if (field.matches && field.matches('select[data-jump]')) {
+  const bereichId = field.dataset.jump;
+  if (field.value === 'new') { field.value = String(currentColumn); kategorieDialog(bereichId); }
+  else if (field.value.startsWith('show:')) toggleKategorieHidden(bereichId, field.value.slice(5));
+  else goToColumn(+field.value, true);
+  return;
+ }
  if (field.matches && field.matches('#modal [name=what]')) {
   const titleField = $('#modal [name=text]');
   if (titleField) titleField.placeholder = field.value === 'goal' ? 'Was willst du erreichen? z. B. Neue Kund*innen gewinnen' : 'Was ist zu tun?';
@@ -3141,6 +3215,46 @@ document.addEventListener('visibilitychange', () => {
   toast('Neuer Tag. „Heute“ ist wieder leer.');
  }
 });
-// Offline-Betrieb: Der Service Worker legt alle Dateien der App lokal ab. Er greift nur über http(s), nicht bei file://.
-if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {});
+// Offline-Betrieb und Updates: Der Service Worker legt alle Dateien der App lokal ab. Er greift nur über http(s), nicht bei file://.
+// Updates: Beim Start und jedes Mal, wenn die App wieder in den Vordergrund kommt, fragt sie nach einer neuen Fassung.
+// Ist eine da, lädt sich die App einmal neu. Die Liste bleibt dabei erhalten, denn sie liegt im localStorage
+// und ist schon gespeichert (save() nach jeder Änderung). Ist gerade ein Popup oder der Fokusmodus offen (oder wird gezogen), wartet das Neuladen,
+// bis die App das nächste Mal im Hintergrund ist, damit nichts Halbgetipptes verloren geht.
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+ const UPDATE_FLAG = 'powerliste-update-geladen';
+ const hadController = !!navigator.serviceWorker.controller;
+ let reloadPending = false;
+ let reloading = false;
+ const reloadNow = () => {
+  if (reloading) return;
+  reloading = true;
+  // Ein gerade bearbeitetes Textfeld zuerst verlassen: Das speichert den Text (blur → save).
+  try { document.activeElement?.blur?.(); } catch (e) {}
+  try { sessionStorage.setItem(UPDATE_FLAG, '1'); } catch (e) {}
+  location.reload();
+ };
+ navigator.serviceWorker.addEventListener('controllerchange', () => {
+  if (!hadController) return; // allererste Installation: nichts neu zu laden
+  const typing = document.activeElement && document.activeElement.matches('input:not([type=checkbox]),textarea,select,[contenteditable]');
+  const busy = !$('#modal').hidden || !$('#focus').hidden || document.querySelector('.dragging') || typing;
+  if (busy) reloadPending = true;
+  else reloadNow();
+ });
+ document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && reloadPending) reloadNow();
+ });
+ navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(registration => {
+  document.addEventListener('visibilitychange', () => {
+   if (document.visibilityState === 'visible') registration.update().catch(() => {});
+  });
+ }).catch(() => {});
+ try {
+  if (sessionStorage.getItem(UPDATE_FLAG)) {
+   sessionStorage.removeItem(UPDATE_FLAG);
+   if (!hadOpenToday) toast(`Neue Version ${APP_VERSION} geladen. Deine Liste ist unverändert.`);
+  }
+ } catch (e) {}
+ // Den Browser bitten, die gespeicherte Liste nicht bei Platzmangel von selbst zu löschen.
+ navigator.storage?.persist?.().catch(() => {});
+}
 }

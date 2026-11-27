@@ -14,7 +14,7 @@
  .ok{color:#1f7a4d}.fail{color:#b3261e;font-weight:600}
  small{display:block;color:#b3261e;font-weight:400}
  #summary{font-weight:700;margin:12px 0}
- iframe{width:420px;max-width:100%;height:700px;border:1px solid #ccc;border-radius:12px;background:#fff;margin-top:12px}
+ iframe{width:640px;max-width:100%;height:700px;border:1px solid #ccc;border-radius:12px;background:#fff;margin-top:12px}
 </style>
 </head>
 <body>
@@ -211,6 +211,33 @@ test('Kategorie-Navigation: alle Kategorien sichtbar, Klick springt zur Spalte',
  await click(tabs[0]);
  await sleep(150);
  expect(cols.scrollLeft < 5, 'Zurück zur ersten Spalte ging nicht');
+});
+test('Handy: nichts ragt seitlich heraus, Auswahlfeld statt Kategorie-Knöpfe', async () => {
+ frame.style.width = '360px';
+ await sleep(200);
+ try {
+  expect(doc.documentElement.scrollWidth <= win.innerWidth + 1, 'Seite ist breiter als der Bildschirm');
+  expect($('.subtabs').offsetParent === null, 'Kategorie-Knöpfe sind am Handy noch sichtbar');
+  expect(!/zeitnah/.test($('.cathead').textContent.replace(/\s+/g, ' ')) || $('.cathead .ct small').offsetParent === null, 'Anzahl „zeitnah“ steht noch im Bereichskopf');
+  expect($('.mswitch .sm').offsetParent !== null && $('.mswitch .lg').offsetParent === null, 'Schalter heißt nicht kurz „Startklare To-Dos“');
+  const jump = $('select[data-jump]');
+  expect(jump && jump.offsetParent !== null, 'Auswahlfeld für Kategorien fehlt');
+  jump.value = '2';
+  jump.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(150);
+  const cols = $('#cols');
+  expect(cols.children[2].classList.contains('jump'), 'Auswahlfeld springt nicht zur Kategorie');
+  await click('[data-act="newcat"]');
+  const box = $('#modal .box').getBoundingClientRect();
+  expect(box.left >= 0 && box.right <= win.innerWidth + 1, 'Popup ist breiter als der Bildschirm');
+  await click('#modal [data-v=""]');
+  if (modalOpen()) { win.document.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape' })); await sleep(60); }
+ } finally {
+  const jump = $('select[data-jump]');
+  if (jump) { jump.value = '0'; jump.dispatchEvent(new Event('change', { bubbles: true })); await sleep(150); }
+  frame.style.width = '';
+  await sleep(200);
+ }
 });
 test('Popup „Neues To-Do“ wie eine Karte: Titel, Unter-To-Dos mit Enter und Tab', async () => {
  const before = Object.keys(saved().tasks).length;
