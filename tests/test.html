@@ -627,9 +627,9 @@ test('Liste: „Liste:“ vor den Text, Punkte eintippen, abhaken, löschen', as
  let list = saved().tasks.g8.list;
  expect(list.length === 2 && list[0].t === 'Öl', 'Punkte wurden nicht gespeichert');
  expect(Object.keys(saved().tasks).length === before, 'Punkte sind eigene To-Dos geworden');
- expect($('.card[data-id="g8"] .lcount').textContent === '0/2', 'Zähler 0/2 im Kopf fehlt');
+ expect($('.card[data-id="g8"] .lmark').textContent === 'Liste 0/2' && !$('.card[data-id="g8"] .chead .lcount'), 'Schild „Liste 0/2“ fehlt');
  await click(`.card[data-id="g8"] .lcheck[data-i="${list[0].id}"]`);
- expect(saved().tasks.g8.list[0].done && $('.card[data-id="g8"] .lcount').textContent === '1/2', 'Abhaken klappt nicht');
+ expect(saved().tasks.g8.list[0].done && $('.card[data-id="g8"] .lmark').textContent === 'Liste 1/2', 'Abhaken klappt nicht');
  // 1.0.45: Listensymbol antippen kopiert Überschrift und Punkte (offene zuerst, erledigte mit ✓)
  let copied = null;
  Object.defineProperty(win.navigator, 'clipboard', { configurable: true, value: { writeText: async text => { copied = text; } } });
@@ -1064,6 +1064,28 @@ test('Listenpunkt erst beim Doppeltippen bearbeiten, Tasten-Hinweis „Senden“
  expect(input && input.getAttribute('enterkeyhint') === 'done', 'Doppeltippen öffnet das Feld nicht');
  await pressKey(input, 'Escape');
  expect($('.card[data-id="g8"] .linput').getAttribute('enterkeyhint') === 'send', 'Feld „+ Punkt“ zeigt nicht „Senden“');
+});
+
+// 1.0.48
+test('Mülleimer im Bearbeitungsfeld löscht das To-Do (mit Rückgängig)', async () => {
+ await freshApp();
+ await dblclick('.card[data-id="g8"] h3 .t');
+ const trash = $('.card[data-id="g8"] h3 .t.editing .editdel');
+ expect(trash && $('.card[data-id="g8"] h3 .t.editing .linkbtn'), 'Mülleimer oder 🔗 im Bearbeitungsfeld fehlt');
+ await click(trash);
+ expect(!saved().tasks.g8, '„g8“ wurde nicht gelöscht');
+ await click('#undo');
+ expect(saved().tasks.g8 && saved().tasks.g8.t === 'Mails auf null bringen', '„g8“ ist nach Rückgängig nicht unverändert zurück');
+});
+test('Übersicht: Pfeil mit Anzahl sitzt auch auf der Trennlinie', async () => {
+ await zeige(false);
+ const tog = $('.tree li.card[data-id="g1"] > .pdiv .divtog');
+ expect(tog && tog.querySelector('small').textContent === $('.tree li.card[data-id="g1"] > .chead .cardtog small').textContent, 'Pfeil auf der Trennlinie fehlt');
+ const open = tog.getAttribute('aria-expanded') === 'true';
+ await click(tog);
+ expect($('.tree li.card[data-id="g1"] > .pdiv .divtog').getAttribute('aria-expanded') === String(!open), 'Pfeil auf der Trennlinie klappt nicht auf/zu');
+ await click('.tree li.card[data-id="g1"] > .pdiv .divtog');
+ await zeige(true);
 });
 
 document.getElementById('run').onclick = async () => {

@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.47-c';
+const APP_VERSION = '1.0.48-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -560,7 +560,7 @@ function cardHtml(task, color, options = {}) {
   : '';
  const tag = options.tag || 'article';
  return `<${tag} class="card${options.cls || ''}" data-id="${task.id}" ${options.attrs || ''} style="--c:${color}">
- <div class="chead">${grip}${task.done ? '' : todaySwitchHtml(task)}<span class="sp"></span>${listCountHtml(task)}${options.headExtra || ''}${moveButton}</div>
+ <div class="chead">${grip}${task.done ? '' : todaySwitchHtml(task)}<span class="sp"></span>${options.headExtra || ''}${moveButton}</div>
  <div class="cbody">${checkButtonHtml(task, color)}<div class="ctext"><h3>${titleHtml(task)}</h3>${options.tree === undefined ? chainBoxHtml(task) + waitingHtml : ''}</div><span class="cacts">${taskActionsHtml(task)}</span></div>
  ${listHtml(task, color)}${options.tree === undefined ? (task.done ? '' : insertHtml(task.id, '', color)) : options.tree}</${tag}>`;
 }
@@ -568,7 +568,8 @@ function cardHtml(task, color, options = {}) {
 // siehe startRename. Einmal antippen tut nichts, so lässt sich die Karte auch am Text anfassen und ziehen.
 function titleHtml(task) {
  // 1.0.45: Das Listensymbol ist ein Knopf: antippen kopiert Überschrift und Punkte (copyList).
- const listMark = isList(task) ? `<button type="button" class="lmark" data-act="lcopy" data-id="${task.id}" title="Ganze Liste kopieren" aria-label="${esc(shownTitle(task))}: ganze Liste kopieren">Liste</button>` : '';
+ // 1.0.48: Im Schild steht auch der Stand, z. B. „Liste 1/4“ (vorher eigener Zähler im Kartenkopf).
+ const listMark = isList(task) ? `<button type="button" class="lmark" data-act="lcopy" data-id="${task.id}" title="Ganze Liste kopieren" aria-label="${esc(shownTitle(task))}: ganze Liste kopieren">Liste${listCountHtml(task)}</button>` : '';
  return `${listMark}<span class="t" data-act="rename" data-id="${task.id}" tabindex="0" role="button" title="Doppelt tippen: Text bearbeiten" aria-label="${esc(task.t)} – Text bearbeiten (doppelt tippen)">${esc(shownTitle(task))}</span>`;
 }
 // Abhak-Liste unter einem Listen-To-Do: offene Punkte oben, erledigte blass darunter, ganz unten ein Feld für
@@ -583,11 +584,11 @@ function listHtml(task, color) {
  const add = task.done ? '' : `<input class="tinput linput" data-id="${task.id}" placeholder="+ Punkt" enterkeyhint="send" aria-label="Neuer Punkt in ${esc(shownTitle(task))}" autocomplete="off">`;
  return `<div class="llist" data-act="none" style="--c:${color}">${itemsHtml}${add}</div>`;
 }
-// „3/7“ im Kopf einer Listen-Karte
+// „ 3/7“ im Listen-Schild (titleHtml)
 function listCountHtml(task) {
  if (!isList(task) || !(task.list || []).length) return '';
  const done = task.list.filter(item => item.done).length;
- return `<small class="lcount" title="${done} von ${task.list.length} abgehakt">${done}/${task.list.length}</small>`;
+ return ` <span class="lcount" title="${done} von ${task.list.length} abgehakt">${done}/${task.list.length}</span>`;
 }
 // 1.0.45: Liste als Text, z. B. „Baumarkt“ und darunter „- Schrauben“. Erledigte Punkte stehen mit „✓“ unten,
 // in derselben Reihenfolge wie auf der Karte.
@@ -841,12 +842,15 @@ function treeNodeHtml(task, color, path, level, viaSoft, parentId = null, inCard
    ? `<ul data-act="none">${children.map(([child, soft]) => treeNodeHtml(child, color, key, 1, soft, task.id, true)).join('')}</ul>`
    : '';
   const bar = task.done ? '' : `<div class="pbar" data-act="none" aria-hidden="true"><i style="width:${progress(task)}%"></i></div>`;
+  // 1.0.48: Am Handy sitzt der Pfeil mit der Anzahl mittig auf der Trennlinie (Fortschritt) unter dem Titel.
+  // Im Kopf bleibt er für breite Bildschirme; CSS zeigt jeweils nur einen.
+  const divider = children.length ? `<div class="pdiv${task.done ? ' nobar' : ''}">${bar}${chevron.replace('hbtn cardtog', 'hbtn cardtog divtog')}</div>` : '';
   // 1.0.47: Hat das Ziel noch offene Unter-To-Dos, ist es leicht ausgegraut (.haspre): erst die Unter-To-Dos
   return cardHtml(task, color, {
    move: !task.done, tag: 'li', cls: ` tcard${!task.done && openBefore(task).length ? ' haspre' : ''}`,
    attrs: `data-tid="${task.id}" data-k="${esc(key)}" data-l="0"`,
    headExtra: chevron,
-   tree: `${children.length ? bar : ''}${task.done ? '' : insertHtml(task.id, '', color)}${childList}`
+   tree: `${divider}${task.done ? '' : insertHtml(task.id, '', color)}${childList}`
   });
  }
  // In einer Karte: alles offen, kein eigener Pfeil. Sonst (z. B. „Erreichte Ziele“): Pfeil pro Zeile wie früher.
@@ -2798,6 +2802,14 @@ function startRename(titleEl) {
  linkButton.title = 'Verbindungen: kommt erst nach … / gehört auch zu …';
  linkButton.setAttribute('aria-label', 'Verbindungen bearbeiten');
  titleEl.append(linkButton);
+ // 1.0.48: Mülleimer im Bearbeitungsfeld, ganz rechts: gelöscht wird dort, wo man bearbeitet
+ const deleteButton = document.createElement('button');
+ deleteButton.type = 'button';
+ deleteButton.className = 'mini del editdel';
+ deleteButton.innerHTML = ICON_TRASH;
+ deleteButton.title = 'Löschen';
+ deleteButton.setAttribute('aria-label', `${task.t} löschen`);
+ titleEl.append(deleteButton);
  titleEl.classList.add('editing');
  input.focus();
  input.setSelectionRange(input.value.length, input.value.length);
@@ -2805,6 +2817,13 @@ function startRename(titleEl) {
  // Fokus im Feld lassen, damit das Antippen von 🔗 nicht erst das Feld schließt
  linkButton.addEventListener('mousedown', event => event.preventDefault());
  linkButton.addEventListener('pointerdown', event => event.stopPropagation());
+ deleteButton.addEventListener('mousedown', event => event.preventDefault());
+ deleteButton.addEventListener('pointerdown', event => event.stopPropagation());
+ deleteButton.addEventListener('click', event => {
+  event.stopPropagation();
+  finished = true;            // nichts speichern, das To-Do kommt weg (mit Rückgängig)
+  deleteWithUndo(task.id);
+ });
  linkButton.addEventListener('click', event => {
   event.stopPropagation();
   finished = true;
