@@ -617,6 +617,15 @@ test('Liste: „Liste:“ vor den Text, Punkte eintippen, abhaken, löschen', as
  expect(copied === 'Baumarkt\n- Magnete\n✓ Öl', 'Liste wurde nicht richtig kopiert: ' + JSON.stringify(copied));
  expect(toastText().includes('Liste kopiert'), 'Meldung „Liste kopiert“ fehlt');
  expect(!$('.card[data-id="b"] h3 .tinput'), 'Listensymbol soll den Titel nicht zum Bearbeiten öffnen');
+ // 1.0.46: Geht kein Kopierweg (z. B. manches Handy), zeigt ein Popup den Text zum Selbst-Kopieren
+ Object.defineProperty(win.navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('nein'); } } });
+ const realExec = doc.execCommand;
+ doc.execCommand = () => false;
+ await click('.card[data-id="b"] .lmark');
+ await sleep(60);
+ doc.execCommand = realExec;
+ expect(modalOpen() && $('#modal .copyarea') && $('#modal .copyarea').value === 'Baumarkt\n- Magnete\n✓ Öl', 'Popup mit dem Listentext fehlt');
+ await click('#modal [data-v="ok"]');
  await click(`.card[data-id="b"] .ldel[data-i="${list[1].id}"]`);
  expect(saved().tasks.b.list.length === 1, 'Punkt wurde nicht gelöscht');
  await click('.card[data-id="b"] h3 .t');

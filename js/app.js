@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.45-c';
+const APP_VERSION = '1.0.46-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -591,30 +591,55 @@ function listAsText(task) {
  const items = [...(task.list || [])].sort((a, b) => a.done - b.done);
  return [shownTitle(task), ...items.map(item => (item.done ? '✓ ' : '- ') + item.t)].join('\n');
 }
-// In die Zwischenablage. Ohne navigator.clipboard (z. B. ohne https) über ein unsichtbares Textfeld.
-async function copyText(text) {
+// In die Zwischenablage. 1.0.46: Am Handy robuster. Erst navigator.clipboard (gibt es nur bei https), sonst ein
+// unsichtbares Textfeld mit execCommand (so wie es auch iPhones annehmen). Klappt beides nicht, zeigt
+// copyList den Text in einem Popup zum Selbst-Kopieren.
+function copyViaTextarea(text) {
+ const previous = document.activeElement;
+ const area = document.createElement('textarea');
+ area.value = text;
+ area.setAttribute('readonly', '');                    // keine Tastatur am Handy
+ area.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;border:0;padding:0';
+ document.body.append(area);
+ let ok = false;
  try {
-  await navigator.clipboard.writeText(text);
-  return true;
- } catch (e) {
-  const area = document.createElement('textarea');
-  area.value = text;
-  area.setAttribute('readonly', '');
-  area.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
-  document.body.append(area);
+  area.focus({ preventScroll: true });
   area.select();
-  let ok = false;
-  try { ok = document.execCommand('copy'); } catch (err) {}
-  area.remove();
-  return ok;
+  area.setSelectionRange(0, text.length);              // iPhone markiert sonst nichts
+  ok = document.execCommand('copy');
+ } catch (e) {}
+ area.remove();
+ getSelection()?.removeAllRanges();
+ previous?.focus?.({ preventScroll: true });
+ return ok;
+}
+async function copyText(text) {
+ // writeText muss direkt im Tippen aufgerufen werden (vor jedem await), sonst lehnt das iPhone ab
+ if (navigator.clipboard?.writeText) {
+  try {
+   await navigator.clipboard.writeText(text);
+   return true;
+  } catch (e) {}
  }
+ return copyViaTextarea(text);
 }
 async function copyList(taskId) {
  const task = getTask(taskId);
  if (!isList(task)) return;
  const count = (task.list || []).length;
- const ok = await copyText(listAsText(task));
- toast(ok ? `Liste kopiert (${count} ${count === 1 ? 'Punkt' : 'Punkte'}).` : 'Kopieren ging hier nicht.');
+ const text = listAsText(task);
+ if (await copyText(text)) {
+  toast(`Liste kopiert (${count} ${count === 1 ? 'Punkt' : 'Punkte'}).`);
+  return;
+ }
+ // Notlösung: Text markiert zeigen, dann geht „Kopieren“ über das Menü des Handys
+ const shown = modal(`<h2>Liste kopieren</h2>
+  <p>Automatisch ging es hier nicht. Der Text ist markiert: gedrückt halten und „Kopieren“ wählen.</p>
+  <textarea class="field copyarea" readonly rows="${Math.min(10, count + 2)}" aria-label="Liste als Text">${esc(text)}</textarea>
+  <div class="btns">${buttonHtml('ok', 'Fertig', 'pri')}</div>`);
+ const area = $('#modal .copyarea');
+ if (area) { area.focus({ preventScroll: true }); area.select(); area.setSelectionRange(0, text.length); }
+ await shown;
 }
 const listItem = (task, itemId) => (task && task.list || []).find(item => item.id === itemId);
 function focusListInput(taskId) {
