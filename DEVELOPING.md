@@ -121,6 +121,7 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | Handy: Popup „Neues To-Do“ für mehrere | `newTasksDialogMobile` (wird von `newTaskDialog` bei `isNarrow()` aufgerufen), Zeilen `.mrow`, Karten `.mcard`, `mAdd` (davor/danach), `mReadCards` |
 | Handy: leere Spalte „+ Neue Kategorie“ | `.coladd` am Ende von `bereichOpenHtml` (Desktop: ausgeblendet) |
 | Handy: Kartenkopf und Haupt-To-Do in einer Zeile | nur CSS (`.chead`/`.cbody` mit `display:contents`, Reihenfolge per `order`, Abschnitt 1.0.38 in `app.css`); Menü per langem Drücken: `end` im Abschnitt „Ziehen“ Nr. 6 ruft `moveMenu` |
+| Handy: Bereichskopf mit Pfeil im Kreis, Bearbeiten per langem Drücken | `bereichOpenHtml` (`.cdot` mit `data-act="opencat"`), `bereichBarHtml` (`.cball`); Langdruck: `headPress` neben den Pfeil-Handlern, öffnet `bereichDialog`; CSS-Abschnitt 1.0.40 |
 | Karte zeigen und aufleuchten lassen    | `showCard` (statt Fokusmodus nach „Jetzt machen“) |
 | „+ davor / parallel / danach“ am Handy | Leiste `.mbar` (Klick-Listener nach `markTouchStrips`), „danach“ = Streifen `.chainafter` in `treeNodeHtml` |
 | Abhaken                                | `toggleDone`                                   |
