@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.39-c';
+const APP_VERSION = '1.0.40-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -909,7 +909,7 @@ function bereichCountsText(bereich) {
 // Bereich zugeklappt: eine Leiste
 function bereichBarHtml(bereich) {
  return `<button class="catbar" data-act="opencat" data-cat="${bereich.id}" data-drop="cat" style="--c:${bereich.color}" aria-expanded="false">`
-  + `<b>${esc(bereich.name)}</b><small>${bereichCountsText(bereich)}</small>${ICON_CHEVRON}</button>`;
+  + `<span class="cball" aria-hidden="true">${ICON_CHEVRON}</span><b>${esc(bereich.name)}</b><small>${bereichCountsText(bereich)}</small>${ICON_CHEVRON}</button>`;
 }
 // Schalter „Machbar“ im Kopf eines aufgeklappten Bereichs. An = nur To-Dos, die man jetzt tun kann.
 // Gilt für alle Bereiche gleich (bleibt an, wenn man einen anderen Bereich aufklappt).
@@ -924,16 +924,13 @@ function bereichOpenHtml(bereich) {
  const editButton = bereich.id
   ? `<button class="iconbtn" data-act="editcat" data-id="${bereich.id}" aria-label="Bereich ${name} bearbeiten">${ICON_PEN}</button>`
   : '';
- // Handy (Version C 1.0.34): kein Stift. Punkt antippen = Farbe wählen, Name antippen = Name bearbeiten.
- // Beim Bearbeiten steht rechts, deutlich abgesetzt, „Bereich löschen“ (mit Sicherheitsfrage).
- // Am Desktop bleibt alles wie vorher (.ct zum Zuklappen, Stift öffnet das Popup).
- const editing = bereich.id && editingBereichName === bereich.id;
+ // Handy (Version C 1.0.40): Der farbige Kreis links trägt den Pfeil und klappt den Bereich zu.
+ // Daneben nur Name und „Nur Startklares“. Farbe, Name und „Bereich löschen“: Kopf lange drücken → Popup
+ // (bereichDialog, wie am Desktop über den Stift). Am Desktop bleibt alles wie vorher.
+ const editing = false;
  const mobileTitle = !bereich.id ? ''
-  : editing
-   ? `<div class="ctm"><i></i><input class="cnamein" data-catname="${bereich.id}" value="${name}" aria-label="Name des Bereichs" autocomplete="off" enterkeyhint="done"></div>`
-    + `<span class="csep" aria-hidden="true"></span><button class="cdel" data-act="catdel" data-id="${bereich.id}" aria-label="Ganzen Bereich ${name} löschen">${ICON_TRASH}<span>Bereich löschen</span></button>`
-   : `<div class="ctm"><button class="cdot" data-act="catcolor" data-id="${bereich.id}" aria-label="Farbe von ${name} ändern" title="Farbe ändern"><i></i></button>`
-    + `<button class="cname" data-act="catname" data-id="${bereich.id}" aria-label="Name von ${name} ändern" title="Name ändern">${name}</button></div>`;
+  : `<div class="ctm"><button class="cdot" data-act="opencat" data-cat="${bereich.id}" aria-expanded="true" aria-label="Bereich ${name} zuklappen" title="Zuklappen (lange drücken: bearbeiten)"><i>${ICON_CHEVRON}</i></button>`
+   + `<span class="cname" title="Lange drücken: bearbeiten">${name}</span></div>`;
  const head = `<div class="cathead${editing ? ' editing' : ''}"><button class="ct${bereich.id ? '' : ' keep'}" data-act="opencat" data-cat="${bereich.id}" aria-expanded="true" title="Zuklappen">`
   + `<i></i>${name} <small>${bereichCountsText(bereich)}</small></button>${mobileTitle}${editing ? '' : machbarSwitchHtml(bereich) + editButton}`
   // Version C: Pfeil zum Auf- und Zuklappen ganz rechts außen
@@ -1200,6 +1197,38 @@ document.addEventListener('pointermove', event => {
 ['pointerup', 'pointercancel'].forEach(type => document.addEventListener(type, () => {
  if (longPress) { clearTimeout(longPress.timer); longPress = null; }
 }, true));
+// Version C 1.0.40, Handy: Bereichskopf (oder zugeklappte Leiste) lange drücken = Popup „Bereich bearbeiten“
+// (Name, Farbe, Löschen). Nicht auf dem Schalter „Nur Startklares“.
+let headPress = null;
+document.addEventListener('pointerdown', event => {
+ clearTimeout(headPress?.timer);
+ headPress = null;
+ if (!isNarrow() || event.button > 0 || !event.target.closest) return;
+ const head = event.target.closest('.cathead, .catbar:not(.new)');
+ if (!head || event.target.closest('.mswitch')) return;
+ const id = head.matches('.catbar') ? head.dataset.cat : head.querySelector('.cdot')?.dataset.cat;
+ if (!id || !getBereich(id)) return;
+ head.classList.add('pressing');
+ headPress = {
+  x: event.clientX, y: event.clientY, head,
+  timer: setTimeout(() => {
+   head.classList.remove('pressing');
+   headPress = null;
+   ignoreClicksUntil = Date.now() + 600;  // Loslassen ist kein Klick (klappt nicht zu)
+   if (navigator.vibrate) try { navigator.vibrate(10); } catch (e) {}
+   bereichDialog(id);
+  }, LONG_PRESS_MS)
+ };
+}, true);
+document.addEventListener('pointermove', event => {
+ if (headPress && Math.hypot(event.clientX - headPress.x, event.clientY - headPress.y) > 10) { clearTimeout(headPress.timer); headPress.head.classList.remove('pressing'); headPress = null; }
+}, true);
+['pointerup', 'pointercancel'].forEach(type => document.addEventListener(type, () => {
+ if (headPress) { clearTimeout(headPress.timer); headPress.head.classList.remove('pressing'); headPress = null; }
+}, true));
+document.addEventListener('contextmenu', event => {
+ if (isNarrow() && event.target.closest && event.target.closest('.cathead, .catbar:not(.new)')) event.preventDefault();
+});
 // Rechtsklick oder Kontextmenü-Taste auf einem Pfeil: gleiches Menü. Am Handy kein Browser-Menü beim langen Drücken.
 document.addEventListener('contextmenu', event => {
  const arrow = event.target.closest && event.target.closest('.colarrow, .qarrow');
@@ -3122,7 +3151,7 @@ async function bereichDialog(id) {
  const r = await modal(`<h2>${bereich ? 'Bereich bearbeiten' : 'Neuer Bereich'}</h2>
   <input class="field" name="name" value="${esc(bereich ? bereich.name : '')}" placeholder="z. B. Freund*innen" aria-label="Name" autocomplete="off">
   <label class="lbl">Farbe</label><div class="swatches">${colorChoices}</div>
-  <div class="btns">${bereich ? buttonHtml('del', 'Löschen', 'ghost') : buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', bereich ? 'Fertig' : 'Anlegen', 'pri')}</div>`);
+  <div class="btns">${bereich ? buttonHtml('del', 'Bereich löschen', 'ghost danger') : buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', bereich ? 'Fertig' : 'Anlegen', 'pri')}</div>`);
  if (r.v === 'del') { await deleteBereich(id); return; }
  if (r.v !== 'ok' || !r.vals.name) return;
  undoSnapshot = snapshot();

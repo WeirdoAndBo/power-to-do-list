@@ -728,3 +728,27 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
 }
 
 @media(max-width:600px){.card .tcard .pbar,.card.tcard>.pbar{margin:8px -8px 2px -12px}}
+
+/* ============================================================================
+   Version C 1.0.40 – Handy: Bereichskopf schlanker
+   Der farbige Kreis links ist größer und trägt den Pfeil (antippen = zu- bzw. aufklappen).
+   Rechts nur „Nur Startklares“. Bearbeiten (Name, Farbe, Löschen): Kopf lange drücken → Popup.
+   ============================================================================ */
+.cball{display:none}
+@media(max-width:600px){
+ .cathead .cattog{display:none}
+ .cathead{padding-right:10px}
+ .cdot{width:44px;height:44px;margin-left:-8px;border-radius:50%}
+ .cdot i,.catbar .cball{width:26px;height:26px;border-radius:50%;background:var(--c);color:#fff;display:grid;place-items:center}
+ .cdot i svg{width:16px;height:16px;transform:rotate(90deg);color:#fff}
+ .cname{padding:0 4px;pointer-events:none}
+ .catbar:not(.new)::before{display:none}
+ .catbar:not(.new) .cball{display:grid;flex:none;margin-left:1px}
+ .catbar:not(.new) .cball svg{width:16px;height:16px;color:#fff}
+ .catbar:not(.new)>svg{display:none}
+ .catbar:not(.new){gap:12px}
+ .cathead,.catbar{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+ .cathead.pressing,.catbar.pressing{background:color-mix(in srgb,var(--c) 22%,var(--bg))}
+}
+.btn.ghost.danger{color:#b8392e}
+

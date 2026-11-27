@@ -248,24 +248,39 @@ test('Handy: nichts ragt seitlich heraus, Schnelleingabe statt Pfeilen an den Sp
   await click(add);
   expect(modalOpen(), '„+ Neue Kategorie“ öffnet kein Popup');
   await click('#modal [data-v=""]');
-  // Name im Kopf bearbeiten; „Bereich löschen“ fragt nach, Abbrechen löscht nichts
-  await click('.cname');
-  expect($('.cnamein') && $('.cdel').offsetParent !== null, 'Name lässt sich nicht bearbeiten oder „Bereich löschen“ fehlt');
-  await click('.cdel');
+  // 1.0.40: Kopf lange drücken = Popup mit Name, Farbe und „Bereich löschen“ (fragt nach)
+  expect(!$('.cathead .cattog') || $('.cathead .cattog').offsetParent === null, 'Pfeil rechts im Bereichskopf ist noch da');
+  expect($('.cdot svg') && $('.cdot').offsetParent !== null, 'Pfeil steckt nicht im farbigen Kreis');
+  const holdHead = async () => {
+   const r = $('.cname').getBoundingClientRect();
+   $('.cname').dispatchEvent(new win.PointerEvent('pointerdown', { bubbles: true, clientX: r.left + 5, clientY: r.top + 5, pointerType: 'touch' }));
+   await sleep(550);
+   win.document.dispatchEvent(new win.PointerEvent('pointerup', { bubbles: true }));
+  };
+  await holdHead();
+  expect(modalOpen() && $('#modal [name=name]') && $('#modal [data-v="del"]'), 'Langes Drücken auf den Kopf öffnet kein Popup mit Name und Löschen');
+  await click('#modal [data-v="del"]');
   expect(modalOpen(), 'Keine Sicherheitsfrage vor dem Löschen des Bereichs');
   await click('#modal [data-v=""]');
   await sleep(60);
   expect(saved().cats.some(b => b.id === 'arbeit'), 'Bereich wurde trotz Abbrechen gelöscht');
-  const input = $('.cnamein');
-  input.value = 'Arbeit 2';
-  input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await holdHead();
+  $('#modal [name=name]').value = 'Arbeit 2';
+  await click('#modal [data-v="ok"]');
   await sleep(60);
   expect(saved().cats.find(b => b.id === 'arbeit').name === 'Arbeit 2', 'Neuer Name wurde nicht gespeichert');
-  await click('.cname');
-  const back = $('.cnamein');
-  back.value = 'Arbeit';
-  back.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await holdHead();
+  $('#modal [name=name]').value = 'Arbeit';
+  await click('#modal [data-v="ok"]');
   await sleep(60);
+  // Kreis antippen = zuklappen, auf der Leiste wieder aufklappen
+  await sleep(650);  // direkt nach dem langen Drücken zählt ein Tippen nicht
+  await click('.cdot');
+  await sleep(60);
+  expect(!$('.cat.open[aria-label="Arbeit"]') && $('.catbar .cball'), 'Kreis klappt den Bereich nicht zu');
+  await click('.catbar[data-cat="arbeit"]');
+  await sleep(60);
+  expect($('.cat.open[aria-label="Arbeit"]'), 'Bereich lässt sich nicht wieder aufklappen');
   await click('[data-act="newcat"]');
   const box = $('#modal .box').getBoundingClientRect();
   expect(box.left >= 0 && box.right <= win.innerWidth + 1, 'Popup ist breiter als der Bildschirm');
