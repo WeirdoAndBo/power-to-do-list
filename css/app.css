@@ -220,7 +220,7 @@ details.done[open] summary::before,details.bl[open] summary::before{transform:ro
 /* Vorher-To-Dos auf der Ziel-Karte: nur wenig eingerückt (10 + 8 px je Ebene), dünne Linie in Bereichsfarbe */
 .tree .tcard>ul{margin:6px -4px 0;padding:0;border:0}
 .tree .tcard ul ul{margin-left:10px;padding-left:8px;border-left:2px solid color-mix(in srgb,var(--c) 30%,transparent)}
-.tcard .pbar{margin:10px 0 2px 38px}
+.tcard .pbar{margin:10px -12px 2px;border-radius:0} /* 1.0.39: über die ganze Breite der Karte */
 /* Knopf „3 Vorher-To-Dos“ auf einer Ziel-Karte: klappt die Vorher-To-Dos auf und zu */
 .ttog{display:flex;align-items:center;gap:4px;min-height:32px;margin:6px 0 0 30px;padding:2px 10px 2px 4px;border-radius:12px;font-size:13px;color:var(--mute)}
 .ttog:hover{background:var(--soft);color:var(--ink)}
@@ -658,14 +658,16 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
  .qarrow.off{background:color-mix(in srgb,var(--mute) 30%,var(--bg));color:var(--mute);box-shadow:none;opacity:.7}
  .qarrow:not(.off):active{transform:scale(.94)}
  /* Rundes Feld mit Haken rechts drin (Version C 1.0.36). Der Hinweistext sagt, wohin es geht. */
- .qfield{flex:1;min-width:0;height:44px;display:flex;align-items:center;border-radius:22px;background:var(--acc);color:var(--accInk);box-shadow:0 6px 18px rgb(0 0 0/.16);padding:0 4px 0 0}
+ .qfield{flex:1;min-width:0;height:44px;display:flex;align-items:center;border-radius:22px;background:var(--acc);color:var(--accInk);box-shadow:0 6px 18px rgb(0 0 0/.16);padding:0}
  .qfield:focus-within{box-shadow:0 6px 18px rgb(0 0 0/.16),0 0 0 3px color-mix(in srgb,var(--c) 60%,transparent)}
- .qin{flex:1;min-width:0;height:44px;padding:0 6px 0 16px;border:0;border-radius:22px;background:transparent;color:inherit;font-size:16px;font-weight:600;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}
+ .qin{flex:1;min-width:0;height:44px;padding:0 16px 0 10px;border:0;border-radius:22px;background:transparent;color:inherit;font-size:16px;font-weight:600;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}
  .qin::placeholder{font-size:15px;text-overflow:ellipsis}
- .qin::placeholder{color:color-mix(in srgb,var(--accInk) 68%,transparent);font-weight:600}
+ .qin::placeholder{color:color-mix(in srgb,var(--accInk) 45%,transparent);font-weight:500}
  .qin:focus{outline:none}
- .qok{flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--c);color:#fff;touch-action:manipulation}
- .qok:active{transform:scale(.92)}
+ /* 1.0.39: „+“ links im Feld ist Symbol und Knopf zugleich */
+ .qadd{flex:none;width:36px;height:36px;margin-left:4px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--c);color:#fff;touch-action:manipulation}
+ .qadd svg{display:block}
+ .qadd:active{transform:scale(.92)}
  .qmore{width:56px;height:20px;display:grid;place-items:center;color:var(--mute);border-radius:10px}
  .qmore svg{transition:transform .25s}
  .qbar.open .qmore svg{transform:rotate(180deg)}
@@ -724,3 +726,5 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
  /* Leiste unten ausblenden, solange die Tastatur für ein anderes Feld offen ist */
  .dock.kbhide{visibility:hidden}
 }
+
+@media(max-width:600px){.card .tcard .pbar,.card.tcard>.pbar{margin:8px -8px 2px -12px}}

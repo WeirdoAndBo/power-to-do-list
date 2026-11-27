@@ -58,6 +58,8 @@ async function pressKey(el, key) {
 }
 function expect(cond, text) { if (!cond) throw new Error(text); }
 const getTaskTitle = id => saved().tasks[id] && saved().tasks[id].t;
+// Anlegen zeigt keinen Rückgängig-Knopf mehr (1.0.39). Zum Aufräumen im Test direkt zurücknehmen.
+async function undoLast() { win.eval('undoLast()'); await sleep(60); }
 // Version C: Übersicht öffnen und den Schalter „Machbar“ an (true) oder aus (false) stellen
 async function zeige(machbar) {
  await click('.switch [data-view="baum"]');
@@ -281,13 +283,13 @@ test('Handy: Schnelleingabe legt in der sichtbaren Spalte an, ausgefahren auch w
  try {
   const fin = $$('#cols > .col').findIndex(c => c.getAttribute('aria-label') === 'Finanzen');
   win.eval(`goToColumn(${fin})`); await sleep(150);
-  expect($('#qin').placeholder === '+ in „Finanzen“', 'Hinweistext nennt die sichtbare Spalte nicht');
+  expect($('#qin').placeholder === 'in „Finanzen“', 'Hinweistext nennt die sichtbare Spalte nicht');
   expect(!$('#qlabel'), 'Schild über der Eingabe ist noch da');
   const qin = $('#qin');
   qin.value = 'Schnell 1';
   await pressKey(qin, 'Enter');
   qin.value = 'Schnell 2';
-  await click('.qok'); // Haken statt Enter
+  await click('.qadd'); // „+“ links im Feld statt Enter
   const tasks = Object.values(saved().tasks);
   const s1 = tasks.find(t => t.t === 'Schnell 1'), s2 = tasks.find(t => t.t === 'Schnell 2');
   expect(s1 && s2 && s1.cat === 'arbeit' && s1.area === 'fin' && !s1.backlog, 'To-Do liegt nicht in Arbeit · Finanzen');
@@ -303,14 +305,14 @@ test('Handy: Schnelleingabe legt in der sichtbaren Spalte an, ausgefahren auch w
   $('#qopts [name=bl]').checked = true;
   $('#qopts [name=bl]').dispatchEvent(new Event('change', { bubbles: true }));
   await sleep(30);
-  expect($('#qin').placeholder === '+ in „Haushalt“ · Backlog', 'Hinweistext zeigt nicht Haushalt · Backlog');
+  expect($('#qin').placeholder === 'in „Haushalt“ · Backlog', 'Hinweistext zeigt nicht Haushalt · Backlog');
   qin.value = 'Schnell Privat';
   await pressKey(qin, 'Enter');
   const sp = Object.values(saved().tasks).find(t => t.t === 'Schnell Privat');
   expect(sp && sp.cat === 'privat' && sp.area === 'haus' && sp.backlog, 'To-Do liegt nicht in Privat · Haushalt · Backlog');
   await click('.qmore');
   expect(!$('#qbar').classList.contains('open'), 'Optionen fahren nicht wieder ein');
-  await click('#undo');
+  await undoLast();
   expect(!Object.values(saved().tasks).some(t => t.t === 'Schnell Privat'), 'Rückgängig nimmt das Anlegen nicht zurück');
  } finally {
   win.eval('goToColumn(0)'); await sleep(150);
@@ -351,7 +353,7 @@ test('Handy: Popup „Neues To-Do“ – Enter legt ein weiteres To-Do an, „+ 
   const t1 = tasks.find(t => t.t === 'Erstes'), d = tasks.find(t => t.t === 'Danach'), z = tasks.find(t => t.t === 'Zweites'), v = tasks.find(t => t.t === 'Vor Zweitem');
   expect(t1.goal && t1.area === 'orga' && !t1.needs.length, '„Erstes“ ist kein eigenes To-Do in Orga');
   expect(d.goal && d.needs[0] === z.id && z.needs[0] === v.id && !z.goal, 'Kette Vor Zweitem → Zweites → Danach stimmt nicht');
-  await click('#undo');
+  await undoLast();
   expect(Object.keys(saved().tasks).length === before, 'Rückgängig nimmt nicht alles zurück');
  } finally {
   win.eval('goToColumn(0)'); await sleep(150);
@@ -384,10 +386,10 @@ test('Popup „Neues To-Do“ wie eine Karte: Titel, Unter-To-Dos mit Enter und 
  const goal = tasks.find(t => t.t === 'Test-Ziel');
  const b = tasks.find(t => t.t === 'Schritt B');
  expect(goal && goal.needs.length === 2 && b.needs.length === 1 && getTaskTitle(b.needs[0]) === 'Vor B', 'Aufbau stimmt nicht');
- expect(toastText().includes('mit 3 Unter-To-Dos'), 'Hinweis „mit 3 Unter-To-Dos“ fehlt');
+ expect(!$('#undo') || $('#toast').hidden, 'Beim Anlegen erscheint ein Rückgängig-Hinweis');
 });
-test('Rückgängig nimmt das Anlegen zurück', async () => {
- await click('#undo');
+test('Anlegen lässt sich intern zurücknehmen', async () => {
+ await undoLast();
  expect(!Object.values(saved().tasks).some(t => t.t === 'Test-Ziel'), 'Ziel ist noch da');
 });
 test('Popup: Titel „Liste: …“ macht aus den Zeilen Listenpunkte', async () => {
@@ -404,8 +406,7 @@ test('Popup: Titel „Liste: …“ macht aus den Zeilen Listenpunkte', async ()
  const tasks = Object.values(saved().tasks);
  const created = tasks.find(t => t.t === 'Liste: Packen');
  expect(tasks.length === before + 1 && created && created.list.length === 2, 'Liste mit 2 Punkten wurde nicht angelegt');
- expect(toastText().includes('2 Punkten'), 'Hinweis „mit 2 Punkten“ fehlt');
- await click('#undo');
+ await undoLast();
  expect(!Object.values(saved().tasks).some(t => t.t === 'Liste: Packen'), 'Rückgängig nimmt die Liste nicht zurück');
 });
 test('Abhaken, „Cool, geschafft!“ und wieder öffnen', async () => {
@@ -415,7 +416,7 @@ test('Abhaken, „Cool, geschafft!“ und wieder öffnen', async () => {
  expect(modalOpen() && $('#modal').textContent.includes('Cool, geschafft'), 'Frage „Jetzt machen?“ kam nicht');
  await click('#modal [data-v="later"]');
  expect(saved().tasks.desk.done, '„desk“ ist nicht erledigt');
- await click('#undo');
+ await undoLast();
  expect(!saved().tasks.desk.done, 'Rückgängig hat „desk“ nicht wieder geöffnet');
 });
 test('Heute-Schalter nimmt offene Vorher-To-Dos mit', async () => {
@@ -709,7 +710,7 @@ test('„+“ zwischen To-Dos: neues To-Do an genau dieser Stelle eintippen', as
  expect(next && doc.activeElement === next, 'Danach öffnet sich kein Feld für das nächste To-Do');
  await pressKey(next, 'Escape');
  expect(!$('.insrow'), 'Escape schließt das Feld nicht');
- await click('#undo');
+ await undoLast();
  expect(!saved().tasks[created.id], 'Rückgängig hat das Einfügen nicht zurückgenommen');
  await zeige(true);
 });
@@ -854,7 +855,7 @@ test('Kategorie duplizieren: Kopie mit ihren offenen To-Dos', async () => {
  const copy = subs.find(k => k.name === 'Akquise (Kopie)');
  expect(copy && subs[subs.indexOf(copy) - 1].id === 'akq', 'Kopie steht nicht direkt nach Akquise');
  expect(Object.keys(saved().tasks).length > before && Object.values(saved().tasks).filter(t => t.area === copy.id).length >= open, 'To-Dos wurden nicht mitkopiert');
- await click('#undo');
+ await undoLast();
  expect(!saved().cats[0].subs.some(k => k.name === 'Akquise (Kopie)') && Object.keys(saved().tasks).length === before, 'Rückgängig entfernt die Kopie nicht');
 });
 test('Kategorie bekommt ein Linien-Symbol aus der Auswahl', async () => {

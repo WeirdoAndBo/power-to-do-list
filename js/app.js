@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.38-c';
+const APP_VERSION = '1.0.39-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -1246,7 +1246,7 @@ function updateQuickBar() {
  const kategorie = bereich && bereich.subs.find(k => k.id === kategorieId);
  const where = kategorie ? kategorie.name : placeName(bereichId, kategorieId);
  // 1.0.37: kurz halten, das Feld ist schmal. Für Vorlesehilfen steht es ausführlich im aria-label.
- const hint = heute && !quickOpen ? '+ für „Heute“' : `+ in „${where}“${backlog ? ' · Backlog' : ''}`;
+ const hint = heute && !quickOpen ? 'für „Heute“' : `in „${where}“${backlog ? ' · Backlog' : ''}`;
  const input = $('#qin');
  input.placeholder = hint;
  input.setAttribute('aria-label', heute && !quickOpen ? 'Neues To-Do für Heute' : `Neues To-Do in ${where}${backlog ? ', Backlog' : ''}`);
@@ -1274,6 +1274,8 @@ addEventListener('resize', syncDockHeight);
 // wird. Daraus berechnet die App, wie viel die Tastatur verdeckt, und schiebt die Leiste unten (und Popups)
 // genau darüber. --kb = verdeckte Höhe. (1.0.36 hatte overlays-content: Dann meldet Android die Tastatur gar
 // nicht, und sie lag über dem Feld.)
+let lastCovered = 0;  // wie viel die Tastatur zuletzt verdeckt hat
+const isTyping = () => !!document.activeElement && document.activeElement.matches('input:not([type=checkbox]):not([type=radio]),textarea,[contenteditable]');
 function placeDockAboveKeyboard() {
  const view = window.visualViewport;
  const dock = document.querySelector('.dock');
@@ -1281,6 +1283,10 @@ function placeDockAboveKeyboard() {
  const covered = Math.max(0, Math.round(innerHeight - view.height - view.offsetTop));
  // 1.0.38: Nur wenn das eigene Feld (oder die Optionen) aktiv ist, rutscht die Leiste über die Tastatur.
  // Tippt man woanders (Titel, Popup …), bleibt sie unten und ist ausgeblendet.
+ // 1.0.39: Geht die Tastatur zu (am Handy meist mit der Zurück-Taste), endet auch die Eingabe:
+ // Das Feld verliert den Fokus (Text bearbeiten speichert dabei wie beim Wegtippen).
+ if (lastCovered > 80 && covered < 20 && isTyping()) document.activeElement.blur();
+ lastCovered = covered;
  const own = covered && dock.contains(document.activeElement);
  dock.style.transform = own ? `translateY(${-covered}px)` : '';
  dock.classList.toggle('kbhide', !!covered && !own);
@@ -1294,7 +1300,7 @@ window.visualViewport?.addEventListener('scroll', placeDockAboveKeyboard);
 }));
 // Haken in der Eingabezeile: Tippen soll die Tastatur nicht schließen
 document.addEventListener('pointerdown', event => {
- if (event.target.closest && event.target.closest('.qok')) event.preventDefault();
+ if (event.target.closest && event.target.closest('.qadd')) event.preventDefault();
 });
 function quickStep(direction) {
  const open = visibleBereiche().find(b => b.id === state.openCat);
@@ -1344,7 +1350,6 @@ function quickAdd() {
  save();
  render();
  const kategorie = getBereich(cat)?.subs.find(k => k.id === area);
- toast(`„${esc(shownTitle(task))}“ in ${esc(kategorie ? kategorie.name : placeName(cat, area))}${backlog ? ' · Backlog' : ''}.`, true);
  input.focus({ preventScroll: true });
 }
 document.addEventListener('keydown', event => {
@@ -1477,6 +1482,13 @@ function syncBackGuard() {
 addEventListener('popstate', () => {
  const kind = history.state?.powerliste;
  if (leaving) { if (kind === 'base' || kind === 'home') history.back(); return; }
+ // 1.0.39: Steht man in einem Eingabefeld (Tastatur schon zu), beendet „Zurück“ zuerst nur die Eingabe
+ if (!ignoreNextPop && isTyping()) {
+  document.activeElement.blur();
+  if (backGuard) { backGuard = false; syncBackGuard(); }  // Popup bleibt offen, Eintrag neu anlegen
+  else if (kind === 'base') armExitGuard();
+  return;
+ }
  if (ignoreNextPop) {
   ignoreNextPop = false;
   // Wurde inzwischen schon das nächste Popup geöffnet, braucht es wieder einen Eintrag
@@ -1572,20 +1584,25 @@ function modal(html) {
   };
  });
 }
+// Rückgängig: state auf den Stand vor der letzten Änderung (undoSnapshot) zurücksetzen.
+// Version C 1.0.39: Der Knopf „Rückgängig“ erscheint nur noch, wenn etwas gelöscht oder geändert wurde,
+// nicht beim Anlegen. undoSnapshot wird trotzdem auch beim Anlegen gesetzt.
+function undoLast() {
+ if (!undoSnapshot) return;
+ state = JSON.parse(undoSnapshot);
+ save();
+ render();
+ $('#toast').hidden = true;
+}
 // toast: kurzer Hinweis unten, verschwindet nach 7 Sekunden.
-// withUndo = true zeigt „Rückgängig“ (setzt state auf undoSnapshot zurück).
+// withUndo = true zeigt „Rückgängig“ (undoLast).
 function toast(message, withUndo) {
  const toastEl = $('#toast');
  clearTimeout(toastTimer);
  toastEl.innerHTML = `<span>${message}</span>${withUndo ? '<button id="undo">Rückgängig</button>' : ''}`;
  toastEl.hidden = false;
  if (withUndo) {
-  $('#undo').onclick = () => {
-   state = JSON.parse(undoSnapshot);
-   save();
-   render();
-   toastEl.hidden = true;
-  };
+  $('#undo').onclick = undoLast;
  }
  toastTimer = setTimeout(() => toastEl.hidden = true, 7000);
 }
@@ -1901,7 +1918,6 @@ async function newTasksDialogMobile(text = '', place = currentPlace()) {
  save();
  render();
  const n = result.length;
- toast((n === 1 ? 'Angelegt' : `${n} To-Dos angelegt`) + (subs ? ` – mit ${subs} weiteren davor/danach.` : '.'), true);
  return true;
 }
 async function newTaskDialog(text = '', place = currentPlace()) {
@@ -1989,7 +2005,6 @@ async function newTaskDialog(text = '', place = currentPlace()) {
  else createPreTasks(created, r.vals._pre, today);
  save();
  render();
- toast(!count ? 'Angelegt.' : isList(created) ? `Liste angelegt – mit ${count} Punkt${count === 1 ? '' : 'en'}.` : `Angelegt – mit ${count} Unter-To-Do${pluralS(count)}.`, true);
  return true;
 }
 
@@ -2566,7 +2581,6 @@ function startInsert(button) {
   document.querySelectorAll('.tcard').forEach(card => { if (card.contains(box)) treeOpen.set(card.dataset.k, true); });
   save();
   render();
-  toast(`„${esc(shownTitle(task))}“ eingefügt.`, true);
   if (isList(task) && focusListInput(task.id)) return;
   // Gleich weiter: nächstes Feld direkt dahinter
   (button.classList.contains('chainafter')
@@ -2608,7 +2622,6 @@ function startInsertRoot(button) {
   order.forEach((id, i) => { if (getTask(id)) getTask(id).prio = order.length - i; });
   save();
   render();
-  toast(`„${esc(shownTitle(task))}“ angelegt.`, true);
   if (isList(task) && focusListInput(task.id)) return;
   document.querySelector(`.ins[data-act="insroot"][data-cat="${cat}"][data-area="${area}"][data-bl="${bl}"][data-after="${task.id}"]`)?.click();
  };
@@ -2760,7 +2773,6 @@ async function askBefore(id) {
  undoSnapshot = before;
  save();
  render();
- toast(r.vals.kind === 'help' ? 'Notiert – sperrt nichts.' : 'Kommt vorher und steht jetzt oben.', true);
 }
 // Popup „Neues Ziel / Neues To-Do“ (Knopf + unten und + in jeder Spalte).
 //   text = Vorbelegung des Titels, parent = To-Do, vor das das neue kommen soll,
@@ -2810,7 +2822,6 @@ async function addTask({ text = '', parent = null, mode = null, place = currentP
  }
  createPreTasks(created, preEntries, today);
  const count = preEntries.length;
- toast(count ? `Angelegt – mit ${count} Vorher-To-Do${pluralS(count)}.` : (r.vals.what === 'goal' ? 'Neues Ziel angelegt.' : 'Angelegt.'), true);
  save();
  render();
  return true;
@@ -3211,7 +3222,6 @@ function duplicateKategorie(fromBereichId, kategorieId, toBereichId, index) {
  render();
  goToColumn(currentColumn);
  const n = originals.length;
- toast(`„${esc(copy.name)}“ angelegt${n ? ` – mit ${n} To-Do${pluralS(n)}` : ''}.`, true);
 }
 // Auge im Kategorie-Knopf: Sammlung ein- und ausblenden
 function toggleKategorieHidden(bereichId, kategorieId) {
