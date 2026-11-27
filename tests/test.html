@@ -281,12 +281,13 @@ test('Handy: Schnelleingabe legt in der sichtbaren Spalte an, ausgefahren auch w
  try {
   const fin = $$('#cols > .col').findIndex(c => c.getAttribute('aria-label') === 'Finanzen');
   win.eval(`goToColumn(${fin})`); await sleep(150);
-  expect($('#qlabel').textContent.includes('Finanzen'), 'Name der sichtbaren Spalte steht nicht über der Eingabe');
+  expect($('#qin').placeholder === 'Neues To-Do in „Finanzen“', 'Hinweistext nennt die sichtbare Spalte nicht');
+  expect(!$('#qlabel'), 'Schild über der Eingabe ist noch da');
   const qin = $('#qin');
   qin.value = 'Schnell 1';
   await pressKey(qin, 'Enter');
   qin.value = 'Schnell 2';
-  await pressKey(qin, 'Enter');
+  await click('.qok'); // Haken statt Enter
   const tasks = Object.values(saved().tasks);
   const s1 = tasks.find(t => t.t === 'Schnell 1'), s2 = tasks.find(t => t.t === 'Schnell 2');
   expect(s1 && s2 && s1.cat === 'arbeit' && s1.area === 'fin' && !s1.backlog, 'To-Do liegt nicht in Arbeit · Finanzen');
@@ -302,7 +303,7 @@ test('Handy: Schnelleingabe legt in der sichtbaren Spalte an, ausgefahren auch w
   $('#qopts [name=bl]').checked = true;
   $('#qopts [name=bl]').dispatchEvent(new Event('change', { bubbles: true }));
   await sleep(30);
-  expect($('#qlabel').textContent.includes('Privat') && $('#qlabel').textContent.includes('Backlog'), 'Ziel über der Eingabe zeigt nicht Privat · Backlog');
+  expect($('#qin').placeholder === 'Neues To-Do in „Haushalt“ · Backlog', 'Hinweistext zeigt nicht Haushalt · Backlog');
   qin.value = 'Schnell Privat';
   await pressKey(qin, 'Enter');
   const sp = Object.values(saved().tasks).find(t => t.t === 'Schnell Privat');

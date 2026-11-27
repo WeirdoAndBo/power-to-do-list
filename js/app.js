@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.35-c';
+const APP_VERSION = '1.0.36-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -1238,8 +1238,13 @@ function updateQuickBar() {
  const [bereichId, kategorieId] = quickTargetPlace().split('|');
  const bereich = getBereich(bereichId);
  const backlog = quickOpen && $('#qopts [name=bl]')?.checked;
- $('#qlabel').innerHTML = heute && !quickOpen ? 'In „Heute“'
-  : esc(placeName(bereichId, kategorieId)) + (backlog ? ' · Backlog' : '');
+ // Version C 1.0.36: Wohin es geht, steht im Hinweistext des Felds (kein Schild mehr darüber)
+ const kategorie = bereich && bereich.subs.find(k => k.id === kategorieId);
+ const where = kategorie ? kategorie.name : placeName(bereichId, kategorieId);
+ const hint = heute && !quickOpen ? 'Neues To-Do für „Heute“' : `Neues To-Do in „${where}“${backlog ? ' · Backlog' : ''}`;
+ const input = $('#qin');
+ input.placeholder = hint;
+ input.setAttribute('aria-label', hint);
  bar.style.setProperty('--c', bereich ? bereich.color : GRAY);
  const open = visibleBereiche().find(b => b.id === state.openCat);
  const count = open && !heute ? columnsOf(open).length : 0;
@@ -1259,6 +1264,23 @@ function syncDockHeight() {
  if (dock) document.documentElement.style.setProperty('--dockh', dock.offsetHeight + 'px');
 }
 addEventListener('resize', syncDockHeight);
+// Version C 1.0.36: Tastatur als Ebene darüber. Der Viewport-Tag (interactive-widget=overlays-content) sorgt dafür,
+// dass die Tastatur die Seite nicht staucht und nichts verrutscht. Die Leiste unten rutscht dann selbst
+// über die Tastatur (visualViewport = der Teil, der noch zu sehen ist). --kb = Höhe der Tastatur.
+function placeDockAboveKeyboard() {
+ const view = window.visualViewport;
+ const dock = document.querySelector('.dock');
+ if (!view || !dock) return;
+ const covered = Math.max(0, Math.round(innerHeight - view.height - view.offsetTop));
+ dock.style.transform = covered ? `translateY(${-covered}px)` : '';
+ document.documentElement.style.setProperty('--kb', covered + 'px');
+}
+window.visualViewport?.addEventListener('resize', placeDockAboveKeyboard);
+window.visualViewport?.addEventListener('scroll', placeDockAboveKeyboard);
+// Haken in der Eingabezeile: Tippen soll die Tastatur nicht schließen
+document.addEventListener('pointerdown', event => {
+ if (event.target.closest && event.target.closest('.qok')) event.preventDefault();
+});
 function quickStep(direction) {
  const open = visibleBereiche().find(b => b.id === state.openCat);
  const count = open ? columnsOf(open).length : 0;
@@ -1293,7 +1315,7 @@ function closeQuickOptions() {
 function quickAdd() {
  const input = $('#qin');
  const text = input.value.trim();
- if (!text) return;
+ if (!text) { input.focus({ preventScroll: true }); return; }
  const [cat, area] = quickTargetPlace().split('|');
  const today = state.view === 'heute' && !quickOpen;
  const backlog = quickOpen && $('#qopts [name=bl]').checked;
@@ -1308,7 +1330,7 @@ function quickAdd() {
  render();
  const kategorie = getBereich(cat)?.subs.find(k => k.id === area);
  toast(`„${esc(shownTitle(task))}“ in ${esc(kategorie ? kategorie.name : placeName(cat, area))}${backlog ? ' · Backlog' : ''}.`, true);
- input.focus();
+ input.focus({ preventScroll: true });
 }
 document.addEventListener('keydown', event => {
  if (event.target.id !== 'qin') return;
@@ -3618,6 +3640,7 @@ document.addEventListener('click', event => {
    quickStep(+button.dataset.d);
    break;
   case 'qmore': setQuickOpen(!quickOpen); break;
+  case 'qadd': quickAdd(); break;
   case 'qfull': {
    const text = $('#qin').value.trim();
    const place = quickTargetPlace();

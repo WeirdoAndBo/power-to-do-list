@@ -117,7 +117,7 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | Ganze Seite neu aufbauen               | `render`                                       |
 | Popup und Hinweis unten                | `modal`, `buttonHtml`, `toast`                 |
 | Zurück-Taste am Handy: schließt Popup, sonst „App verlassen?“ bei Doppeldruck | `armExitGuard` (Verlaufseinträge „base“/„home“), `syncBackGuard` („popup“), `popstate`-Listener, `backAtHome`, `askLeave` |
-| Handy: Schnelleingabe unten            | `#qbar` in `index.html`; `updateQuickBar`, `quickStep`, `setQuickOpen`, `quickAdd`, `closeQuickOptions`; Toast steht über der Leiste (`--dockh`, `syncDockHeight`) |
+| Handy: Schnelleingabe unten            | `#qbar` in `index.html`; `updateQuickBar` (Hinweistext mit Ziel), `quickStep`, `setQuickOpen`, `quickAdd` (Enter oder Haken `.qok`), `closeQuickOptions`; Toast steht über der Leiste (`--dockh`, `syncDockHeight`). Tastatur als Ebene: `interactive-widget=overlays-content` im Viewport-Tag, `placeDockAboveKeyboard` schiebt die Leiste per `visualViewport` darüber (`--kb`) |
 | Handy: Popup „Neues To-Do“ für mehrere | `newTasksDialogMobile` (wird von `newTaskDialog` bei `isNarrow()` aufgerufen), Zeilen `.mrow`, Karten `.mcard`, `mAdd` (davor/danach), `mReadCards` |
 | Handy: leere Spalte „+ Neue Kategorie“ | `.coladd` am Ende von `bereichOpenHtml` (Desktop: ausgeblendet) |
 | Karte zeigen und aufleuchten lassen    | `showCard` (statt Fokusmodus nach „Jetzt machen“) |
