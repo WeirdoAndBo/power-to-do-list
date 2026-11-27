@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.46-c';
+const APP_VERSION = '1.0.47-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -213,6 +213,9 @@ const getBereich = id => state.cats.find(bereich => bereich.id === id);
 const allTasks = () => Object.values(state.tasks);
 // Noch offene „geht sonst nicht“-Vorher-To-Dos (IDs). Leer = das To-Do ist machbar.
 const openNeeds = task => task.needs.filter(id => getTask(id) && !getTask(id).done);
+// 1.0.47: Alle noch offenen Unter-To-Dos (needs und soft). Für „Nur Startklares“ und das Ausgrauen in der
+// Übersicht: Ein To-Do ist erst startklar, wenn keines seiner Unter-To-Dos mehr offen ist.
+const openBefore = task => [...task.needs, ...task.soft].filter(id => getTask(id) && !getTask(id).done);
 // Alle To-Dos, vor denen id kommt (needs und soft) bzw. nur die, die id brauchen (needs)
 const parentsOf = id => allTasks().filter(parent => parent.needs.includes(id) || parent.soft.includes(id));
 const parentsNeeding = id => allTasks().filter(parent => parent.needs.includes(id));
@@ -561,22 +564,23 @@ function cardHtml(task, color, options = {}) {
  <div class="cbody">${checkButtonHtml(task, color)}<div class="ctext"><h3>${titleHtml(task)}</h3>${options.tree === undefined ? chainBoxHtml(task) + waitingHtml : ''}</div><span class="cacts">${taskActionsHtml(task)}</span></div>
  ${listHtml(task, color)}${options.tree === undefined ? (task.done ? '' : insertHtml(task.id, '', color)) : options.tree}</${tag}>`;
 }
-// Titel eines To-Dos. Antippen = direkt hier bearbeiten (Enter speichert, Escape bricht ab), siehe startRename.
+// Titel eines To-Dos. 1.0.47: Doppelt antippen = direkt hier bearbeiten (Enter speichert, Escape bricht ab),
+// siehe startRename. Einmal antippen tut nichts, so lässt sich die Karte auch am Text anfassen und ziehen.
 function titleHtml(task) {
  // 1.0.45: Das Listensymbol ist ein Knopf: antippen kopiert Überschrift und Punkte (copyList).
  const listMark = isList(task) ? `<button type="button" class="lmark" data-act="lcopy" data-id="${task.id}" title="Ganze Liste kopieren" aria-label="${esc(shownTitle(task))}: ganze Liste kopieren">Liste</button>` : '';
- return `${listMark}<span class="t" data-act="rename" data-id="${task.id}" tabindex="0" role="button" aria-label="${esc(task.t)} – Text bearbeiten">${esc(shownTitle(task))}</span>`;
+ return `${listMark}<span class="t" data-act="rename" data-id="${task.id}" tabindex="0" role="button" title="Doppelt tippen: Text bearbeiten" aria-label="${esc(task.t)} – Text bearbeiten (doppelt tippen)">${esc(shownTitle(task))}</span>`;
 }
 // Abhak-Liste unter einem Listen-To-Do: offene Punkte oben, erledigte blass darunter, ganz unten ein Feld für
-// den nächsten Punkt (Enter = hinzufügen und gleich weiter). Punkt antippen = Text bearbeiten (leer = löschen).
+// den nächsten Punkt (Enter = hinzufügen und gleich weiter). Punkt doppelt antippen = Text bearbeiten (leer = löschen).
 function listHtml(task, color) {
  if (!isList(task)) return '';
  const items = [...(task.list || [])].sort((a, b) => a.done - b.done);
  const itemsHtml = items.map(item => `<div class="litem${item.done ? ' ldone' : ''}">`
   + `<button class="lcheck" role="checkbox" aria-checked="${!!item.done}" data-act="lcheck" data-id="${task.id}" data-i="${item.id}" aria-label="${esc(item.t)} ${item.done ? 'wieder öffnen' : 'abhaken'}">${ICON_TICK}</button>`
-  + `<span class="lt" data-act="lren" data-id="${task.id}" data-i="${item.id}" tabindex="0" role="button" aria-label="${esc(item.t)} – Text bearbeiten">${esc(item.t)}</span>`
+  + `<span class="lt" data-act="lren" data-id="${task.id}" data-i="${item.id}" tabindex="0" role="button" title="Doppelt tippen: Text bearbeiten" aria-label="${esc(item.t)} – Text bearbeiten (doppelt tippen)">${esc(item.t)}</span>`
   + `<button class="mini del ldel" data-act="ldel" data-id="${task.id}" data-i="${item.id}" aria-label="${esc(item.t)} aus der Liste löschen" title="Löschen">${ICON_TRASH}</button></div>`).join('');
- const add = task.done ? '' : `<input class="tinput linput" data-id="${task.id}" placeholder="+ Punkt" aria-label="Neuer Punkt in ${esc(shownTitle(task))}" autocomplete="off">`;
+ const add = task.done ? '' : `<input class="tinput linput" data-id="${task.id}" placeholder="+ Punkt" enterkeyhint="send" aria-label="Neuer Punkt in ${esc(shownTitle(task))}" autocomplete="off">`;
  return `<div class="llist" data-act="none" style="--c:${color}">${itemsHtml}${add}</div>`;
 }
 // „3/7“ im Kopf einer Listen-Karte
@@ -678,6 +682,7 @@ function startItemEdit(el) {
  input.value = item.t;
  input.setAttribute('aria-label', 'Punkt bearbeiten');
  input.setAttribute('autocomplete', 'off');
+ input.setAttribute('enterkeyhint', 'done');
  el.textContent = '';
  el.append(input);
  input.focus();
@@ -790,7 +795,7 @@ function backlogRowHtml(task, color) {
 // Schalter „Machbar“ an: eine Kategorie-Spalte mit Zeitnah (nicht gesperrt), Backlog und Erledigt
 function machbarColumnHtml(bereich, kategorie) {
  const here = task => isIn(task, bereich.id, kategorie.id);
- const doable = allTasks().filter(t => !t.done && !t.backlog && !openNeeds(t).length && here(t)).sort(byPrio);
+ const doable = allTasks().filter(t => !t.done && !t.backlog && !openBefore(t).length && here(t)).sort(byPrio);
  const backlogAll = allTasks().filter(t => !t.done && t.backlog && here(t));
  // Im Backlog nur die „obersten“ zeigen: nicht die, deren Ziel selbst schon im Backlog liegt
  const backlogTop = backlogAll.filter(t => !parentsOf(t.id).some(p => p.backlog && !p.done && here(p))).sort(byPrio);
@@ -836,8 +841,9 @@ function treeNodeHtml(task, color, path, level, viaSoft, parentId = null, inCard
    ? `<ul data-act="none">${children.map(([child, soft]) => treeNodeHtml(child, color, key, 1, soft, task.id, true)).join('')}</ul>`
    : '';
   const bar = task.done ? '' : `<div class="pbar" data-act="none" aria-hidden="true"><i style="width:${progress(task)}%"></i></div>`;
+  // 1.0.47: Hat das Ziel noch offene Unter-To-Dos, ist es leicht ausgegraut (.haspre): erst die Unter-To-Dos
   return cardHtml(task, color, {
-   move: !task.done, tag: 'li', cls: ' tcard',
+   move: !task.done, tag: 'li', cls: ` tcard${!task.done && openBefore(task).length ? ' haspre' : ''}`,
    attrs: `data-tid="${task.id}" data-k="${esc(key)}" data-l="0"`,
    headExtra: chevron,
    tree: `${children.length ? bar : ''}${task.done ? '' : insertHtml(task.id, '', color)}${childList}`
@@ -859,7 +865,8 @@ function treeNodeHtml(task, color, path, level, viaSoft, parentId = null, inCard
  // einem Strich verbunden (.down / .up). Nur das letzte Glied einer Kette (das, womit man anfängt) ist kräftig,
  // die anderen leicht ausgegraut. Mehrere Vorher-To-Dos sind parallel: eingerückt, ohne Strich.
  const chainDown = inCard && children.length === 1;
- const chainClass = `${chainDown ? ' down' : ''}${linked ? ' up' : ''}${linked && viaSoft ? ' upsoft' : ''}`;
+ // 1.0.47: .haspre = hat noch offene Unter-To-Dos, auch mehrere parallele: leicht ausgegraut wie ein Kettenglied
+ const chainClass = `${chainDown ? ' down' : ''}${linked ? ' up' : ''}${linked && viaSoft ? ' upsoft' : ''}${!task.done && openBefore(task).length ? ' haspre' : ''}`;
  const row = `<div class="row${task.done ? ' isdone' : ''}${inBacklog ? ' inbl' : ''}${chainClass}">${grip}${checkButtonHtml(task, color)}`
   + `<span class="tw">${titleHtml(task)}${inBacklog ? ' <span class="tag bl" title="Liegt im Backlog">Backlog</span>' : ''}</span>`
   + `${viaSoft ? '<span class="tag">hilft</span>' : ''}
@@ -2051,7 +2058,7 @@ async function newTaskDialog(text = '', place = currentPlace()) {
   ${placePickerHtml(place)}
   <label class="opt"><input type="checkbox" name="bl"> Erst mal ins Backlog</label>
   <div class="ncard" style="--c:${bereich ? bereich.color : GRAY}">
-   <div class="nhead"><span class="ncheck" aria-hidden="true"></span><input class="field ntitle" name="text" value="${esc(text)}" placeholder="Was ist zu tun?" autocomplete="off" aria-label="Titel"></div>
+   <div class="nhead"><span class="ncheck" aria-hidden="true"></span><input class="field ntitle" name="text" value="${esc(text)}" placeholder="Was ist zu tun?" autocomplete="off" enterkeyhint="next" aria-label="Titel"></div>
    <div class="nlist"></div>
   </div>
   <p class="prehint">Enter: nächstes Unter-To-Do · Tab: kommt davor (eine Ebene tiefer) · Umschalt+Tab: zurück · Enter in leerer Zeile: fertig</p>
@@ -2689,7 +2696,7 @@ function startInsert(button) {
  const box = document.createElement('div');
  box.className = 'insrow';
  box.style.setProperty('--c', button.style.getPropertyValue('--c'));
- box.innerHTML = `<input class="tinput" placeholder="${esc(button.querySelector('em') ? button.querySelector('em').textContent : insertQuestion(parent))}" aria-label="Neues To-Do" autocomplete="off">`;
+ box.innerHTML = `<input class="tinput" placeholder="${esc(button.querySelector('em') ? button.querySelector('em').textContent : insertQuestion(parent))}" aria-label="Neues To-Do" autocomplete="off" enterkeyhint="send">`;
  button.replaceWith(box);
  const input = box.querySelector('input');
  input.focus();
@@ -2744,7 +2751,7 @@ function startInsertRoot(button) {
  const box = document.createElement('div');
  box.className = 'insrow insrowroot';
  box.style.setProperty('--c', button.style.getPropertyValue('--c'));
- box.innerHTML = `<input class="tinput" placeholder="${ROOT_QUESTION}" aria-label="Neues To-Do" autocomplete="off">`;
+ box.innerHTML = `<input class="tinput" placeholder="${ROOT_QUESTION}" aria-label="Neues To-Do" autocomplete="off" enterkeyhint="send">`;
  button.replaceWith(box);
  const input = box.querySelector('input');
  input.focus();
@@ -2780,6 +2787,7 @@ function startRename(titleEl) {
  input.value = task.t;
  input.setAttribute('aria-label', 'Text bearbeiten');
  input.setAttribute('autocomplete', 'off');
+ input.setAttribute('enterkeyhint', 'done');
  titleEl.textContent = '';
  titleEl.append(input);
  // Version C: 🔗 im Bearbeitungsfeld öffnet die Verbindungen (kommt erst nach … / gehört auch zu …)
@@ -2854,6 +2862,8 @@ async function toggleDone(id) {
  task.doneAt = Date.now();
  save();
  render();
+ // 1.0.47: In „Heute“ kein Popup nach dem Abhaken (gehört später zum überarbeiteten Fokusmodus)
+ if (state.view === 'heute') return;
  for (const parent of freed) {
   if (parent.goal) {
    const r = await modal(`<div class="next" style="--c:${colorOf(parent)}"><p class="yay">Alles dafür erledigt!</p><h2>${esc(parent.t)}</h2>
@@ -3785,6 +3795,17 @@ function toggleTreeBranch(key, level) {
  treeOpen.set(key, !isOpen);
  render();
 }
+// 1.0.47: Text bearbeiten erst beim zweiten Antippen desselben Titels bzw. Listenpunkts kurz hintereinander.
+// Einmal antippen tut nichts; so lassen sich Karten mit viel Text auch am Text anfassen und verschieben.
+const DOUBLE_TAP_MS = 450;
+let lastTap = { key: '', at: 0 };
+function secondTap(el) {
+ const key = `${el.dataset.act}:${el.dataset.id}:${el.dataset.i || ''}`;
+ const now = Date.now();
+ const again = lastTap.key === key && now - lastTap.at < DOUBLE_TAP_MS;
+ lastTap = again ? { key: '', at: 0 } : { key, at: now };
+ return again;
+}
 // Alle Klicks laufen hier zusammen. Jeder Knopf im HTML trägt data-act="…" (und meist data-id),
 // hier steht, was dann passiert. Neuer Knopf = data-act im HTML setzen + hier ein neues case.
 document.addEventListener('click', event => {
@@ -3810,11 +3831,11 @@ document.addEventListener('click', event => {
   case 'add': addTask(); break;
   case 'addsub': addTask({ parent: id, mode: 'sub' }); break;
   case 'edit': editTask(id); break;
-  case 'rename': startRename(button); break;
+  case 'rename': if (secondTap(button)) startRename(button); break;
   case 'lcopy': copyList(id); break;
   case 'lcheck': toggleListItem(id, button.dataset.i); break;
   case 'ldel': deleteListItem(id, button.dataset.i); break;
-  case 'lren': startItemEdit(button); break;
+  case 'lren': if (secondTap(button)) startItemEdit(button); break;
   case 'ins': case 'insroot': startInsert(button); break;
   case 'inbox': sortInbox(); break;
   case 'menu': openAppMenu(button); break;

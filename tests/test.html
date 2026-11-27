@@ -46,6 +46,20 @@ async function click(sel) {
  el.click();
  await sleep(60);
 }
+// 1.0.47: Titel und Listenpunkte werden erst beim zweiten Antippen bearbeitet
+async function dblclick(sel) {
+ const el = typeof sel === 'string' ? $(sel) : sel;
+ if (!el) throw new Error('Nicht gefunden: ' + sel);
+ el.click();
+ el.click();
+ await sleep(60);
+}
+// Übersicht mit aufgeklapptem Ziel g1 (Unter-To-Dos sichtbar)
+async function zeigeG1Offen() {
+ await zeige(false);
+ const toggle = $('.tree li.card[data-id="g1"] > .chead .cardtog');
+ if (toggle.getAttribute('aria-expanded') !== 'true') await click(toggle);
+}
 async function type(sel, text) {
  const el = $(sel);
  if (!el) throw new Error('Nicht gefunden: ' + sel);
@@ -472,7 +486,8 @@ test('Abhaken, „Cool, geschafft!“ und wieder öffnen', async () => {
  expect(!saved().tasks.desk.done, 'Rückgängig hat „desk“ nicht wieder geöffnet');
 });
 test('Heute-Schalter nimmt offene Vorher-To-Dos mit', async () => {
- await click('.card[data-id="b"] [data-act="today"]');
+ await zeigeG1Offen();
+ await click('.tree li[data-tid="b"] > .row [data-act="today"]');
  const s = saved();
  expect(s.tasks.b.today, '„b“ ist nicht in Heute');
  expect(s.tasks.ex.today && s.tasks.ex.todayBy === 'b', 'Vorher-To-Do „ex“ wurde nicht mitgenommen');
@@ -498,36 +513,39 @@ test('Text in „Heute“ direkt bearbeiten (auch mit der Maus angeklickt)', asy
  title.dispatchEvent(new win.PointerEvent('pointerdown', at));
  win.dispatchEvent(new win.PointerEvent('pointerup', at));
  $(`#daylist .card[data-id="${id}"] h3 .t`).click();
+ $(`#daylist .card[data-id="${id}"] h3 .t`).click();
  const input = $(`#daylist .card[data-id="${id}"] .tinput`);
  expect(input && doc.activeElement === input, 'Eingabefeld erscheint in „Heute“ nicht');
  input.value = old + ' (neu)';
  await pressKey(input, 'Enter');
  expect(saved().tasks[id].t === old + ' (neu)', 'Neuer Text wurde nicht gespeichert');
- await click(`#daylist .card[data-id="${id}"] h3 .t`);
+ await dblclick(`#daylist .card[data-id="${id}"] h3 .t`);
  $(`#daylist .card[data-id="${id}"] .tinput`).value = old;
  await pressKey($(`#daylist .card[data-id="${id}"] .tinput`), 'Enter');
 });
 test('Heute-Schalter aus nimmt Mitgenommene wieder raus', async () => {
- await zeige(true);
- await click('.card[data-id="b"] [data-act="today"]');
+ await zeigeG1Offen();
+ await click('.tree li[data-tid="b"] > .row [data-act="today"]');
  expect(!saved().tasks.ex.today, '„ex“ ist noch in Heute');
+ await click('.tree li.card[data-id="g1"] > .chead .cardtog');
+ await zeige(true);
 });
 test('Ins Backlog verschieben und zurück', async () => {
- await click('.card[data-id="b"] [data-act="move"]');
+ await click('.card[data-id="ex"] [data-act="move"]');
  $('#modal [name=bl][value="1"]').checked = true;
  await click('#modal [data-v="ok"]');
  expect(modalOpen(), 'Frage „ganze Kette?“ kam nicht');
  await click('#modal [data-v="one"]');
- expect(saved().tasks.b.backlog, '„b“ ist nicht im Backlog');
+ expect(saved().tasks.ex.backlog, '„ex“ ist nicht im Backlog');
  // Version C: Backlog ist ein eigener Abschnitt mit denselben Karten; zurück nach Zeitnah per Ziehen
  const section = $('.col[aria-label="Akquise"] details.blsec');
  expect(section && !section.open, 'Backlog-Abschnitt ist nicht eingeklappt');
  await click(section.querySelector('summary'));
- const card = $('.col[aria-label="Akquise"] details.blsec .card[data-id="b"]');
- expect(card && $('.col[aria-label="Akquise"] details.blsec').open, '„b“ steht nicht als Karte im aufgeklappten Backlog-Abschnitt');
+ const card = $('.col[aria-label="Akquise"] details.blsec .card[data-id="ex"]');
+ expect(card && $('.col[aria-label="Akquise"] details.blsec').open, '„ex“ steht nicht als Karte im aufgeklappten Backlog-Abschnitt');
  const top = $('.col[aria-label="Akquise"] .list.zone[data-bl="0"] > .card').getBoundingClientRect();
  await dragTo(card.querySelector('.ctext'), top.x + 40, top.y + 8);
- expect(!saved().tasks.b.backlog, '„b“ ist nicht zurück in Zeitnah');
+ expect(!saved().tasks.ex.backlog, '„ex“ ist nicht zurück in Zeitnah');
 });
 test('Löschen mit Rückgängig', async () => {
  await click('.card[data-id="ex"] [data-act="del"]');
@@ -573,30 +591,32 @@ test('Unter-To-Do in der Übersicht mit dem Mülleimer löschen', async () => {
  await zeige(true);
 });
 test('Text direkt bearbeiten: antippen, tippen, Enter', async () => {
- const title = $('.card[data-id="b"] h3 .t');
+ const title = $('.card[data-id="g8"] h3 .t');
  expect(title, 'Titel zum Antippen fehlt');
  await click(title);
- const input = $('.card[data-id="b"] .tinput');
+ expect(!$('.card[data-id="g8"] .tinput'), 'Einmal antippen soll noch nicht bearbeiten');
+ await click(title);
+ const input = $('.card[data-id="g8"] .tinput');
  expect(input && doc.activeElement === input, 'Eingabefeld erscheint nicht');
  input.value = 'Text gut überlegen';
  await pressKey(input, 'Enter');
- expect(saved().tasks.b.t === 'Text gut überlegen', 'Neuer Text wurde nicht gespeichert');
- expect($('.card[data-id="b"] h3 .t').textContent === 'Text gut überlegen', 'Neuer Text wird nicht angezeigt');
- await click('.card[data-id="b"] h3 .t');
- $('.card[data-id="b"] .tinput').value = 'Verworfen';
- await pressKey($('.card[data-id="b"] .tinput'), 'Escape');
- expect(saved().tasks.b.t === 'Text gut überlegen', 'Escape hat trotzdem gespeichert');
- await click('.card[data-id="b"] h3 .t');
- $('.card[data-id="b"] .tinput').value = 'Text überlegen';
- await pressKey($('.card[data-id="b"] .tinput'), 'Enter');
+ expect(saved().tasks.g8.t === 'Text gut überlegen', 'Neuer Text wurde nicht gespeichert');
+ expect($('.card[data-id="g8"] h3 .t').textContent === 'Text gut überlegen', 'Neuer Text wird nicht angezeigt');
+ await dblclick('.card[data-id="g8"] h3 .t');
+ $('.card[data-id="g8"] .tinput').value = 'Verworfen';
+ await pressKey($('.card[data-id="g8"] .tinput'), 'Escape');
+ expect(saved().tasks.g8.t === 'Text gut überlegen', 'Escape hat trotzdem gespeichert');
+ await dblclick('.card[data-id="g8"] h3 .t');
+ $('.card[data-id="g8"] .tinput').value = 'Mails auf null bringen';
+ await pressKey($('.card[data-id="g8"] .tinput'), 'Enter');
 });
 test('Liste: „Liste:“ vor den Text, Punkte eintippen, abhaken, löschen', async () => {
- await click('.card[data-id="b"] h3 .t');
- $('.card[data-id="b"] .tinput').value = 'Liste: Baumarkt';
- await pressKey($('.card[data-id="b"] .tinput'), 'Enter');
- const field = () => $('.card[data-id="b"] .linput');
+ await dblclick('.card[data-id="g8"] h3 .t');
+ $('.card[data-id="g8"] .tinput').value = 'Liste: Baumarkt';
+ await pressKey($('.card[data-id="g8"] .tinput'), 'Enter');
+ const field = () => $('.card[data-id="g8"] .linput');
  expect(field() && doc.activeElement === field(), 'Feld für den ersten Punkt ist nicht gleich offen');
- expect($('.card[data-id="b"] h3 .t').textContent === 'Baumarkt' && $('.card[data-id="b"] .lmark'), 'Titel ohne „Liste:“ und mit Listen-Kennzeichen fehlt');
+ expect($('.card[data-id="g8"] h3 .t').textContent === 'Baumarkt' && $('.card[data-id="g8"] .lmark'), 'Titel ohne „Liste:“ und mit Listen-Kennzeichen fehlt');
  const before = Object.keys(saved().tasks).length;
  field().value = 'Öl';
  await pressKey(field(), 'Enter');
@@ -604,38 +624,38 @@ test('Liste: „Liste:“ vor den Text, Punkte eintippen, abhaken, löschen', as
  field().value = 'Magnete';
  await pressKey(field(), 'Enter');
  await pressKey(field(), 'Escape');
- let list = saved().tasks.b.list;
+ let list = saved().tasks.g8.list;
  expect(list.length === 2 && list[0].t === 'Öl', 'Punkte wurden nicht gespeichert');
  expect(Object.keys(saved().tasks).length === before, 'Punkte sind eigene To-Dos geworden');
- expect($('.card[data-id="b"] .lcount').textContent === '0/2', 'Zähler 0/2 im Kopf fehlt');
- await click(`.card[data-id="b"] .lcheck[data-i="${list[0].id}"]`);
- expect(saved().tasks.b.list[0].done && $('.card[data-id="b"] .lcount').textContent === '1/2', 'Abhaken klappt nicht');
+ expect($('.card[data-id="g8"] .lcount').textContent === '0/2', 'Zähler 0/2 im Kopf fehlt');
+ await click(`.card[data-id="g8"] .lcheck[data-i="${list[0].id}"]`);
+ expect(saved().tasks.g8.list[0].done && $('.card[data-id="g8"] .lcount').textContent === '1/2', 'Abhaken klappt nicht');
  // 1.0.45: Listensymbol antippen kopiert Überschrift und Punkte (offene zuerst, erledigte mit ✓)
  let copied = null;
  Object.defineProperty(win.navigator, 'clipboard', { configurable: true, value: { writeText: async text => { copied = text; } } });
- await click('.card[data-id="b"] .lmark');
+ await click('.card[data-id="g8"] .lmark');
  expect(copied === 'Baumarkt\n- Magnete\n✓ Öl', 'Liste wurde nicht richtig kopiert: ' + JSON.stringify(copied));
  expect(toastText().includes('Liste kopiert'), 'Meldung „Liste kopiert“ fehlt');
- expect(!$('.card[data-id="b"] h3 .tinput'), 'Listensymbol soll den Titel nicht zum Bearbeiten öffnen');
+ expect(!$('.card[data-id="g8"] h3 .tinput'), 'Listensymbol soll den Titel nicht zum Bearbeiten öffnen');
  // 1.0.46: Geht kein Kopierweg (z. B. manches Handy), zeigt ein Popup den Text zum Selbst-Kopieren
  Object.defineProperty(win.navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('nein'); } } });
  const realExec = doc.execCommand;
  doc.execCommand = () => false;
- await click('.card[data-id="b"] .lmark');
+ await click('.card[data-id="g8"] .lmark');
  await sleep(60);
  doc.execCommand = realExec;
  expect(modalOpen() && $('#modal .copyarea') && $('#modal .copyarea').value === 'Baumarkt\n- Magnete\n✓ Öl', 'Popup mit dem Listentext fehlt');
  await click('#modal [data-v="ok"]');
- await click(`.card[data-id="b"] .ldel[data-i="${list[1].id}"]`);
- expect(saved().tasks.b.list.length === 1, 'Punkt wurde nicht gelöscht');
- await click('.card[data-id="b"] h3 .t');
- $('.card[data-id="b"] .tinput').value = 'Text überlegen';
- await pressKey($('.card[data-id="b"] .tinput'), 'Enter');
- expect(!$('.card[data-id="b"] .llist') && saved().tasks.b.list.length === 1, 'Ohne „Liste:“ soll die Liste ausgeblendet, aber nicht gelöscht sein');
+ await click(`.card[data-id="g8"] .ldel[data-i="${list[1].id}"]`);
+ expect(saved().tasks.g8.list.length === 1, 'Punkt wurde nicht gelöscht');
+ await dblclick('.card[data-id="g8"] h3 .t');
+ $('.card[data-id="g8"] .tinput').value = 'Mails auf null bringen';
+ await pressKey($('.card[data-id="g8"] .tinput'), 'Enter');
+ expect(!$('.card[data-id="g8"] .llist') && saved().tasks.g8.list.length === 1, 'Ohne „Liste:“ soll die Liste ausgeblendet, aber nicht gelöscht sein');
 });
 test('🔗 im Bearbeitungsfeld: ein vorhandenes To-Do muss vorher erledigt sein', async () => {
- await click('.card[data-id="b"] h3 .t');
- const link = $('.card[data-id="b"] .linkbtn');
+ await dblclick('.card[data-id="g8"] h3 .t');
+ const link = $('.card[data-id="g8"] .linkbtn');
  expect(link, '🔗 im Bearbeitungsfeld fehlt');
  await click(link);
  expect(modalOpen() && $('#modal [data-v="addk"]') && $('#modal [data-v="addp"]'), 'Popup „Verbindungen“ fehlt');
@@ -653,11 +673,11 @@ test('🔗 im Bearbeitungsfeld: ein vorhandenes To-Do muss vorher erledigt sein'
  const target = saved().tasks[shown[0]];
  $('#modal [name=o]').value = target.id;
  await click('#modal [data-v="ok"]');
- expect(saved().tasks.b.needs.includes(target.id) || saved().tasks.b.soft.includes(target.id), 'Verbindung wurde nicht angelegt');
+ expect(saved().tasks.g8.needs.includes(target.id) || saved().tasks.g8.soft.includes(target.id), 'Verbindung wurde nicht angelegt');
  await click('#modal [data-v="ok"]');
  expect(!modalOpen(), 'Popup schließt nicht');
  await click('#undo');
- expect(!saved().tasks.b.needs.includes(target.id) && !saved().tasks.b.soft.includes(target.id), 'Rückgängig löst die Verbindung nicht');
+ expect(!saved().tasks.g8.needs.includes(target.id) && !saved().tasks.g8.soft.includes(target.id), 'Rückgängig löst die Verbindung nicht');
 });
 test('Übersicht: Ziel-Karte hat Heute und ⋯ im Kopf, + und Mülleimer hinter dem Titel', async () => {
  await zeige(false);
@@ -1005,6 +1025,45 @@ test('Gespeicherte Liste bleibt nach Neuladen erhalten', async () => {
  await loadApp();
  expect(win.localStorage.getItem(KEY) === before, 'Daten haben sich beim Laden verändert');
  expect($$('#acc .card').length > 0, 'Nach dem Neuladen keine Karten');
+});
+
+// 1.0.47
+test('Nur Startklares: To-Do mit offenem Unter-To-Do (auch „hilft nur“) fehlt, ausgegraut in der Übersicht', async () => {
+ await freshApp();
+ await zeige(true);
+ expect(!$('.card[data-id="b"]'), '„b“ hat ein offenes Unter-To-Do und steht trotzdem in „Nur Startklares“');
+ expect($('.card[data-id="ex"]') && $('.card[data-id="g8"]'), 'Startklare To-Dos fehlen');
+ await zeige(false);
+ expect($('.tree li.card[data-id="g1"]').classList.contains('haspre') && !$('.tree li.card[data-id="g8"]').classList.contains('haspre'), 'Ziel mit offenen Unter-To-Dos ist nicht ausgegraut');
+ await zeige(true);
+});
+test('Abhaken in „Heute“ zeigt kein Popup', async () => {
+ await freshApp();
+ await click('[data-view="heute"]');
+ await click('#daylist .card[data-id="c"] .check');
+ await sleep(60);
+ expect(saved().tasks.c.done, '„c“ ist nicht erledigt');
+ // c war nicht das letzte Vorher-To-Do von a; desk fehlt noch. Mit desk wäre a frei → früher Popup „Cool, geschafft!“
+ const d = saved(); d.tasks.desk.today = true; win.localStorage.setItem(KEY, JSON.stringify(d));
+ await loadApp();
+ await click('[data-view="heute"]');
+ await click('#daylist .card[data-id="desk"] .check');
+ await sleep(60);
+ expect(saved().tasks.desk.done && !modalOpen(), 'In „Heute“ kam nach dem Abhaken ein Popup');
+});
+test('Listenpunkt erst beim Doppeltippen bearbeiten, Tasten-Hinweis „Senden“', async () => {
+ await freshApp();
+ const d = saved(); d.tasks.g8.t = 'Liste: Mails'; d.tasks.g8.list = [{ id: 'p1', t: 'Posteingang', done: false }];
+ win.localStorage.setItem(KEY, JSON.stringify(d));
+ await loadApp();
+ const item = () => $('.card[data-id="g8"] .lt[data-i="p1"]');
+ await click(item());
+ expect(!item().querySelector('input'), 'Einmal antippen soll noch nicht bearbeiten');
+ await dblclick(item());
+ const input = item().querySelector('input');
+ expect(input && input.getAttribute('enterkeyhint') === 'done', 'Doppeltippen öffnet das Feld nicht');
+ await pressKey(input, 'Escape');
+ expect($('.card[data-id="g8"] .linput').getAttribute('enterkeyhint') === 'send', 'Feld „+ Punkt“ zeigt nicht „Senden“');
 });
 
 document.getElementById('run').onclick = async () => {
