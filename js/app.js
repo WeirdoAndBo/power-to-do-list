@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.44-c';
+const APP_VERSION = '1.0.45-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -563,7 +563,8 @@ function cardHtml(task, color, options = {}) {
 }
 // Titel eines To-Dos. Antippen = direkt hier bearbeiten (Enter speichert, Escape bricht ab), siehe startRename.
 function titleHtml(task) {
- const listMark = isList(task) ? `<span class="lmark" title="Liste">Liste</span>` : '';
+ // 1.0.45: Das Listensymbol ist ein Knopf: antippen kopiert Überschrift und Punkte (copyList).
+ const listMark = isList(task) ? `<button type="button" class="lmark" data-act="lcopy" data-id="${task.id}" title="Ganze Liste kopieren" aria-label="${esc(shownTitle(task))}: ganze Liste kopieren">Liste</button>` : '';
  return `${listMark}<span class="t" data-act="rename" data-id="${task.id}" tabindex="0" role="button" aria-label="${esc(task.t)} – Text bearbeiten">${esc(shownTitle(task))}</span>`;
 }
 // Abhak-Liste unter einem Listen-To-Do: offene Punkte oben, erledigte blass darunter, ganz unten ein Feld für
@@ -583,6 +584,37 @@ function listCountHtml(task) {
  if (!isList(task) || !(task.list || []).length) return '';
  const done = task.list.filter(item => item.done).length;
  return `<small class="lcount" title="${done} von ${task.list.length} abgehakt">${done}/${task.list.length}</small>`;
+}
+// 1.0.45: Liste als Text, z. B. „Baumarkt“ und darunter „- Schrauben“. Erledigte Punkte stehen mit „✓“ unten,
+// in derselben Reihenfolge wie auf der Karte.
+function listAsText(task) {
+ const items = [...(task.list || [])].sort((a, b) => a.done - b.done);
+ return [shownTitle(task), ...items.map(item => (item.done ? '✓ ' : '- ') + item.t)].join('\n');
+}
+// In die Zwischenablage. Ohne navigator.clipboard (z. B. ohne https) über ein unsichtbares Textfeld.
+async function copyText(text) {
+ try {
+  await navigator.clipboard.writeText(text);
+  return true;
+ } catch (e) {
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+  document.body.append(area);
+  area.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (err) {}
+  area.remove();
+  return ok;
+ }
+}
+async function copyList(taskId) {
+ const task = getTask(taskId);
+ if (!isList(task)) return;
+ const count = (task.list || []).length;
+ const ok = await copyText(listAsText(task));
+ toast(ok ? `Liste kopiert (${count} ${count === 1 ? 'Punkt' : 'Punkte'}).` : 'Kopieren ging hier nicht.');
 }
 const listItem = (task, itemId) => (task && task.list || []).find(item => item.id === itemId);
 function focusListInput(taskId) {
@@ -3754,6 +3786,7 @@ document.addEventListener('click', event => {
   case 'addsub': addTask({ parent: id, mode: 'sub' }); break;
   case 'edit': editTask(id); break;
   case 'rename': startRename(button); break;
+  case 'lcopy': copyList(id); break;
   case 'lcheck': toggleListItem(id, button.dataset.i); break;
   case 'ldel': deleteListItem(id, button.dataset.i); break;
   case 'lren': startItemEdit(button); break;
