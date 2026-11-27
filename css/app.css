@@ -796,3 +796,7 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
  .qadd{margin:0 0 0 4px}
  .catbar.new{justify-content:center;text-align:center;padding:0 14px}
 }
+/* Version C 1.0.45 – Listensymbol „Liste“ ist ein Knopf: antippen kopiert die ganze Liste */
+button.lmark{border:0;font-family:inherit;line-height:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button.lmark:hover{background:color-mix(in srgb,var(--c) 24%,var(--card))}
+button.lmark:active{transform:scale(.95)}
