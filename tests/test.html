@@ -219,7 +219,7 @@ test('Handy: nichts ragt seitlich heraus, Schnelleingabe statt Pfeilen an den Sp
   expect(doc.documentElement.scrollWidth <= win.innerWidth + 1, 'Seite ist breiter als der Bildschirm');
   expect($('.subtabs').offsetParent === null, 'Kategorie-Knöpfe sind am Handy noch sichtbar');
   expect(!/zeitnah/i.test($('.cat.open').innerText), 'Wort „zeitnah“ steht noch im Bereich');
-  expect($('.mswitch .sm').offsetParent !== null && $('.mswitch .sm').textContent === 'Startklar', 'Schalter heißt nicht kurz „Startklar“');
+  expect($('.mswitch .sm').offsetParent !== null && $('.mswitch .sm').textContent === 'Nur Startklares', 'Schalter heißt nicht kurz „Nur Startklares“');
   expect($('.cathead [data-act="editcat"]').offsetParent === null, 'Stift am Bereichsnamen ist am Handy noch sichtbar');
   expect(!$('.colarrow') || $('.colarrow').offsetParent === null, 'Pfeile neben den Spalten sind noch da');
   expect($('.dock .plus').offsetParent === null && $('#qin').offsetParent !== null, 'Unten steht noch der Knopf statt der Eingabezeile');
@@ -281,7 +281,7 @@ test('Handy: Schnelleingabe legt in der sichtbaren Spalte an, ausgefahren auch w
  try {
   const fin = $$('#cols > .col').findIndex(c => c.getAttribute('aria-label') === 'Finanzen');
   win.eval(`goToColumn(${fin})`); await sleep(150);
-  expect($('#qin').placeholder === 'Neu in Finanzen', 'Hinweistext nennt die sichtbare Spalte nicht');
+  expect($('#qin').placeholder === '+ in „Finanzen“', 'Hinweistext nennt die sichtbare Spalte nicht');
   expect(!$('#qlabel'), 'Schild über der Eingabe ist noch da');
   const qin = $('#qin');
   qin.value = 'Schnell 1';
@@ -303,7 +303,7 @@ test('Handy: Schnelleingabe legt in der sichtbaren Spalte an, ausgefahren auch w
   $('#qopts [name=bl]').checked = true;
   $('#qopts [name=bl]').dispatchEvent(new Event('change', { bubbles: true }));
   await sleep(30);
-  expect($('#qin').placeholder === 'Neu in Haushalt · Backlog', 'Hinweistext zeigt nicht Haushalt · Backlog');
+  expect($('#qin').placeholder === '+ in „Haushalt“ · Backlog', 'Hinweistext zeigt nicht Haushalt · Backlog');
   qin.value = 'Schnell Privat';
   await pressKey(qin, 'Enter');
   const sp = Object.values(saved().tasks).find(t => t.t === 'Schnell Privat');
