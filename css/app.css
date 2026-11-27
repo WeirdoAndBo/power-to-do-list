@@ -788,3 +788,11 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
  /* „+ Bereich“ wie die Bereichsköpfe: eckig, volle Breite */
  .catbar.new{margin:0 calc(-1 * max(4vw,16px));width:auto;border-radius:0;min-height:54px;padding:0 14px 0 max(4vw,16px)}
 }
+
+/* Version C 1.0.44 – Handy: „+“ wieder links im Feld, „+ Bereich“ mittig, Überschrift im Popup nicht markierbar */
+#modal h2{user-select:none;-webkit-user-select:none}
+@media(max-width:600px){
+ .qin{padding:0 16px 0 10px}
+ .qadd{margin:0 0 0 4px}
+ .catbar.new{justify-content:center;text-align:center;padding:0 14px}
+}
