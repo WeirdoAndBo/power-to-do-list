@@ -442,7 +442,7 @@ details.blsec .bempty{padding:6px 8px 12px}
 
 /* Version C: Listen („Liste: …“) – einfache Abhak-Punkte unter dem Titel, keine eigenen To-Dos */
 .lmark{display:inline-block;vertical-align:2px;margin-right:6px;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:color-mix(in srgb,var(--c) 75%,var(--ink));background:color-mix(in srgb,var(--c) 14%,var(--card));border-radius:6px;padding:1px 6px}
-.lcount{font-size:12px;font-weight:600;color:var(--mute);margin-right:4px}
+.lcount{font-weight:700}
 .llist{margin:4px 0 2px 34px;display:flex;flex-direction:column;cursor:default}
 .tree li>.llist{margin:-6px 0 6px 30px}
 .litem{display:flex;align-items:center;gap:8px;min-height:30px}
@@ -824,3 +824,23 @@ button.lmark::after{content:'';position:absolute;inset:-10px -4px}
 .litem .lcheck{margin-top:7px}
 .litem .ldel{margin-top:2px}
 .t[data-act=rename],.lt[data-act=lren]{touch-action:manipulation}
+
+/* ============================================================================
+   Version C 1.0.48 – Kartenzeile am Handy: nur Häkchen, Titel, Heute
+   - Schild „Liste 1/4“ steht über dem Titel (Stand im Schild statt eigenem Zähler).
+   - Mülleimer im Bearbeitungsfeld (Doppeltipp auf den Text), ganz rechts neben 🔗.
+     Am Handy entfallen dafür die Mülleimer in der Zeile (Karten und Unter-To-Dos).
+   - Pfeil mit Anzahl der Unter-To-Dos mittig auf der Trennlinie (Fortschritt), die dort unterbrochen ist.
+   ============================================================================ */
+.card h3 .lmark{display:table;margin:0 0 4px}
+.editdel{flex:none;width:30px;height:30px;margin-left:auto;opacity:.75}
+.pdiv .divtog{display:none}
+@media(max-width:600px){
+ .card .cbody>.cacts,.tcard .row>.mini.del{display:none}
+ .card .chead>.cardtog{display:none}
+ .card>.pdiv{order:10;flex:1 0 100%;position:relative;display:flex;justify-content:center;min-height:14px;margin:8px -8px 8px -12px}
+ /* Beim Bearbeiten hat das Feld die ganze Breite: Heute-Schalter kurz weg, Mülleimer ganz am rechten Rand */
+ .card:has(.t.editing) .chead>.today{display:none}
+ .card>.pdiv>.pbar{position:absolute;left:0;right:0;top:50%;margin:-2px 0 0 !important}
+ .pdiv .divtog{display:flex;position:relative;height:28px;margin:-7px 0;background:var(--card);box-shadow:0 0 0 1px color-mix(in srgb,var(--c) 30%,transparent);border-radius:14px;opacity:1;padding:0 8px 0 10px}
+}
