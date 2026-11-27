@@ -650,14 +650,20 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
  .dock .plus{display:none}
  .dock{padding:6px 0 calc(4px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 35%)}
  .qbar{display:grid;pointer-events:auto;width:min(100%,520px);padding:0 12px;justify-items:center}
- .qlabel{margin:0 0 4px;max-width:100%;padding:1px 10px;border-radius:10px;font-size:12px;font-weight:600;color:color-mix(in srgb,var(--c) 70%,var(--ink));background:color-mix(in srgb,var(--c) 12%,var(--bg));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ /* Leiste liegt als eigene Ebene über allem; mit Tastatur rutscht sie per transform darüber (app.js) */
+ .dock{z-index:20;will-change:transform}
  .qrow{display:flex;align-items:center;gap:8px;width:100%}
  .qarrow{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--orange);color:var(--orangeInk);box-shadow:0 4px 12px rgb(0 0 0/.16);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation;transition:opacity .15s,background .15s}
  .qarrow.off{background:color-mix(in srgb,var(--mute) 30%,var(--bg));color:var(--mute);box-shadow:none;opacity:.7}
  .qarrow:not(.off):active{transform:scale(.94)}
- .qin{flex:1;min-width:0;height:44px;padding:0 18px;border-radius:22px;border:0;background:var(--acc);color:var(--accInk);font-size:16px;font-weight:600;box-shadow:0 6px 18px rgb(0 0 0/.16)}
- .qin::placeholder{color:color-mix(in srgb,var(--accInk) 70%,transparent);font-weight:600}
- .qin:focus{outline:none;box-shadow:0 6px 18px rgb(0 0 0/.16),0 0 0 3px color-mix(in srgb,var(--c) 60%,transparent)}
+ /* Rundes Feld mit Haken rechts drin (Version C 1.0.36). Der Hinweistext sagt, wohin es geht. */
+ .qfield{flex:1;min-width:0;height:44px;display:flex;align-items:center;border-radius:22px;background:var(--acc);color:var(--accInk);box-shadow:0 6px 18px rgb(0 0 0/.16);padding:0 4px 0 0}
+ .qfield:focus-within{box-shadow:0 6px 18px rgb(0 0 0/.16),0 0 0 3px color-mix(in srgb,var(--c) 60%,transparent)}
+ .qin{flex:1;min-width:0;height:44px;padding:0 6px 0 16px;border:0;border-radius:22px;background:transparent;color:inherit;font-size:16px;font-weight:600;text-overflow:ellipsis}
+ .qin::placeholder{color:color-mix(in srgb,var(--accInk) 68%,transparent);font-weight:600}
+ .qin:focus{outline:none}
+ .qok{flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--c);color:#fff;touch-action:manipulation}
+ .qok:active{transform:scale(.92)}
  .qmore{width:56px;height:20px;display:grid;place-items:center;color:var(--mute);border-radius:10px}
  .qmore svg{transition:transform .25s}
  .qbar.open .qmore svg{transform:rotate(180deg)}
@@ -672,7 +678,7 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
  .qline .seg label{min-height:36px}
  .qline .opt{min-height:40px;gap:8px;font-size:15px}
  .qfull{display:block;margin:6px auto 0;font-size:14px}
- #toast{bottom:calc(var(--dockh,96px) + 6px)}
+ #toast{bottom:calc(var(--dockh,96px) + var(--kb,0px) + 6px)}
 
  /* Die Pfeile neben den Spalten entfallen: die Spalten haben die volle Breite */
  .colarrow{display:none}
