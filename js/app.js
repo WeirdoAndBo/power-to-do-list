@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.36-c';
+const APP_VERSION = '1.0.37-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -1241,10 +1241,11 @@ function updateQuickBar() {
  // Version C 1.0.36: Wohin es geht, steht im Hinweistext des Felds (kein Schild mehr darüber)
  const kategorie = bereich && bereich.subs.find(k => k.id === kategorieId);
  const where = kategorie ? kategorie.name : placeName(bereichId, kategorieId);
- const hint = heute && !quickOpen ? 'Neues To-Do für „Heute“' : `Neues To-Do in „${where}“${backlog ? ' · Backlog' : ''}`;
+ // 1.0.37: kurz halten, das Feld ist schmal. Für Vorlesehilfen steht es ausführlich im aria-label.
+ const hint = heute && !quickOpen ? 'Neu für Heute' : `Neu in ${where}${backlog ? ' · Backlog' : ''}`;
  const input = $('#qin');
  input.placeholder = hint;
- input.setAttribute('aria-label', hint);
+ input.setAttribute('aria-label', heute && !quickOpen ? 'Neues To-Do für Heute' : `Neues To-Do in ${where}${backlog ? ', Backlog' : ''}`);
  bar.style.setProperty('--c', bereich ? bereich.color : GRAY);
  const open = visibleBereiche().find(b => b.id === state.openCat);
  const count = open && !heute ? columnsOf(open).length : 0;
@@ -1264,9 +1265,11 @@ function syncDockHeight() {
  if (dock) document.documentElement.style.setProperty('--dockh', dock.offsetHeight + 'px');
 }
 addEventListener('resize', syncDockHeight);
-// Version C 1.0.36: Tastatur als Ebene darüber. Der Viewport-Tag (interactive-widget=overlays-content) sorgt dafür,
-// dass die Tastatur die Seite nicht staucht und nichts verrutscht. Die Leiste unten rutscht dann selbst
-// über die Tastatur (visualViewport = der Teil, der noch zu sehen ist). --kb = Höhe der Tastatur.
+// Version C 1.0.37: Tastatur. Der Viewport-Tag (interactive-widget=resizes-visual) sorgt dafür, dass die Tastatur
+// die Seite nicht neu anordnet (Spalten bleiben, wie sie sind), aber der sichtbare Teil (visualViewport) kleiner
+// wird. Daraus berechnet die App, wie viel die Tastatur verdeckt, und schiebt die Leiste unten (und Popups)
+// genau darüber. --kb = verdeckte Höhe. (1.0.36 hatte overlays-content: Dann meldet Android die Tastatur gar
+// nicht, und sie lag über dem Feld.)
 function placeDockAboveKeyboard() {
  const view = window.visualViewport;
  const dock = document.querySelector('.dock');
@@ -1277,6 +1280,10 @@ function placeDockAboveKeyboard() {
 }
 window.visualViewport?.addEventListener('resize', placeDockAboveKeyboard);
 window.visualViewport?.addEventListener('scroll', placeDockAboveKeyboard);
+// Manche Handys melden die Tastatur erst etwas später: nach dem Antippen eines Felds noch ein paar Mal nachsehen
+['focusin', 'focusout'].forEach(type => document.addEventListener(type, () => {
+ [50, 200, 400, 700].forEach(ms => setTimeout(placeDockAboveKeyboard, ms));
+}));
 // Haken in der Eingabezeile: Tippen soll die Tastatur nicht schließen
 document.addEventListener('pointerdown', event => {
  if (event.target.closest && event.target.closest('.qok')) event.preventDefault();
