@@ -762,3 +762,29 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
  .cathead .cname{min-height:0;align-self:center}
  .catbar:not(.new) .cball{margin-left:-2px}
 }
+
+/* ============================================================================
+   Version C 1.0.43 – Handy-Feinschliff
+   ============================================================================ */
+/* Menü ⋯ neben dem Namen der Liste */
+.appmenu .animitem{display:flex;align-items:center;gap:12px;justify-content:space-between}
+.appmenu .animitem i{flex:none;width:34px;height:20px;border-radius:10px;background:var(--line);position:relative;transition:background .15s}
+.appmenu .animitem i::after{content:'';position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgb(0 0 0/.25);transition:transform .15s}
+.appmenu .animitem[aria-checked=true] i{background:var(--acc)}
+.appmenu .animitem[aria-checked=true] i::after{transform:translateX(14px)}
+/* Bereich wählen beim Eintragen in „Heute“ */
+.qhmenu .qhq{margin:4px 12px 6px;font-size:13px;color:var(--mute)}
+.qhmenu [data-act=qheute]{display:flex;align-items:center;gap:10px}
+.qhmenu [data-act=qheute] i{flex:none;width:10px;height:10px;border-radius:50%;background:var(--c)}
+.foot{min-height:1em}
+@media(max-width:600px){
+ /* „+“ rechts im Feld */
+ .qin{padding:0 8px 0 16px}
+ .qadd{margin:0 4px 0 0}
+ /* „Heute“: keine Pfeile, Feld so breit wie die ganze Zeile */
+ .qbar.qheute .qarrow{display:none}
+ /* Häkchen des Haupt-To-Dos mittig zum Titel */
+ .card .cbody>.check{align-self:center}
+ /* „+ Bereich“ wie die Bereichsköpfe: eckig, volle Breite */
+ .catbar.new{margin:0 calc(-1 * max(4vw,16px));width:auto;border-radius:0;min-height:54px;padding:0 14px 0 max(4vw,16px)}
+}

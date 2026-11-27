@@ -292,6 +292,42 @@ test('Handy: nichts ragt seitlich heraus, Schnelleingabe statt Pfeilen an den Sp
   await sleep(200);
  }
 });
+test('Handy: In „Heute“ ohne Pfeile, das „+“ fragt nach dem Bereich und legt in dessen Sammlung an', async () => {
+ frame.style.width = '360px';
+ await sleep(200);
+ try {
+  await click('[data-view="heute"]');
+  await sleep(100);
+  expect(!$$('.qarrow').some(a => a.offsetParent !== null), 'Pfeile stehen in „Heute“ noch neben dem Feld');
+  $('#qin').value = 'Heute-Test';
+  await click('.qadd');
+  const choices = $$('.ctxmenu [data-act="qheute"]');
+  expect(choices.length === saved().cats.length, 'Beim „+“ erscheint keine Auswahl der Bereiche');
+  const target = saved().cats[0];
+  await click(choices[0]);
+  await sleep(60);
+  const made = Object.values(saved().tasks).find(t => t.t === 'Heute-Test');
+  const sammlung = target.subs.find(k => k.inbox);
+  expect(made && made.today && made.cat === target.id && made.area === (sammlung ? sammlung.id : null), 'To-Do steht nicht für heute in der Sammlung des gewählten Bereichs');
+  await undoLast();
+ } finally {
+  await click('[data-view="baum"]');
+  frame.style.width = '';
+  await sleep(200);
+ }
+});
+test('Menü ⋯: Über diese App, Datensicherung und Animationen', async () => {
+ await click('[data-act="menu"]');
+ expect($('.ctxmenu [data-act="about"]') && $('.ctxmenu [data-act="backup"]') && $('.ctxmenu [data-act="anim"]'), 'Menü hat nicht alle Einträge');
+ const before = saved().anim;
+ await click('.ctxmenu [data-act="anim"]');
+ expect(saved().anim === !before, 'Animationen lassen sich im Menü nicht umschalten');
+ await click('.ctxmenu [data-act="anim"]');
+ await click('.ctxmenu [data-act="about"]');
+ expect(modalOpen() && /Tracking/.test($('#modal').textContent) && !/Datenformat/.test($('#modal').textContent), 'App-Infos fehlen oder zeigen noch technische Details');
+ await click('#modal [data-v="ok"]');
+ expect(!$('.foot').textContent.trim(), 'Hinweis unter den Bereichen steht noch da');
+});
 test('Handy: Schnelleingabe legt in der sichtbaren Spalte an, ausgefahren auch woanders und ins Backlog', async () => {
  frame.style.width = '360px';
  await sleep(200);
@@ -913,6 +949,7 @@ test('Sicherung speichern erzeugt eine gültige Datei', async () => {
  win.URL.createObjectURL = b => { blob = b; return original.call(win.URL, b); };
  win.HTMLAnchorElement.prototype.click = function () {}; // keinen echten Download auslösen
  await click('[data-act="menu"]');
+ await click('[data-act="backup"]');
  await click('#modal [data-v="export"]');
  expect(blob, 'Es wurde keine Datei erzeugt');
  backup = await blob.text();
