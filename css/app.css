@@ -553,17 +553,12 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
 /* ---------- Handy: Kopf des Bereichs kompakter ---------- */
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .mswitch .sm{display:none}
-.katjump{display:none}
 @media(max-width:600px){
  /* keine Anzahl „zeitnah“ im Bereichskopf */
  .cathead .ct small,.catbar small{display:none}
  .mswitch .lg{display:none}.mswitch .sm{display:inline}
- /* Kategorie-Knöpfe aus, stattdessen ein Auswahlfeld */
+ /* Kategorie-Knöpfe aus, stattdessen Pfeile neben den Spalten (siehe unten, Version C 1.0.34) */
  .subtabs{display:none}
- .katjump{display:flex;align-items:center;position:relative;margin:0 2px 10px;border-radius:14px;background:var(--card);box-shadow:var(--shadow)}
- .katjump select{appearance:none;-webkit-appearance:none;width:100%;min-height:42px;padding:0 40px 0 14px;border:0;border-radius:14px;background:transparent;font-size:15px;font-weight:600;color:var(--ink)}
- .katjump select:focus-visible{outline:3px solid color-mix(in srgb,var(--c) 70%,transparent)}
- .katjump svg{position:absolute;right:14px;transform:rotate(90deg);color:var(--mute);pointer-events:none}
 }
 /* Handy: Name, kurzer Schalter, Stift und Pfeil passen meist in eine Zeile */
 @media(max-width:600px){.cathead{flex-wrap:nowrap}.cathead .ct{flex:1 1 auto;font-size:18px}.cathead .mswitch{order:0;margin:0}.cathead .iconbtn{width:38px}}
@@ -572,3 +567,77 @@ body.dnd .insroot.last .ins,body.treedrag .insroot.last .ins{visibility:hidden}
 @media(max-width:380px){header .name{font-size:25px}}
 /* Streifen für „+ danach“ in der Kette: nie von selbst sichtbar, nur über die Leiste am Handy */
 .ins.chainafter{display:none}
+
+/* ============================================================================
+   Version C 1.0.34 – Handy schlanker
+   ============================================================================ */
+/* Text nur am Desktop (.wide) oder nur am Handy (.narrow), siehe wideNarrow() in app.js */
+.narrow{display:none}
+@media(max-width:600px){.wide{display:none}.narrow{display:inline}}
+
+/* Kopf des Bereichs am Handy: Punkt (Farbe) und Name (bearbeiten) statt Zuklapp-Knopf und Stift */
+.ctm,.csep,.cdel{display:none}
+.colarrow{display:none}
+.colwrap{position:relative}
+
+/* Kleines Menü neben einem Knopf: alle Kategorien (Pfeil lange drücken) oder Farben (Punkt antippen) */
+.ctxmenu{position:fixed;z-index:35;min-width:190px;max-width:min(300px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;padding:6px;border-radius:16px;background:var(--card);box-shadow:0 12px 36px rgb(0 0 0/.2),0 0 0 1px var(--line);display:grid;gap:2px;animation:menuin .12s ease-out}
+@keyframes menuin{from{opacity:0;transform:scale(.96)}}
+.ctxmenu>button{display:flex;align-items:center;gap:4px;min-height:42px;padding:6px 12px;border-radius:10px;text-align:left;font-size:15px}
+.ctxmenu>button:hover,.ctxmenu>button:focus-visible{background:var(--soft);outline:none}
+.ctxmenu>button[aria-current=true]{font-weight:700;background:color-mix(in srgb,var(--c) 14%,var(--card))}
+.ctxmenu>button.off{color:var(--mute)}
+.ctxmenu>button small{margin-left:auto;padding-left:10px;font-size:12.5px;color:var(--mute)}
+.ctxmenu>button.new{color:var(--mute)}
+.ctxmenu hr{border:0;border-top:1px solid var(--line);margin:4px 6px}
+.cmswatch{display:grid;grid-template-columns:repeat(4,40px);gap:8px;padding:6px}
+.cmswatch button{width:40px;height:40px;border-radius:50%;background:var(--c)}
+.cmswatch button[aria-checked=true]{box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--c)}
+
+@media(max-width:600px){
+ /* „+ Neues To-Do“ unten: etwa so hoch wie der Umschalter Übersicht/Heute */
+ .plus{height:44px;padding:0 18px 0 14px;border-radius:22px;font-size:15px;gap:6px;box-shadow:0 6px 18px rgb(0 0 0/.16)}
+ .plus span{font-size:22px}
+ .dock{padding-top:10px}
+
+ /* Bereiche in voller Breite, ohne Umrandung: nur der Kopf hat die Farbe des Bereichs als Hintergrund.
+    Die Seitenränder (.wrap) werden dafür mit negativem Rand überbrückt. */
+ .cat.open,.catbar:not(.new){margin:0 calc(-1 * max(4vw,16px));width:auto}
+ .cat.open{border-radius:0;background:transparent;box-shadow:none;padding:0 0 14px}
+ .cathead,.catbar:not(.new){background:color-mix(in srgb,var(--c) 13%,var(--bg))}
+ .cathead{min-height:54px;padding:0 4px 0 max(4vw,16px);margin-bottom:10px;gap:4px}
+ .catbar:not(.new){border-radius:0;box-shadow:none;min-height:54px;padding:0 14px 0 max(4vw,16px);gap:10px}
+ .catbar:not(.new)::before{position:static;width:12px;height:12px;border-radius:50%;flex:none}
+ .catbar:not(.new) b{flex:1;font-size:17px}
+ .catbar:not(.new):hover{background:color-mix(in srgb,var(--c) 18%,var(--bg))}
+ #acc{gap:8px}
+
+ /* Kopf: Punkt = Farbe, Name = bearbeiten. Kein Stift, kein Zuklapp-Knopf auf dem Namen. */
+ .cathead .ct:not(.keep),.cathead .iconbtn[data-act=editcat]{display:none}
+ .ctm{display:flex;align-items:center;flex:1 1 auto;min-width:0;gap:2px}
+ .cdot{flex:none;width:32px;height:44px;margin-left:-10px;display:grid;place-items:center;border-radius:12px}
+ .cdot i,.ctm>i{width:12px;height:12px;border-radius:50%;background:var(--c);display:block}
+ .ctm>i{flex:none;margin:0 10px 0 0}
+ .cname{min-width:0;max-width:100%;min-height:44px;padding:0 6px;margin-left:-2px;border-radius:10px;font-size:18px;font-weight:700;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .cdot:active,.cname:active{background:color-mix(in srgb,var(--c) 18%,transparent)}
+ .cathead .mswitch{background:color-mix(in srgb,var(--card) 70%,transparent);box-shadow:none}
+ .cathead .mswitch[aria-checked=true]{background:var(--card)}
+ /* Name bearbeiten: Feld, dann abgesetzt „Bereich löschen“ (betrifft den ganzen Bereich, nicht nur den Text) */
+ .cnamein{flex:1;min-width:0;min-height:40px;padding:0 10px;border:0;border-radius:10px;background:var(--card);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--c) 55%,transparent);font-size:17px;font-weight:700}
+ .cnamein:focus{outline:none;box-shadow:inset 0 0 0 2px var(--c)}
+ .cathead.editing{padding-right:10px}
+ .csep{display:block;flex:none;width:1px;align-self:stretch;margin:12px 6px;background:color-mix(in srgb,var(--ink) 18%,transparent)}
+ .cdel{display:inline-flex;align-items:center;gap:5px;flex:none;min-height:38px;padding:0 10px;border-radius:19px;font-size:13px;font-weight:600;color:#b8392e;background:color-mix(in srgb,#c8463b 12%,var(--card))}
+ .cdel svg{width:16px;height:16px}
+
+ /* Spalten mit dezenten Pfeilen links und rechts */
+ .colwrap:not(.noarrows){display:grid;grid-template-columns:30px minmax(0,1fr) 30px;align-items:start}
+ .colwrap.noarrows{padding:0 max(4vw,16px)}
+ .colarrow{display:grid;place-items:center;position:sticky;top:8px;height:48px;margin-top:2px;color:color-mix(in srgb,var(--c) 70%,var(--mute));opacity:.75;border-radius:12px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+ .colarrow.prev svg{transform:rotate(180deg)}
+ .colarrow:active{background:color-mix(in srgb,var(--c) 15%,transparent);opacity:1}
+
+ /* Wort „zeitnah“ weg: Überschrift über der Liste entfällt */
+ .zlabel.zsoon{display:none}
+}
+@media(max-width:380px){.cathead{flex-wrap:nowrap}.cathead .mswitch{order:0;margin:0}.cdel span{display:none}.cdel{padding:0 10px}}
