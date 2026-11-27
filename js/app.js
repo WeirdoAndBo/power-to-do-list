@@ -23,7 +23,7 @@
 
    Aufbau der Datei (Abschnitte mit „----------“ markiert):
      Einstellungen → Hilfen → Laden/Speichern → Datenlogik → Ort (Bereich/Kategorie)
-     → Ansichten → Seite aufbauen → Fokusmodus → Popup & Hinweis → Vorher-Liste im Popup
+     → Ansichten → Seite aufbauen → Popup & Hinweis → Vorher-Liste im Popup
      → Ziehen mit Maus/Finger → Abläufe (Dialoge) → Datensicherung → Ereignisse → Start
    ============================================================================ */
 // Die geschweifte Klammer hält alle Namen dieser Datei privat (nichts landet in „window“).
@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.34-c';
+const APP_VERSION = '1.0.35-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -90,7 +90,6 @@ let undoSnapshot = null;        // Kopie von state als Text, für „Rückgängi
 let toastTimer;                 // Timer des Hinweises unten
 let currentColumn = 0;          // Nummer der sichtbaren Kategorie-Spalte
 let columnJumpUntil = 0;        // bis wann gerade per Kategorie-Navigation gescrollt wird
-let focusId = null;             // To-Do, das gerade im Fokusmodus offen ist
 let lastRenderedBereich;        // welcher Bereich beim letzten render() offen war
 let ignoreClicksUntil = 0;      // Zeitpunkt, bis zu dem Klicks ignoriert werden (direkt nach dem Ziehen)
 const treeOpen = new Map();     // auf-/zugeklappte Äste in der Übersicht
@@ -557,7 +556,7 @@ function cardHtml(task, color, options = {}) {
   ? `<p class="wait">Erst noch: ${waiting.map(id => esc(getTask(id).t)).join(', ')}</p>`
   : '';
  const tag = options.tag || 'article';
- return `<${tag} class="card${options.cls || ''}" data-act="focus" data-id="${task.id}" ${options.attrs || ''} style="--c:${color}" tabindex="0" aria-label="${title} – im Fokusmodus öffnen">
+ return `<${tag} class="card${options.cls || ''}" data-id="${task.id}" ${options.attrs || ''} style="--c:${color}">
  <div class="chead">${grip}${task.done ? '' : todaySwitchHtml(task)}<span class="sp"></span>${listCountHtml(task)}${options.headExtra || ''}${moveButton}</div>
  <div class="cbody">${checkButtonHtml(task, color)}<div class="ctext"><h3>${titleHtml(task)}</h3>${options.tree === undefined ? chainBoxHtml(task) + waitingHtml : ''}</div><span class="cacts">${taskActionsHtml(task)}</span></div>
  ${listHtml(task, color)}${options.tree === undefined ? (task.done ? '' : insertHtml(task.id, '', color)) : options.tree}</${tag}>`;
@@ -917,7 +916,7 @@ function bereichBarHtml(bereich) {
 function machbarSwitchHtml(bereich) {
  const on = state.view === 'jetzt';
  return `<button class="mswitch" role="switch" aria-checked="${on}" data-act="machbar" style="--c:${bereich.color}"`
-  + ` title="${on ? 'Wieder alles zeigen' : 'Nur zeigen, was du jetzt tun kannst'}"><span class="lg">Nur startklare To-Dos anzeigen</span><span class="sm">Startklare To-Dos</span><i></i></button>`;
+  + ` title="${on ? 'Wieder alles zeigen' : 'Nur zeigen, was du jetzt tun kannst'}"><span class="lg">Nur startklare To-Dos anzeigen</span><span class="sm">Startklar</span><i></i></button>`;
 }
 // Bereich aufgeklappt: Kopf, Kategorie-Navigation (kleine Knöpfe) und die Spalten nebeneinander
 function bereichOpenHtml(bereich) {
@@ -970,7 +969,10 @@ function bereichOpenHtml(bereich) {
   const content = kategorie.inbox ? sammlungColumnHtml(bereich, kategorie)
    : state.view === 'baum' ? uebersichtColumnHtml(bereich, kategorie) : machbarColumnHtml(bereich, kategorie);
   return `<section class="col${kategorie.inbox ? ' colsammlung' : ''}" aria-label="${esc(kategorie.name)}">${columnHead}${content}</section>`;
- }).join('');
+ }).join('')
+  // Handy (Version C 1.0.35): nach der letzten Spalte eine leere Spalte mit „+“ für eine neue Kategorie
+  + (bereich.id ? `<section class="col coladd" aria-label="Neue Kategorie"><button class="addcol" data-act="newsub" data-id="${bereich.id}">`
+   + `<span aria-hidden="true">+</span>Neue Kategorie</button></section>` : '');
  return `<section class="cat open" style="--c:${bereich.color}" aria-label="${name}">
  ${head}
  ${tabs}
@@ -993,7 +995,7 @@ function render() {
  if (state.view === 'heute') {
   $('#acc').innerHTML = heuteViewHtml();
   lastRenderedBereich = undefined;
-  if (!$('#focus').hidden) renderFocus();
+  updateQuickBar();
   return;
  }
  // Übersicht (Schalter „Machbar“ an oder aus): Bereiche untereinander, einer davon aufgeklappt
@@ -1019,7 +1021,7 @@ function render() {
  lastRenderedBereich = state.openCat;
  updateColumnEdges();
  markTouchStrips();
- if (!$('#focus').hidden) renderFocus();
+ updateQuickBar();
 }
 /* Version C, Handy (ohne Maus, kein Drüberfahren): Statt aller „+“-Linien ist pro Stelle nur eine zu sehen
    (Klasse .tvis): die unterste einer Spalten-Liste und die unterste in jeder Karte. Antippt man eine Zeile
@@ -1088,6 +1090,7 @@ function updateColumnEdges() {
 // Markiert den Knopf der Kategorie-Spalte Nr. index in der Kategorie-Navigation als aktuell
 function markCurrentTab(index) {
  document.querySelectorAll('.tab[data-i]').forEach(b => b.setAttribute('aria-current', +b.dataset.i === index));
+ updateQuickBar();
 }
 // Zu Kategorie-Spalte Nr. index wischen/scrollen. Mit highlight leuchtet die Spalte kurz auf
 // (Klick in der Kategorie-Navigation), damit man sieht, wo man gelandet ist.
@@ -1178,8 +1181,8 @@ document.addEventListener('pointerdown', event => {
  // Tippen außerhalb des Menüs schließt es
  const menu = document.querySelector('.ctxmenu');
  if (menu && !menu.contains(event.target)) closeKatMenu();
- const arrow = event.target.closest && event.target.closest('.colarrow');
- if (!arrow || event.button > 0) return;
+ const arrow = event.target.closest && event.target.closest('.colarrow, .qarrow');
+ if (!arrow || event.button > 0 || !arrow.dataset.id) return;
  swallowArrowClick = false;
  clearTimeout(longPress?.timer);
  longPress = {
@@ -1195,8 +1198,8 @@ document.addEventListener('pointermove', event => {
 }, true));
 // Rechtsklick oder Kontextmenü-Taste auf einem Pfeil: gleiches Menü. Am Handy kein Browser-Menü beim langen Drücken.
 document.addEventListener('contextmenu', event => {
- const arrow = event.target.closest && event.target.closest('.colarrow');
- if (!arrow) return;
+ const arrow = event.target.closest && event.target.closest('.colarrow, .qarrow');
+ if (!arrow || !arrow.dataset.id) return;
  event.preventDefault();
  if (!document.querySelector('.ctxmenu')) { swallowArrowClick = event.pointerType === 'touch' || !!longPress; openKatMenu(arrow); }
 });
@@ -1215,6 +1218,106 @@ document.addEventListener('keydown', event => {
  }
 }, true);
 
+/* ---------- Version C 1.0.35, Handy: Schnelleingabe unten ----------
+   Statt des Knopfs „+ Neues To-Do“ steht unten eine Eingabezeile. Was man dort tippt, landet mit Enter in
+   der Spalte, die gerade zu sehen ist (deren Name steht klein darüber), unten an der Liste. Das Feld bleibt
+   offen, man kann gleich das nächste tippen.
+   Links und rechts davon runde Pfeile: eine Kategorie weiter (ausgegraut am Anfang/Ende), lange drücken =
+   Menü mit allen Kategorien. Der kleine Pfeil darunter fährt den Block nach oben aus: Dort stellt man selbst
+   ein, wohin es geht (Bereich, Kategorie, oben/unten, Backlog). Solange ausgefahren, gilt diese Wahl.
+   „Mit davor/danach …“ öffnet das große Popup mit dem getippten Text. Nur am Handy (bis 600 px). */
+let quickOpen = false;   // Einsortier-Optionen ausgefahren?
+function quickTargetPlace() {
+ return quickOpen ? $('#qopts [name=place]').value : currentPlace();
+}
+// Name der Ziel-Spalte über der Zeile, Pfeile aus/an
+function updateQuickBar() {
+ const bar = $('#qbar');
+ if (!bar) return;
+ const heute = state.view === 'heute';
+ const [bereichId, kategorieId] = quickTargetPlace().split('|');
+ const bereich = getBereich(bereichId);
+ const backlog = quickOpen && $('#qopts [name=bl]')?.checked;
+ $('#qlabel').innerHTML = heute && !quickOpen ? 'In „Heute“'
+  : esc(placeName(bereichId, kategorieId)) + (backlog ? ' · Backlog' : '');
+ bar.style.setProperty('--c', bereich ? bereich.color : GRAY);
+ const open = visibleBereiche().find(b => b.id === state.openCat);
+ const count = open && !heute ? columnsOf(open).length : 0;
+ bar.querySelectorAll('.qarrow').forEach(arrow => {
+  const d = +arrow.dataset.d;
+  // Nicht disabled: lange drücken (Menü mit allen Kategorien) soll auch am Ende gehen
+  const off = !count || (d < 0 ? currentColumn <= 0 : currentColumn >= count - 1);
+  arrow.classList.toggle('off', off);
+  arrow.setAttribute('aria-disabled', off);
+  arrow.dataset.id = open && open.id ? open.id : '';
+ });
+ syncDockHeight();
+}
+// Höhe der Leiste unten als CSS-Variable --dockh: Der Hinweis (Toast) steht immer knapp darüber
+function syncDockHeight() {
+ const dock = document.querySelector('.dock');
+ if (dock) document.documentElement.style.setProperty('--dockh', dock.offsetHeight + 'px');
+}
+addEventListener('resize', syncDockHeight);
+function quickStep(direction) {
+ const open = visibleBereiche().find(b => b.id === state.openCat);
+ const count = open ? columnsOf(open).length : 0;
+ const to = currentColumn + direction;
+ if (to < 0 || to >= count) return;
+ goToColumn(to, true);
+ updateQuickBar();
+}
+function setQuickOpen(on) {
+ quickOpen = on;
+ const bar = $('#qbar');
+ bar.classList.toggle('open', on);
+ bar.querySelector('.qmore').setAttribute('aria-expanded', on);
+ const opts = $('#qopts');
+ if (on) {
+  opts.innerHTML = placePickerHtml(currentPlace())
+   + `<div class="qline"><div class="seg qpos" role="radiogroup" aria-label="Wo in der Spalte?">`
+   + `<label><input type="radio" name="qpos" value="top">Oben</label><label><input type="radio" name="qpos" value="bottom" checked>Unten</label></div>`
+   + `<label class="opt"><input type="checkbox" name="bl"> Backlog</label></div>`
+   + `<button type="button" class="link qfull" data-act="qfull">Mehrere mit davor/danach …</button>`;
+ }
+ opts.inert = !on;
+ updateQuickBar();
+ setTimeout(syncDockHeight, 320); // nach dem Ausfahren
+}
+// Ausgefahrene Optionen einklappen (z. B. mit der Zurück-Taste). true = war offen.
+function closeQuickOptions() {
+ if (!quickOpen) return false;
+ setQuickOpen(false);
+ return true;
+}
+function quickAdd() {
+ const input = $('#qin');
+ const text = input.value.trim();
+ if (!text) return;
+ const [cat, area] = quickTargetPlace().split('|');
+ const today = state.view === 'heute' && !quickOpen;
+ const backlog = quickOpen && $('#qopts [name=bl]').checked;
+ const top = quickOpen && $('#qopts [name=qpos]:checked')?.value === 'top';
+ undoSnapshot = snapshot();
+ // Reihenfolge in der Spalte: höhere prio zuerst, bei gleicher prio das ältere zuerst
+ const prios = allTasks().filter(t => !t.done && !!t.backlog === backlog && isIn(t, cat, area) && !parentsOf(t.id).length).map(t => t.prio);
+ const prio = top ? Math.max(0, ...prios) + 1 : Math.min(0, ...prios);
+ const task = createTask(text, { goal: true, cat: cat || null, area: area || null, backlog, today, prio });
+ input.value = '';
+ save();
+ render();
+ const kategorie = getBereich(cat)?.subs.find(k => k.id === area);
+ toast(`„${esc(shownTitle(task))}“ in ${esc(kategorie ? kategorie.name : placeName(cat, area))}${backlog ? ' · Backlog' : ''}.`, true);
+ input.focus();
+}
+document.addEventListener('keydown', event => {
+ if (event.target.id !== 'qin') return;
+ if (event.key === 'Enter') { event.preventDefault(); quickAdd(); }
+ if (event.key === 'Escape') { event.preventDefault(); if (!closeQuickOptions()) event.target.blur(); }
+});
+document.addEventListener('change', event => {
+ if (event.target.closest && event.target.closest('#qopts')) setTimeout(updateQuickBar, 0);
+});
 /* ---------- Handy: Name des Bereichs direkt im Kopf bearbeiten (Version C 1.0.34) ---------- */
 let nameCommitTimer;
 function startBereichRename(id) {
@@ -1272,47 +1375,6 @@ document.addEventListener('pointerdown', event => {
  if (column) currentColumn = [...column.parentElement.children].indexOf(column);
 }, true);
 
-/* ---------- Fokusmodus ---------- */
-function openFocus(id) {
- focusId = id;
- $('#focus').hidden = false;
- syncBackGuard();
- document.body.style.overflow = 'hidden';
- renderFocus();
- setTimeout(() => $('#focus .bigcheck .check')?.focus(), 30);
-}
-function closeFocus() {
- $('#focus').hidden = true;
- syncBackGuard();
- document.body.style.overflow = '';
- focusId = null;
- render();
-}
-function renderFocus() {
- const task = getTask(focusId);
- if (!task) { closeFocus(); return; }
- const color = colorOf(task);
- const before = openNeeds(task).map(getTask);
- const focusEl = $('#focus');
- focusEl.style.setProperty('--c', color);
- const hint = goalHint(task);
- const beforeHtml = before.length
-  ? `<div class="before"><p>Vorher noch:</p>${before.map(t => `<div class="drow">${checkButtonHtml(t, color)}<span>${esc(t.t)}</span></div>`).join('')}</div>`
-  : '';
- const addButton = (task.done
-  ? ''
-  : `<button class="softbtn" data-act="block" data-id="${task.id}">${task.goal ? '+ To-Do' : '+ Vorher-To-Do'}</button>`)
-  + ` <button class="softbtn" data-act="edit" data-id="${task.id}">Details und Verbindungen</button>`;
- focusEl.innerHTML = `<div class="ftop"><small>FOKUSMODUS</small><span class="fbtns">`
-  + `<button class="iconbtn" data-act="del" data-id="${task.id}" aria-label="${esc(task.t)} löschen" title="Löschen">${ICON_TRASH}</button>`
-  + `<button class="iconbtn" data-act="closefocus" aria-label="Fokusmodus schließen">${ICON_CLOSE}</button></span></div>
- <div class="fmain">${hint ? `<p class="goal">${hint}</p>` : ''}<h1>${esc(shownTitle(task))}</h1>
- ${listHtml(task, color)}${beforeHtml}
- <div class="bigcheck">${checkButtonHtml(task, color)}<span>${task.done ? 'Geschafft' : 'Abhaken, wenn es geschafft ist'}</span></div>
- ${addButton}</div>
- <div class="fbot"><button class="plus" data-act="quick"><span>+</span> Neues To-Do</button></div>`;
-}
-
 /* ---------- Popup & Hinweis ---------- */
 // buttonHtml(wert, beschriftung, art): Knopf für Popups. art 'pri' = Hauptknopf, 'ghost' = unauffällig
 const buttonHtml = (value, label, kind = '') => `<button type="button" class="btn ${kind}" data-v="${value}">${label}</button>`;
@@ -1336,14 +1398,33 @@ function readModalValues(modalEl) {
  return values;
 }
 /* ---------- Zurück-Taste (Android, auch in der installierten App) ----------
-   Ist ein Popup oder der Fokusmodus offen, legt die App einen eigenen Eintrag in den Verlauf.
-   Die Zurück-Taste nimmt dann diesen Eintrag weg: Das schließt zuerst das Popup (wie „Abbrechen“),
-   dann den Fokusmodus. Erst wenn nichts mehr offen ist, verlässt „Zurück“ die App.
-   Wird ein Popup auf anderem Weg geschlossen (Knopf, Escape), nimmt die App ihren Eintrag selbst wieder weg. */
+   Ist ein Popup offen, legt die App einen eigenen Eintrag in den Verlauf („popup“).
+   Die Zurück-Taste nimmt dann diesen Eintrag weg: Das schließt das Popup (wie „Abbrechen“).
+   Wird ein Popup auf anderem Weg geschlossen (Knopf, Escape), nimmt die App ihren Eintrag selbst wieder weg.
+   Version C 1.0.35: Am Handy fliegt man mit „Zurück“ nicht mehr aus der App. Unter allem liegen zwei eigene
+   Einträge: „base“ und darüber „home“. Zurück ohne offenes Popup landet auf „base“, die App legt „home“
+   sofort wieder darauf. Ist die Schnelleingabe ausgefahren, klappt sie zuerst ein. Zweimal schnell
+   hintereinander fragt die App „App verlassen?“. Ja = die App geht wirklich zurück (bzw. schließt sich). */
 let closeOpenModal = null;   // schließt das gerade offene Popup (wie Abbrechen)
 let backGuard = false;       // liegt gerade ein eigener Eintrag im Verlauf?
 let ignoreNextPop = false;   // nächstes popstate kommt von uns selbst (history.back), nichts tun
-const layerOpen = () => !$('#modal').hidden || !$('#focus').hidden;
+let leaving = false;         // „App verlassen?“ mit Ja beantwortet: alle eigenen Einträge überspringen
+let lastHomeBack = 0;        // wann zuletzt „Zurück“ ohne offenes Popup gedrückt wurde
+const EXIT_DOUBLE_MS = 700;  // so schnell hintereinander gilt als Doppeldruck
+const layerOpen = () => !$('#modal').hidden;
+// Nur am Handy bzw. als installierte App. Am Desktop-Browser bleibt „Zurück“ normal.
+const exitGuardWanted = () => matchMedia('(hover:none)').matches || matchMedia('(display-mode: standalone)').matches;
+function armExitGuard() {
+ if (!exitGuardWanted()) return;
+ try {
+  const kind = history.state?.powerliste;
+  if (kind === 'home') return;
+  // Nach einem Neuladen mit offenem Popup: Der Eintrag wird zu „home“
+  if (kind === 'popup') { history.replaceState({ powerliste: 'home' }, ''); return; }
+  if (kind !== 'base') history.replaceState({ powerliste: 'base' }, '');
+  history.pushState({ powerliste: 'home' }, '');
+ } catch (e) {}
+}
 // Erst nach einem Moment prüfen: Oft folgt auf ein geschlossenes Popup sofort das nächste.
 function syncBackGuard() {
  setTimeout(() => {
@@ -1357,18 +1438,50 @@ function syncBackGuard() {
  }, 0);
 }
 addEventListener('popstate', () => {
+ const kind = history.state?.powerliste;
+ if (leaving) { if (kind === 'base' || kind === 'home') history.back(); return; }
  if (ignoreNextPop) {
   ignoreNextPop = false;
   // Wurde inzwischen schon das nächste Popup geöffnet, braucht es wieder einen Eintrag
-  if (history.state?.powerliste !== 'popup') { backGuard = false; syncBackGuard(); }
+  if (kind !== 'popup') { backGuard = false; syncBackGuard(); }
   return;
  }
- if (!backGuard) return;
- backGuard = false;
- if (!$('#modal').hidden && closeOpenModal) closeOpenModal(null);
- else if (!$('#focus').hidden) closeFocus();
- syncBackGuard(); // ist darunter noch etwas offen (z. B. Fokusmodus), kommt ein neuer Eintrag
+ if (backGuard) {
+  backGuard = false;
+  if (!$('#modal').hidden && closeOpenModal) closeOpenModal(null);
+  if (kind === 'base') armExitGuard();
+  syncBackGuard();
+  return;
+ }
+ if (kind === 'base') { armExitGuard(); backAtHome(); }
 });
+// „Zurück“ gedrückt, ohne dass ein Popup offen ist
+function backAtHome() {
+ if (closeQuickOptions()) return;
+ const now = Date.now();
+ if (now - lastHomeBack < EXIT_DOUBLE_MS) { lastHomeBack = 0; askLeave(); return; }
+ lastHomeBack = now;
+ toast('Zum Verlassen zweimal schnell „Zurück“ drücken.');
+}
+async function askLeave() {
+ const r = await modal(`<h2>App verlassen?</h2><p>Deine Liste ist gespeichert.</p>`
+  + `<div class="btns">${buttonHtml('', 'Nein', 'ghost')}${buttonHtml('yes', 'Ja', 'pri')}</div>`);
+ if (r.v !== 'yes') return;
+ // Erst den Eintrag des Popups wegnehmen lassen (syncBackGuard), dann über „home“ und „base“ zurück
+ setTimeout(() => {
+  leaving = true;
+  history.back();
+  // Ging es nicht weiter zurück (die App war der erste Eintrag), bleibt die App offen:
+  // Dann schließt die nächste Zurück-Taste sie, ohne zu fragen.
+  setTimeout(() => {
+   if (document.visibilityState !== 'visible') return;
+   leaving = false;
+   try { window.close(); } catch (e) {}
+   if (history.state?.powerliste !== 'base') return;
+   toast('Noch einmal „Zurück“ drücken zum Schließen.');
+  }, 700);
+ }, 150);
+}
 
 // modal(html): zeigt ein Popup und wartet, bis es geschlossen wird. Ergebnis: {v, vals}
 //   v = data-v des gedrückten Knopfs (null bei Escape/Klick daneben)
@@ -1574,7 +1687,188 @@ function addNewRow(list, where, level) {
  row.querySelector('input').focus();
  return row;
 }
+/* ---------- Version C 1.0.35, Handy: Popup „Neues To-Do“ für mehrere To-Dos ----------
+   Enter legt kein Unter-To-Do an, sondern ein weiteres To-Do (eigene Karte). Unter der Zeile, in der man
+   gerade tippt, steht eine Leiste „+ davor / + danach“:
+   davor  = neue Zeile eine Ebene tiefer direkt darunter (muss vorher passieren),
+   danach = neue Zeile an die Stelle dieser Zeile, die Zeile selbst rutscht eine Ebene tiefer
+            (das neue To-Do braucht dann dieses). Bei der obersten Zeile wird das neue zum Titel der Karte.
+   Enter in einer leeren Zeile = fertig (Anlegen). Rücktaste in einer leeren Zeile = Zeile weg.
+   Gilt am Handy (bis 600 px). Am Desktop bleibt das Popup wie bisher (newTaskDialog). */
+const isNarrow = () => matchMedia('(max-width:600px)').matches;
+const M_PLACEHOLDER = { top: 'Was ist zu tun?', before: 'Was muss vorher passieren?', after: 'Was kommt danach?' };
+function mRowHtml(level, kind = level ? 'before' : 'top') {
+ return `<div class="mrow" data-l="${level}" style="--l:${level}"><span class="ncheck" aria-hidden="true"></span>`
+  + `<input class="field mrin" placeholder="${M_PLACEHOLDER[kind]}" autocomplete="off" enterkeyhint="next" aria-label="${level ? 'Unter-To-Do' : 'To-Do'}">`
+  + `<button type="button" class="mini del" data-mrow="rm" aria-label="Zeile entfernen">${ICON_TRASH}</button></div>`;
+}
+const mCardHtml = () => `<div class="ncard mcard">${mRowHtml(0)}</div>`;
+// Rows einer Karte: die oberste (Ebene 0) ist der Titel, darunter die Unter-To-Dos mit Ebenen
+const mRows = card => [...card.querySelectorAll('.mrow')];
+function mSetLevel(row, level) {
+ row.dataset.l = level;
+ row.style.setProperty('--l', level);
+ row.querySelector('input').setAttribute('aria-label', level ? 'Unter-To-Do' : 'To-Do');
+}
+// Die Zeile und alles, was zu ihr gehört (die tieferen Zeilen direkt darunter)
+function mSubtree(row) {
+ const rows = mRows(row.closest('.mcard'));
+ const i = rows.indexOf(row);
+ const level = +row.dataset.l;
+ let j = i;
+ while (j + 1 < rows.length && +rows[j + 1].dataset.l > level) j++;
+ return rows.slice(i, j + 1);
+}
+// Leiste „+ davor / + danach“ unter die Zeile setzen, in der man gerade ist
+function mShowBar(row) {
+ const box = row.closest('.mcards');
+ box.querySelectorAll('.mbar').forEach(x => x.remove());
+ box.querySelectorAll('.mrow.cur').forEach(x => x.classList.remove('cur'));
+ row.classList.add('cur');
+ const bar = document.createElement('div');
+ bar.className = 'mbar nbar';
+ bar.style.marginLeft = `calc(30px + ${+row.dataset.l} * 22px)`;
+ bar.innerHTML = '<button type="button" data-madd="before"><span aria-hidden="true">+</span>davor</button>'
+  + '<button type="button" data-madd="after"><span aria-hidden="true">+</span>danach</button>';
+ row.after(bar);
+}
+function mFocus(row) {
+ const input = row.querySelector('input');
+ input.focus();
+ mShowBar(row);
+}
+function mAdd(row, where) {
+ const temp = document.createElement('div');
+ const level = +row.dataset.l;
+ if (where === 'before') {
+  temp.innerHTML = mRowHtml(level + 1, 'before');
+  row.after(temp.firstElementChild);
+  mFocus(row.nextElementSibling.classList.contains('mbar') ? row.nextElementSibling.nextElementSibling : row.nextElementSibling);
+  return;
+ }
+ // danach: neue Zeile an diese Stelle, die Zeile mit allem darunter eine Ebene tiefer
+ const subtree = mSubtree(row);
+ temp.innerHTML = mRowHtml(level, level ? 'after' : 'top');
+ const fresh = temp.firstElementChild;
+ if (!level) fresh.querySelector('input').placeholder = M_PLACEHOLDER.after;
+ row.before(fresh);
+ subtree.forEach(r => mSetLevel(r, +r.dataset.l + 1));
+ mFocus(fresh);
+}
+// Neue Karte (weiteres To-Do) nach der Karte von row
+function mAddCard(afterCard) {
+ const temp = document.createElement('div');
+ temp.innerHTML = mCardHtml();
+ const card = temp.firstElementChild;
+ afterCard.after(card);
+ mFocus(card.querySelector('.mrow'));
+ card.scrollIntoView({ block: 'nearest' });
+}
+function mRemove(row) {
+ const card = row.closest('.mcard');
+ const rows = mRows(card);
+ const i = rows.indexOf(row);
+ const cards = [...card.parentElement.querySelectorAll('.mcard')];
+ let target;
+ if (rows.length === 1) {
+  if (cards.length === 1) { row.querySelector('input').value = ''; mFocus(row); return; }
+  const k = cards.indexOf(card);
+  const neighbour = cards[k - 1] || cards[k + 1];
+  card.remove();
+  target = mRows(neighbour).at(-1);
+ } else {
+  // Was darunter hing, rückt eine Ebene hoch (nichts geht verloren)
+  mSubtree(row).slice(1).forEach(r => mSetLevel(r, Math.max(0, +r.dataset.l - 1)));
+  row.remove();
+  const rest = mRows(card);
+  if (+rest[0].dataset.l !== 0) mSetLevel(rest[0], 0);
+  target = rest[Math.max(0, i - 1)];
+ }
+ card.parentElement?.querySelectorAll('.mbar').forEach(x => x.remove());
+ mFocus(target);
+}
+// Liest alle Karten: [{ t, pre: [{ t, l }] }]. Leere Zeilen fallen weg, die Ebenen bleiben stimmig.
+function mReadCards(box) {
+ return [...box.querySelectorAll('.mcard')].map(card => {
+  let entries = mRows(card).map(row => ({ t: row.querySelector('input').value.trim(), l: +row.dataset.l })).filter(e => e.t);
+  if (!entries.length) return null;
+  const top = entries[0];
+  const base = top.l;
+  entries = entries.slice(1).map(e => ({ t: e.t, l: Math.max(0, e.l - base - 1) }));
+  return { t: top.t, pre: entries };
+ }).filter(Boolean);
+}
+async function newTasksDialogMobile(text = '', place = currentPlace()) {
+ const bereich = getBereich(place.split('|')[0]);
+ let result = [];
+ const pending = modal(`<h2>Neues To-Do</h2>
+  ${placePickerHtml(place)}
+  <label class="opt"><input type="checkbox" name="bl"> Erst mal ins Backlog</label>
+  <div class="mcards" style="--c:${bereich ? bereich.color : GRAY}">${mCardHtml()}</div>
+  <p class="prehint">Enter: nächstes To-Do · „+ davor“ / „+ danach“ unter der Zeile: was vorher oder danach passiert · Enter in leerer Zeile: fertig</p>
+  <div class="btns">${buttonHtml('', 'Abbrechen', 'ghost')}${buttonHtml('ok', 'Anlegen', 'pri')}</div>`);
+ const modalEl = $('#modal');
+ const box = modalEl.querySelector('.mcards');
+ const first = box.querySelector('.mrow');
+ first.querySelector('input').value = text;
+ mFocus(first);
+ const listening = new AbortController();
+ const once = { signal: listening.signal };
+ modalEl.querySelector('[data-pick=cat]').addEventListener('change', event => {
+  const chosen = getBereich(event.target.value);
+  box.style.setProperty('--c', chosen ? chosen.color : GRAY);
+ });
+ // Vor dem Schließen die Karten lesen (danach ist das Popup leer)
+ modalEl.addEventListener('click', event => {
+  if (event.target.closest('.btn.pri')) result = mReadCards(box);
+  const add = event.target.closest('[data-madd]');
+  if (add) { event.stopPropagation(); mAdd(box.querySelector('.mrow.cur') || mRows(box).at(-1), add.dataset.madd); return; }
+  const remove = event.target.closest('[data-mrow="rm"]');
+  if (remove) { event.stopPropagation(); mRemove(remove.closest('.mrow')); }
+ }, { capture: true, signal: listening.signal });
+ // Tippen auf „+ davor/danach“ soll die Tastatur nicht erst zu- und dann wieder aufklappen
+ modalEl.addEventListener('pointerdown', event => { if (event.target.closest('[data-madd]')) event.preventDefault(); }, once);
+ modalEl.addEventListener('focusin', event => {
+  const row = event.target.closest && event.target.closest('.mrow');
+  if (row && !row.classList.contains('cur')) mShowBar(row);
+ }, once);
+ modalEl.addEventListener('keydown', event => {
+  const input = event.target;
+  const row = input.closest && input.closest('.mrow');
+  if (!row) return;
+  if (event.key === 'Enter') {
+   event.preventDefault();
+   event.stopPropagation();
+   if (!input.value.trim()) { modalEl.querySelector('.btn.pri').click(); return; }
+   mAddCard(row.closest('.mcard'));
+  } else if (event.key === 'Backspace' && !input.value) {
+   event.preventDefault();
+   mRemove(row);
+  }
+ }, once);
+ const r = await pending;
+ listening.abort();
+ if (r.v !== 'ok' || !result.length) return false;
+ undoSnapshot = snapshot();
+ const today = state.view === 'heute';
+ const [cat, area] = r.vals.place.split('|');
+ const now = Date.now();
+ let subs = 0;
+ result.forEach((entry, i) => {
+  // created + i: die To-Dos stehen in der Spalte in der Reihenfolge, in der sie getippt wurden
+  const created = createTask(entry.t, { goal: true, cat: cat || null, area: area || null, today, backlog: !!r.vals.bl && !today, created: now + i });
+  if (isList(created)) entry.pre.forEach(e => addListItem(created, e.t));
+  else createPreTasks(created, entry.pre, today);
+  subs += entry.pre.length;
+ });
+ save();
+ render();
+ const n = result.length;
+ toast((n === 1 ? 'Angelegt' : `${n} To-Dos angelegt`) + (subs ? ` – mit ${subs} weiteren davor/danach.` : '.'), true);
+ return true;
+}
 async function newTaskDialog(text = '', place = currentPlace()) {
+ if (isNarrow()) return newTasksDialogMobile(text, place);
  const bereich = getBereich(place.split('|')[0]);
  const pending = modal(`<h2>Neues To-Do</h2>
   ${placePickerHtml(place)}
@@ -1843,7 +2137,7 @@ function dragCard(event, grip) {
 function dragColumn(event, grip) {
  const cols = $('#cols');
  const source = grip.closest('.col');
- const columns = [...cols.children];
+ const columns = [...cols.children].filter(c => !c.classList.contains('coladd'));
  const from = columns.indexOf(source);
  const kategorieId = grip.dataset.s;
  const bereichId = grip.dataset.cat;
@@ -2138,7 +2432,7 @@ function dragTargetAt(target) {
  return null;
 }
 document.addEventListener('pointerdown', event => {
- if (event.button > 0 || !$('#modal').hidden || !$('#focus').hidden) return;
+ if (event.button > 0 || !$('#modal').hidden) return;
  // Wird gerade ein Text bearbeitet: erst speichern (baut die Seite neu auf), nicht gleich ziehen
  if (document.activeElement && document.activeElement.classList.contains('tinput') && !document.activeElement.classList.contains('linput') && event.target !== document.activeElement) {
   document.activeElement.blur();
@@ -2384,9 +2678,22 @@ async function toggleDone(id) {
   }
   const r = await modal(`<div class="next" style="--c:${colorOf(parent)}"><p class="yay">Cool, geschafft! Next!</p><h2>${esc(parent.t)}</h2>
    <div class="nbtns">${buttonHtml('later', 'Später', 'ghost')}${buttonHtml('go', 'Jetzt machen', 'pri')}${buttonHtml('more', '+ Vorher-To-Do')}</div></div>`);
-  if (r.v === 'go') { openFocus(parent.id); break; }
+  if (r.v === 'go') { showCard(parent.id); break; }
   if (r.v === 'more') await askBefore(parent.id);
  }
+}
+// Zeigt die Karte eines To-Dos: hinscrollen und kurz aufleuchten lassen (z. B. nach „Jetzt machen“).
+// Version C 1.0.35: ersetzt den Fokusmodus, bis der an passenden Stellen neu eingebaut wird.
+function showCard(id) {
+ const el = document.querySelector(`.card[data-id="${id}"], li[data-tid="${id}"] > .row`);
+ if (!el) return;
+ const column = el.closest('#cols > .col');
+ if (column) goToColumn([...column.parentElement.children].indexOf(column));
+ el.scrollIntoView({ block: 'center', behavior: state.anim ? 'smooth' : 'auto' });
+ el.classList.remove('flash');
+ void el.offsetWidth;
+ el.classList.add('flash');
+ setTimeout(() => el.classList.remove('flash'), 1400);
 }
 // Popup „Muss etwas anderes vorher passieren?“ (Knopf „+ Vorher-To-Do“ auf Karten)
 async function askBefore(id) {
@@ -2419,7 +2726,7 @@ async function askBefore(id) {
 //   (ohne: der gerade sichtbare Ort). Gibt true zurück, wenn etwas angelegt wurde.
 async function addTask({ text = '', parent = null, mode = null, place = currentPlace() } = {}) {
  const openBereichId = place.split('|')[0];
- const context = parent || (focusId && getTask(focusId) ? focusId : null);
+ const context = parent;
  const candidates = allTasks().filter(t => !t.done);
  const asSub = mode ? mode === 'sub' : !!context;
  // Version C: Neues To-Do ohne Zusammenhang (weißer Knopf unten, „Später einsortieren“) = Popup wie eine Karte
@@ -2465,22 +2772,6 @@ async function addTask({ text = '', parent = null, mode = null, place = currentP
  save();
  render();
  return true;
-}
-// Schnelles Notieren im Fokusmodus. „Später einsortieren“ landet in state.inbox.
-async function quickNote() {
- const r = await modal(`<h2>Neues To-Do</h2><p>Schreib es kurz auf. Danach geht’s hier weiter.</p>
-  <input class="field" name="text" placeholder="Was ist dir eingefallen?" autocomplete="off" aria-label="Was ist dir eingefallen?">
-  <div class="btns">${buttonHtml('now', 'Direkt einsortieren')}${buttonHtml('later', 'Später einsortieren', 'pri')}</div>`);
- if (!r.v || !r.vals.text) return;
- if (r.v === 'later') {
-  undoSnapshot = snapshot();
-  state.inbox.push({ id: uid(), t: r.vals.text, ctx: focusId });
-  save();
-  render();
-  toast('Notiert. Weiter geht’s.', true);
-  return;
- }
- await addTask({ text: r.vals.text, parent: focusId, mode: 'sub' });
 }
 // Liste „Später einsortieren“ abarbeiten (bleibt offen, bis „Fertig“ gedrückt wird)
 async function sortInbox() {
@@ -2733,7 +3024,6 @@ function deleteTask(id) {
    if (!t.goal && !parentsOf(t.id).length) { remove(t.id); changed = true; }
   });
  }
- if (focusId === id) closeFocus();
 }
 // Bereich löschen, nach Sicherheitsfrage. Die To-Dos bleiben und stehen danach unter „Ohne Bereich“.
 // Gibt true zurück, wenn gelöscht wurde.
@@ -3307,11 +3597,8 @@ document.addEventListener('click', event => {
   case 'block': askBefore(id); break;
   case 'today': toggleToday(id, button); break;
   case 'del': deleteWithUndo(id); break;
-  case 'focus': openFocus(id); break;
-  case 'closefocus': closeFocus(); break;
   case 'add': addTask(); break;
   case 'addsub': addTask({ parent: id, mode: 'sub' }); break;
-  case 'quick': quickNote(); break;
   case 'edit': editTask(id); break;
   case 'rename': startRename(button); break;
   case 'lcheck': toggleListItem(id, button.dataset.i); break;
@@ -3326,6 +3613,19 @@ document.addEventListener('click', event => {
    if (swallowArrowClick) { swallowArrowClick = false; break; }
    stepColumn(+button.dataset.d, button);
    break;
+  case 'qstep':
+   if (swallowArrowClick) { swallowArrowClick = false; break; }
+   quickStep(+button.dataset.d);
+   break;
+  case 'qmore': setQuickOpen(!quickOpen); break;
+  case 'qfull': {
+   const text = $('#qin').value.trim();
+   const place = quickTargetPlace();
+   $('#qin').value = '';
+   setQuickOpen(false);
+   newTaskDialog(text, place);
+   break;
+  }
   case 'catcolor': openColorMenu(button); break;
   case 'setcolor': setBereichColor(id, button.dataset.color); break;
   case 'catname': startBereichRename(id); break;
@@ -3341,10 +3641,9 @@ document.addEventListener('click', event => {
   case 'tog': toggleTreeBranch(button.dataset.k, +button.dataset.l); break;
  }
 });
-// Tastatur: Escape schließt den Fokusmodus, Enter öffnet eine Karte, Pfeiltasten wechseln die Kategorie
+// Tastatur: Enter/Leertaste auf Titeln bearbeitet, Pfeiltasten wechseln die Kategorie
 document.addEventListener('keydown', event => {
  if (!$('#modal').hidden) return;
- if (event.key === 'Escape' && !$('#focus').hidden) closeFocus();
  if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('.t[data-act="rename"]')) {
   event.preventDefault();
   startRename(event.target);
@@ -3361,7 +3660,6 @@ document.addEventListener('keydown', event => {
   startItemEdit(event.target);
   return;
  }
- if (event.key === 'Enter' && event.target.matches('.card')) openFocus(event.target.dataset.id);
  if (event.target.matches('.tab[data-i]') && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
   const count = columnsOf(visibleBereiche().find(b => b.id === state.openCat)).length;
   goToColumn((currentColumn + (event.key === 'ArrowRight' ? 1 : count - 1)) % count);
@@ -3380,6 +3678,7 @@ $('#name').addEventListener('keydown', event => { if (event.key === 'Enter') eve
 state = load();
 const hadOpenToday = startNewDayIfNeeded();
 render();
+armExitGuard();
 if (hadOpenToday) toast('Guten Morgen. „Heute“ ist wieder leer – Offenes steht weiter in der Übersicht.');
 // Beim Zurückkehren zur App (z. B. am nächsten Morgen) prüfen, ob ein neuer Tag begonnen hat
 document.addEventListener('visibilitychange', () => {
@@ -3391,7 +3690,7 @@ document.addEventListener('visibilitychange', () => {
 // Offline-Betrieb und Updates: Der Service Worker legt alle Dateien der App lokal ab. Er greift nur über http(s), nicht bei file://.
 // Updates: Beim Start und jedes Mal, wenn die App wieder in den Vordergrund kommt, fragt sie nach einer neuen Fassung.
 // Ist eine da, lädt sich die App einmal neu. Die Liste bleibt dabei erhalten, denn sie liegt im localStorage
-// und ist schon gespeichert (save() nach jeder Änderung). Ist gerade ein Popup oder der Fokusmodus offen (oder wird gezogen), wartet das Neuladen,
+// und ist schon gespeichert (save() nach jeder Änderung). Ist gerade ein Popup offen (oder wird gezogen), wartet das Neuladen,
 // bis die App das nächste Mal im Hintergrund ist, damit nichts Halbgetipptes verloren geht.
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
  const UPDATE_FLAG = 'powerliste-update-geladen';
@@ -3409,7 +3708,7 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
  navigator.serviceWorker.addEventListener('controllerchange', () => {
   if (!hadController) return; // allererste Installation: nichts neu zu laden
   const typing = document.activeElement && document.activeElement.matches('input:not([type=checkbox]),textarea,select,[contenteditable]');
-  const busy = !$('#modal').hidden || !$('#focus').hidden || document.querySelector('.dragging') || typing;
+  const busy = !$('#modal').hidden || document.querySelector('.dragging') || typing;
   if (busy) reloadPending = true;
   else reloadNow();
  });

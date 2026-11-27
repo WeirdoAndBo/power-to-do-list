@@ -23,7 +23,7 @@ tests/test.html        Selbsttest: klickt die App automatisch durch (siehe „Te
 archiv/                ältere Prototypen, nur zum Nachschauen, werden von der App nicht geladen
 ```
 
-`index.html` enthält fast keinen Inhalt. Die Container `#acc` (Hauptbereich), `#focus` (Fokusmodus), `#modal` (Popups) und `#toast` (Hinweis unten) werden von `js/app.js` gefüllt.
+`index.html` enthält fast keinen Inhalt. Die Container `#acc` (Hauptbereich), `#modal` (Popups) und `#toast` (Hinweis unten) werden von `js/app.js` gefüllt. Unten in `.dock` stehen der Knopf „+ Neues To-Do“ (Desktop) und die Schnelleingabe `#qbar` (Handy).
 
 ## Wörter im Code und in der App
 
@@ -110,18 +110,21 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | Übersicht mit Schalter aus             | `uebersichtColumnHtml`, `treeNodeHtml` (Ziel ganz oben = `cardHtml` mit `options.tree`; Zeilen nicht eingerückt, Ebene als `.lvl`-Punkte) |
 | Unter-To-Dos in der Übersicht umsortieren | `moveInTree`, `treeDropTarget`, `applyTreeMove`, Ziehen am Griff (`.tgrip`, Abschnitt „Ziehen“ Nr. 5), Pfeiltasten |
 | Bereiche und Kategorien (Akkordeon)    | `bereichBarHtml`, `bereichOpenHtml`, `bereichDialog`, `kategorieDialog` |
-| Kategorie-Navigation (Knöpfe über den Spalten) | `subtabs` in `bereichOpenHtml`, `goToColumn` (Sprung + Aufleuchten), `markCurrentTab`; am Handy (bis 600 px) stattdessen Pfeile `.colarrow` neben den Spalten: kurz = `stepColumn`, lang = `openKatMenu` (Menü `.ctxmenu`) |
+| Kategorie-Navigation (Knöpfe über den Spalten) | `subtabs` in `bereichOpenHtml`, `goToColumn` (Sprung + Aufleuchten), `markCurrentTab`; am Handy (bis 600 px) stattdessen die runden Pfeile `.qarrow` der Schnelleingabe: kurz = `quickStep`, lang = `openKatMenu` (Menü `.ctxmenu`). Die alten Pfeile `.colarrow` sind am Handy ausgeblendet |
 | Bereichskopf am Handy (Punkt = Farbe, Name = bearbeiten, „Bereich löschen“) | `.ctm` in `bereichOpenHtml`, `openColorMenu`, `startBereichRename`/`commitBereichRename`, `deleteBereich` |
 | Text nur am Desktop / nur am Handy (z. B. kein „zeitnah“ am Handy) | `wideNarrow()` mit den CSS-Klassen `.wide`/`.narrow` |
 | Kategorie-Spalten umsortieren          | `moveKategorie`, Ziehen am Griff (`.colgrip`, Abschnitt „Ziehen“), Pfeiltasten, „Nach links/rechts“ in `kategorieDialog` |
 | Ganze Seite neu aufbauen               | `render`                                       |
-| Fokusmodus                             | `openFocus`, `renderFocus`, `closeFocus`       |
 | Popup und Hinweis unten                | `modal`, `buttonHtml`, `toast`                 |
-| Zurück-Taste am Handy schließt erst Popup/Fokusmodus | `syncBackGuard`, `popstate`-Listener vor `modal` |
+| Zurück-Taste am Handy: schließt Popup, sonst „App verlassen?“ bei Doppeldruck | `armExitGuard` (Verlaufseinträge „base“/„home“), `syncBackGuard` („popup“), `popstate`-Listener, `backAtHome`, `askLeave` |
+| Handy: Schnelleingabe unten            | `#qbar` in `index.html`; `updateQuickBar`, `quickStep`, `setQuickOpen`, `quickAdd`, `closeQuickOptions`; Toast steht über der Leiste (`--dockh`, `syncDockHeight`) |
+| Handy: Popup „Neues To-Do“ für mehrere | `newTasksDialogMobile` (wird von `newTaskDialog` bei `isNarrow()` aufgerufen), Zeilen `.mrow`, Karten `.mcard`, `mAdd` (davor/danach), `mReadCards` |
+| Handy: leere Spalte „+ Neue Kategorie“ | `.coladd` am Ende von `bereichOpenHtml` (Desktop: ausgeblendet) |
+| Karte zeigen und aufleuchten lassen    | `showCard` (statt Fokusmodus nach „Jetzt machen“) |
 | „+ davor / parallel / danach“ am Handy | Leiste `.mbar` (Klick-Listener nach `markTouchStrips`), „danach“ = Streifen `.chainafter` in `treeNodeHtml` |
 | Abhaken                                | `toggleDone`                                   |
 | Listen („Liste: …“)                    | `LIST_PATTERN`, `isList`, `shownTitle`, `listHtml`, `listCountHtml`, `startItemEdit`; optionales Feld `task.list = [{ id, t, done }]` (Datenformat bleibt 1) |
-| Neues To-Do / Ziel                     | `addTask`, `quickNote`, `askBefore`, `createPreTasks`; Weißer Knopf = `newTaskDialog` (Popup wie eine Karte, Zeilen `.nrow`); „+“ zwischen Karten einer Spalte = `data-act="insroot"` → `startInsertRoot`; Unter-To-Do aus der Karte ziehen = `makeOwnTask`; Backlog-Abschnitt = `backlogSectionHtml` |
+| Neues To-Do / Ziel                     | `addTask`, `askBefore`, `createPreTasks`; Weißer Knopf = `newTaskDialog` (Popup wie eine Karte, Zeilen `.nrow`); „+“ zwischen Karten einer Spalte = `data-act="insroot"` → `startInsertRoot`; Unter-To-Do aus der Karte ziehen = `makeOwnTask`; Backlog-Abschnitt = `backlogSectionHtml` |
 | Bearbeiten, Löschen                    | `editTask`, `deleteTask`, `deleteWithUndo`; Papierkorb-Knöpfe: `data-act="del"`, kleine Variante `deleteMiniHtml` |
 | Verschieben, Backlog                   | `moveTo`, `moveMenu`, Ziehen am Griff (`.mgrip`, Abschnitt „Ziehen“) |
 | Einstellungen                          | `settingsDialog`                               |
@@ -140,7 +143,7 @@ if (r.v === 'ok') { /* r.vals.text benutzen */ }
 
 **Rückgängig:** Vor einer Änderung `undoSnapshot = snapshot()` setzen, danach `toast('Text', true)` aufrufen. Der Knopf „Rückgängig“ stellt dann den alten Stand her.
 
-**Löschen:** geht überall mit dem Papierkorb (`data-act="del"` → `deleteWithUndo`): auf Karten, in „Erledigt“, in „Heute geschafft“ und „Danach dran“ und oben im Fokusmodus. In der Übersicht ist dafür in den Zeilen kein Platz; dort über Tippen auf den Titel → „Bearbeiten“ → „Löschen“. Vorher-To-Dos, die danach zu nichts mehr gehören, verschwinden mit (`deleteTask`).
+**Löschen:** geht überall mit dem Papierkorb (`data-act="del"` → `deleteWithUndo`): auf Karten, in „Erledigt“, in „Heute geschafft“ und „Danach dran“. In der Übersicht ist dafür in den Zeilen kein Platz; dort über Tippen auf den Titel → „Bearbeiten“ → „Löschen“. Vorher-To-Dos, die danach zu nichts mehr gehören, verschwinden mit (`deleteTask`).
 
 **Sicherheit:** Texte, die Nutzer*innen eingeben, immer mit `esc(...)` ins HTML einsetzen, nie direkt.
 
