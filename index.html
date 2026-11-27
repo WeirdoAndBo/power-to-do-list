@@ -21,19 +21,19 @@
  <header>
   <input class="name" id="name" aria-label="Name der Liste" autocomplete="off">
   <span id="inboxSlot"></span>
-  <button class="iconbtn" data-act="menu" aria-label="Einstellungen"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+  <button class="iconbtn" data-act="menu" aria-label="Menü" aria-haspopup="menu"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
  </header>
  <div class="switch" role="group" aria-label="Ansicht">
   <button data-view="baum">Übersicht</button><button data-view="heute">Heute</button>
  </div>
  <main id="acc"></main>
- <p class="foot">Alles bleibt nur auf diesem Gerät. Kein Konto, kein Tracking.</p>
+ <p class="foot" aria-hidden="true"></p>
 </div>
 <div class="dock"><button class="plus" data-act="add"><span>+</span> Neues To-Do</button>
  <div class="qbar" id="qbar">
   <div class="qrow">
    <button type="button" class="qarrow qprev" data-act="qstep" data-d="-1" aria-label="Vorherige Kategorie (lange drücken: alle Kategorien)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
-   <div class="qfield"><button type="button" class="qadd" data-act="qadd" aria-label="Eintragen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><input class="qin" id="qin" placeholder="Neues To-Do" autocomplete="off" enterkeyhint="send" aria-label="Neues To-Do"></div>
+   <div class="qfield"><input class="qin" id="qin" placeholder="Neues To-Do" autocomplete="off" enterkeyhint="send" aria-label="Neues To-Do"><button type="button" class="qadd" data-act="qadd" aria-label="Eintragen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
    <button type="button" class="qarrow qnext" data-act="qstep" data-d="1" aria-label="Nächste Kategorie (lange drücken: alle Kategorien)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
   </div>
   <button type="button" class="qmore" data-act="qmore" aria-expanded="false" aria-controls="qopts" aria-label="Wohin einsortieren?"><svg width="18" height="12" viewBox="0 0 24 14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10l7-6 7 6"/></svg></button>

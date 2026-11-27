@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.42-c';
+const APP_VERSION = '1.0.43-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -1280,6 +1280,8 @@ function updateQuickBar() {
  bar.style.setProperty('--c', bereich ? bereich.color : GRAY);
  const open = visibleBereiche().find(b => b.id === state.openCat);
  const count = open && !heute ? columnsOf(open).length : 0;
+ // 1.0.43: In „Heute“ keine Pfeile, das Feld nimmt ihren Platz ein
+ bar.classList.toggle('qheute', heute);
  bar.querySelectorAll('.qarrow').forEach(arrow => {
   const d = +arrow.dataset.d;
   // Nicht disabled: lange drücken (Menü mit allen Kategorien) soll auch am Ende gehen
@@ -1327,7 +1329,7 @@ window.visualViewport?.addEventListener('scroll', placeDockAboveKeyboard);
 }));
 // Haken in der Eingabezeile: Tippen soll die Tastatur nicht schließen
 document.addEventListener('pointerdown', event => {
- if (event.target.closest && event.target.closest('.qadd')) event.preventDefault();
+ if (event.target.closest && event.target.closest('.qadd, .qhmenu')) event.preventDefault();
 });
 function quickStep(direction) {
  const open = visibleBereiche().find(b => b.id === state.openCat);
@@ -1360,12 +1362,36 @@ function closeQuickOptions() {
  setQuickOpen(false);
  return true;
 }
-function quickAdd() {
+// 1.0.43: In „Heute“ fragt das „+“ (oder Enter), zu welchem Bereich das To-Do gehört.
+// Es landet in der Sammlung dieses Bereichs und steht für heute. Bei nur einem Bereich ohne Frage.
+function quickAddHeute(anchor) {
+ const input = $('#qin');
+ const bereiche = state.cats;
+ if (bereiche.length < 2) { quickAdd(bereiche[0] ? bereiche[0].id : ''); return; }
+ const items = `<p class="qhq">Zu welchem Bereich?</p>` + bereiche.map(b => `<button role="menuitem" data-act="qheute" data-id="${b.id}" style="--c:${b.color}"><i></i>${esc(b.name)}</button>`).join('');
+ openPopMenu(anchor || $('.qadd'), items, 'Bereich wählen');
+ const menu = document.querySelector('.ctxmenu');
+ menu.classList.add('qhmenu');
+ // Über dem Feld, rechtsbündig mit dem „+“ (auch wenn die Tastatur offen ist)
+ const r = (anchor || $('.qadd')).getBoundingClientRect();
+ menu.style.top = Math.max(8, r.top - menu.offsetHeight - 10) + 'px';
+ menu.style.left = Math.max(8, Math.min(r.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8)) + 'px';
+ if (document.activeElement !== input && input.value) input.focus({ preventScroll: true });
+}
+function quickAdd(heuteBereichId) {
  const input = $('#qin');
  const text = input.value.trim();
  if (!text) { input.focus({ preventScroll: true }); return; }
- const [cat, area] = quickTargetPlace().split('|');
- const today = state.view === 'heute' && !quickOpen;
+ const heuteMode = state.view === 'heute' && !quickOpen;
+ if (heuteMode && heuteBereichId === undefined) { quickAddHeute(); return; }
+ closeKatMenu();
+ let [cat, area] = quickTargetPlace().split('|');
+ if (heuteMode) {
+  const bereich = getBereich(heuteBereichId);
+  cat = bereich ? bereich.id : '';
+  area = bereich ? (bereich.subs.find(k => k.inbox) || {}).id || '' : '';
+ }
+ const today = heuteMode;
  const backlog = quickOpen && $('#qopts [name=bl]').checked;
  const top = quickOpen && $('#qopts [name=qpos]:checked')?.value === 'top';
  undoSnapshot = snapshot();
@@ -2491,6 +2517,7 @@ document.addEventListener('keydown', event => {
 //    Maus: drücken und bewegen. Finger: kurz halten (HOLD_MS), dann ziehen; wer gleich wischt, scrollt normal.
 //    Knöpfe, Schalter, Häkchen und Eingabefelder starten kein Ziehen. Ein kurzer Klick auf den Text bearbeitet ihn.
 const HOLD_MS = 320;
+const MENU_HOLD_MS = 330;  // so lange nach dem Anheben noch still halten = Menü (1.0.43)
 const NO_DRAG = 'button, input, select, textarea, summary, a, label, details.chain, .tinput';
 let touchDragging = false;  // während des Ziehens mit dem Finger: Seite nicht scrollen lassen
 document.addEventListener('touchmove', event => { if (touchDragging) event.preventDefault(); }, { passive: false });
@@ -2543,7 +2570,21 @@ document.addEventListener('pointerdown', event => {
   touchDragging = true;
   lifted?.classList.add('held');
   try { navigator.vibrate?.(12); } catch (e) {}
+  // 1.0.43: Bleibt der Finger noch kurz still liegen, öffnet sich das Menü der Karte schon jetzt
+  // (nicht erst beim Loslassen). Wer stattdessen zieht, verschiebt die Karte wie bisher.
+  // Gilt auch in „Heute“.
+  const menuId = lifted && lifted.matches('.card') && (lifted.closest('#daylist') || lifted.querySelector(':scope > .chead [data-act="move"]')) ? lifted.dataset.id : null;
+  let lastX = startX, lastY = startY;
+  const follow = moveEvent => { lastX = moveEvent.clientX; lastY = moveEvent.clientY; };
+  addEventListener('pointermove', follow);
+  const menuTimer = menuId ? setTimeout(() => {
+   if (Math.hypot(lastX - startX, lastY - startY) >= 10) return;
+   dispatchEvent(new PointerEvent('pointercancel'));  // Ziehen sauber beenden, ohne abzulegen
+   moveMenu(menuId);
+  }, MENU_HOLD_MS) : null;
   const end = upEvent => {
+   clearTimeout(menuTimer);
+   removeEventListener('pointermove', follow);
    touchDragging = false;
    lifted?.classList.remove('held');
    ignoreClicksUntil = Date.now() + 350;  // Loslassen nach dem Halten ist kein Klick
@@ -2552,8 +2593,7 @@ document.addEventListener('pointerdown', event => {
    // 1.0.38: Gehalten und ohne zu ziehen losgelassen = Menü der Karte (Backlog / Verschieben nach …).
    // Ersetzt am Handy die drei Punkte im Kartenkopf.
    const still = upEvent && upEvent.type === 'pointerup' && Math.hypot(upEvent.clientX - startX, upEvent.clientY - startY) < 10;
-   const id = lifted && lifted.matches('.card') && lifted.querySelector(':scope > .chead [data-act="move"]') ? lifted.dataset.id : null;
-   if (still && id) setTimeout(() => moveMenu(id), 30);
+   if (still && menuId && $('#modal').hidden) setTimeout(() => moveMenu(menuId), 30);
   };
   addEventListener('pointerup', end);
   addEventListener('pointercancel', end);
@@ -3450,16 +3490,33 @@ async function moveMenu(id) {
  await moveTo(id, { cat, area, bl: r.vals.bl === '1' });
 }
 // Einstellungen (Knopf ··· oben rechts)
+// Version C 1.0.43: Die drei Punkte neben dem Namen der Liste öffnen ein kleines Menü.
+function openAppMenu(anchor) {
+ if (document.querySelector('.ctxmenu.appmenu')) { closeKatMenu(); return; }
+ openPopMenu(anchor, `<button role="menuitem" data-act="about">Über diese App</button>`
+  + `<button role="menuitem" data-act="backup">Datensicherung …</button>`
+  + `<button role="menuitemcheckbox" class="animitem" data-act="anim" aria-checked="${!!state.anim}">Sanfte Animationen<i></i></button>`, 'Menü');
+ document.querySelector('.ctxmenu').classList.add('appmenu');
+}
+function toggleAnim(button) {
+ state.anim = !state.anim;
+ save();
+ document.body.classList.toggle('noanim', !state.anim);
+ button.setAttribute('aria-checked', state.anim);
+}
+function aboutDialog() {
+ modal(`<h2>Über diese App</h2>
+  <p><b>Alles bleibt auf diesem Gerät.</b> Kein Konto, kein Tracking, keine Werbung. Deine Liste liegt nur im Speicher dieses Browsers und wird nirgendwohin geschickt.</p>
+  <p><b>Datensicherung:</b> Weil nichts in einer Cloud liegt, speichere ab und zu eine Sicherung als Datei (Menü ⋯ → Datensicherung). Damit holst du deine Liste auch auf ein anderes Gerät. Löschst du die Website-Daten des Browsers, ist die Liste sonst weg.</p>
+  <p><b>Funktioniert offline:</b> Einmal geöffnet, läuft die App auch ohne Internet.</p>
+  <div class="btns">${buttonHtml('ok', 'Fertig', 'pri')}</div>`);
+}
 async function settingsDialog() {
- const r = await modal(`<h2>Einstellungen</h2><label class="opt"><input type="checkbox" name="anim"${state.anim ? ' checked' : ''}> Sanfte Animationen</label>
-  <p>Version B: Bereiche übereinander, Kategorien zum Wischen, ${wideNarrow('Zeitnah und ', '')}Backlog. Alles bleibt nur auf diesem Gerät.</p>
-  <label class="lbl">Datensicherung</label>
+ const r = await modal(`<h2>Datensicherung</h2>
   <p>Speichere ab und zu eine Sicherung als Datei. Damit holst du deine Liste auch auf ein anderes Gerät.</p>
   <div class="btns" style="justify-content:flex-start;margin-top:10px">${buttonHtml('export', 'Sicherung speichern')}${buttonHtml('import', 'Sicherung laden')}</div>
-  <p class="prehint">App ${APP_VERSION} · Datenformat ${FORMAT}</p>
   <div class="btns">${buttonHtml('reset', 'Beispiel wiederherstellen', 'ghost')}${buttonHtml('copy', 'Daten kopieren', 'ghost')}${buttonHtml('ok', 'Fertig', 'pri')}</div>`);
  if (!r.v) return;
- state.anim = !!r.vals.anim;
  if (r.v === 'import') {
   save();
   render();
@@ -3670,7 +3727,7 @@ document.addEventListener('click', event => {
  const button = event.target.closest('[data-act]');
  if (!button) return;
  const id = button.dataset.id;
- if (button.closest('.ctxmenu')) closeKatMenu();
+ if (button.closest('.ctxmenu') && button.dataset.act !== 'anim') closeKatMenu();  // Animationen-Schalter: Menü bleibt offen
  switch (button.dataset.act) {
   case 'check': toggleDone(id); break;
   case 'block': askBefore(id); break;
@@ -3685,7 +3742,11 @@ document.addEventListener('click', event => {
   case 'lren': startItemEdit(button); break;
   case 'ins': case 'insroot': startInsert(button); break;
   case 'inbox': sortInbox(); break;
-  case 'menu': settingsDialog(); break;
+  case 'menu': openAppMenu(button); break;
+  case 'about': closeKatMenu(); aboutDialog(); break;
+  case 'backup': closeKatMenu(); settingsDialog(); break;
+  case 'anim': toggleAnim(button); break;
+  case 'qheute': quickAdd(button.dataset.id); break;
   case 'machbar': setMachbar(state.view !== 'jetzt'); break;
   case 'gocol': goToColumn(+button.dataset.i, true); break;
   case 'colstep':
