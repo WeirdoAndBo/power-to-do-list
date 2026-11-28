@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.50-c';
+const APP_VERSION = '1.0.51-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -216,6 +216,10 @@ const openNeeds = task => task.needs.filter(id => getTask(id) && !getTask(id).do
 // 1.0.47: Alle noch offenen Unter-To-Dos (needs und soft). Für „Nur Startklares“ und das Ausgrauen in der
 // Übersicht: Ein To-Do ist erst startklar, wenn keines seiner Unter-To-Dos mehr offen ist.
 const openBefore = task => [...task.needs, ...task.soft].filter(id => getTask(id) && !getTask(id).done);
+// 1.0.51: Startklar = offen und nichts davor ist mehr offen. Die eine Regel für alles, was „Nur Startklares“
+// zeigt (Zeitnah, Backlog und Sammlung). Ein Haupt-To-Do mit offenem Unter-To-Do steht dort nie, sondern
+// das Unter-To-Do, mit dem man anfangen kann (auf jeder Ebene).
+const isStartklar = task => !task.done && !openBefore(task).length;
 // Alle To-Dos, vor denen id kommt (needs und soft) bzw. nur die, die id brauchen (needs)
 const parentsOf = id => allTasks().filter(parent => parent.needs.includes(id) || parent.soft.includes(id));
 const parentsNeeding = id => allTasks().filter(parent => parent.needs.includes(id));
@@ -817,10 +821,10 @@ function backlogRowHtml(task, color) {
 // Schalter „Machbar“ an: eine Kategorie-Spalte mit Zeitnah (nicht gesperrt), Backlog und Erledigt
 function machbarColumnHtml(bereich, kategorie) {
  const here = task => isIn(task, bereich.id, kategorie.id);
- const doable = allTasks().filter(t => !t.done && !t.backlog && !openBefore(t).length && here(t)).sort(byPrio);
- const backlogAll = allTasks().filter(t => !t.done && t.backlog && here(t));
- // Im Backlog nur die „obersten“ zeigen: nicht die, deren Ziel selbst schon im Backlog liegt
- const backlogTop = backlogAll.filter(t => !parentsOf(t.id).some(p => p.backlog && !p.done && here(p))).sort(byPrio);
+ const doable = allTasks().filter(t => isStartklar(t) && !t.backlog && here(t)).sort(byPrio);
+ // 1.0.51: Auch im Backlog nur Startklares. Früher standen hier die „obersten“ Karten (z. B. ein Ziel mit
+ // „Erst noch: …“), jetzt stattdessen ihre Unter-To-Dos, mit denen man anfangen kann.
+ const backlogTop = allTasks().filter(t => isStartklar(t) && t.backlog && here(t)).sort(byPrio);
  const done = allTasks().filter(t => t.done && here(t)).sort((a, b) => b.doneAt - a.doneAt);
  // Ablageziel fürs Ziehen
  const dropTarget = `data-drop="zone" data-cat="${bereich.id}" data-area="${kategorie.id}"`;
@@ -832,7 +836,7 @@ function machbarColumnHtml(bereich, kategorie) {
    ? backlogTop.map(t => cardHtml(t, bereich.color, { move: true }) + insertRootHtml(bereich, kategorie, t.id, 'div', true)).join('')
    : `<div class="empty" style="--c:${bereich.color}">Leer. Zieh To-Dos hierher, die gerade nicht dran sind.</div>` + insertRootHtml(bereich, kategorie, '', 'div', true)) + '</div>';
  return `<p class="zlabel zsoon">Zeitnah</p><div class="list zone" ${dropTarget} data-bl="0">${doableHtml}</div>
- ${backlogSectionHtml(bereich, kategorie, backlogAll.length, backlogHtml)}${doneBoxHtml(done, bereich.color)}`;
+ ${backlogSectionHtml(bereich, kategorie, backlogTop.length, backlogHtml)}${doneBoxHtml(done, bereich.color)}`;
 }
 // Tab „Übersicht“: ein Knoten im Baum, ruft sich für seine Vorher-To-Dos selbst auf.
 // path = Weg im Baum (für auf/zu), level = Tiefe (0 = Ziel ganz oben), viaSoft = hängt über „hilft nur“ dran,
@@ -947,7 +951,9 @@ function uebersichtColumnHtml(bereich, kategorie) {
 function sammlungColumnHtml(bereich, kategorie) {
  const here = t => isIn(t, bereich.id, kategorie.id);
  const roots = allTasks().filter(t => here(t) && (t.goal || !parentsOf(t.id).some(here)));
- const open = roots.filter(t => !t.done).sort(byPrio);
+ // 1.0.51: Mit „Nur Startklares“ (Ansicht 'jetzt') auch hier nur startklare To-Dos, auf jeder Ebene, statt der
+ // ganzen Karten. Ohne den Schalter bleibt die Sammlung, wie sie war: Karten mit ihren Unter-To-Dos.
+ const open = (state.view === 'jetzt' ? allTasks().filter(t => here(t) && isStartklar(t)) : roots.filter(t => !t.done)).sort(byPrio);
  const done = roots.filter(t => t.done).sort((a, b) => b.doneAt - a.doneAt);
  const dropTarget = `data-drop="zone" data-cat="${bereich.id}" data-area="${kategorie.id}" data-bl="0"`;
  const card = t => state.view === 'baum' ? treeNodeHtml(t, bereich.color, bereich.id, 0) : cardHtml(t, bereich.color, { move: true });
