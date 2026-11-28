@@ -659,10 +659,10 @@ test('Liste: „Liste:“ vor den Text, Punkte eintippen, abhaken, löschen', as
  await pressKey($('.card[data-id="g8"] .tinput'), 'Enter');
  expect(!$('.card[data-id="g8"] .llist') && saved().tasks.g8.list.length === 1, 'Ohne „Liste:“ soll die Liste ausgeblendet, aber nicht gelöscht sein');
 });
-test('🔗 im Bearbeitungsfeld: ein vorhandenes To-Do muss vorher erledigt sein', async () => {
+test('Stift im Bearbeitungsfeld (früher 🔗): ein vorhandenes To-Do muss vorher erledigt sein', async () => {
  await dblclick('.card[data-id="g8"] h3 .t');
  const link = $('.card[data-id="g8"] .linkbtn');
- expect(link, '🔗 im Bearbeitungsfeld fehlt');
+ expect(link, 'Stift im Bearbeitungsfeld fehlt');
  await click(link);
  expect(modalOpen() && $('#modal [data-v="addk"]') && $('#modal [data-v="addp"]'), 'Popup „Verbindungen“ fehlt');
  await click('#modal [data-v="addk"]');
@@ -1077,7 +1077,7 @@ test('Mülleimer im Bearbeitungsfeld löscht das To-Do (mit Rückgängig)', asyn
  await freshApp();
  await dblclick('.card[data-id="g8"] h3 .t');
  const trash = $('.card[data-id="g8"] h3 .t.editing .editdel');
- expect(trash && $('.card[data-id="g8"] h3 .t.editing .linkbtn'), 'Mülleimer oder 🔗 im Bearbeitungsfeld fehlt');
+ expect(trash && $('.card[data-id="g8"] h3 .t.editing .linkbtn'), 'Mülleimer oder Stift im Bearbeitungsfeld fehlt');
  await click(trash);
  expect(!saved().tasks.g8, '„g8“ wurde nicht gelöscht');
  await click('#undo');
@@ -1328,6 +1328,25 @@ test('Kein Bereich offen: Plus der Schnelleingabe ist neutral, sonst in Bereichs
   frame.style.width = '';
   await sleep(150);
  }
+});
+
+// 1.0.54
+test('Stift im Bearbeitungsfeld: „Ordnen“ verschiebt in eine andere Kategorie (mit Rückgängig)', async () => {
+ await freshApp();
+ const area = saved().tasks.g8.area;
+ await dblclick('.card[data-id="g8"] h3 .t');
+ await click('.card[data-id="g8"] h3 .t.editing .editpen');
+ expect(modalOpen() && $('#modal .arrange'), 'Popup „Ordnen“ fehlt');
+ expect($('#modal [data-v="bl:0"]') && $('#modal [data-v="addk"]'), 'Zeitnah/Backlog oder Abhängigkeiten fehlen im Popup');
+ const chip = $('#modal .achip[data-v^="pk:"]:not(.on)');
+ expect(chip, 'keine andere Kategorie zur Wahl');
+ const target = chip.dataset.v.slice(3);
+ await click(chip);
+ expect(saved().tasks.g8.area === target, 'Kategorie wurde nicht gewechselt');
+ expect(modalOpen() && $(`#modal .achip.on[data-v="pk:${target}"]`), 'Popup ist nicht mehr offen oder zeigt die neue Kategorie nicht');
+ await click('#modal [data-v="ok"]');
+ await click('#undo');
+ expect(saved().tasks.g8.area === area, 'Rückgängig hat die Kategorie nicht zurückgesetzt');
 });
 
 document.getElementById('run').onclick = async () => {

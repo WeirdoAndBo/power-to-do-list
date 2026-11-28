@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.53-c';
+const APP_VERSION = '1.0.54-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -2800,7 +2800,6 @@ document.addEventListener('keydown', event => {
 //    Maus: drücken und bewegen. Finger: kurz halten (HOLD_MS), dann ziehen; wer gleich wischt, scrollt normal.
 //    Knöpfe, Schalter, Häkchen und Eingabefelder starten kein Ziehen. Ein kurzer Klick auf den Text bearbeitet ihn.
 const HOLD_MS = 320;
-const MENU_HOLD_MS = 330;  // so lange nach dem Anheben noch still halten = Menü (1.0.43)
 const NO_DRAG = 'button, input, select, textarea, summary, a, label, details.chain, .tinput';
 let touchDragging = false;  // während des Ziehens mit dem Finger: Seite nicht scrollen lassen
 document.addEventListener('touchmove', event => { if (touchDragging) event.preventDefault(); }, { passive: false });
@@ -2853,30 +2852,15 @@ document.addEventListener('pointerdown', event => {
   touchDragging = true;
   lifted?.classList.add('held');
   try { navigator.vibrate?.(12); } catch (e) {}
-  // 1.0.43: Bleibt der Finger noch kurz still liegen, öffnet sich das Menü der Karte schon jetzt
-  // (nicht erst beim Loslassen). Wer stattdessen zieht, verschiebt die Karte wie bisher.
-  // Gilt auch in „Heute“.
-  const menuId = lifted && lifted.matches('.card') && (lifted.closest('#daylist') || lifted.querySelector(':scope > .chead [data-act="move"]')) ? lifted.dataset.id : null;
-  let lastX = startX, lastY = startY;
-  const follow = moveEvent => { lastX = moveEvent.clientX; lastY = moveEvent.clientY; };
-  addEventListener('pointermove', follow);
-  const menuTimer = menuId ? setTimeout(() => {
-   if (Math.hypot(lastX - startX, lastY - startY) >= 10) return;
-   dispatchEvent(new PointerEvent('pointercancel'));  // Ziehen sauber beenden, ohne abzulegen
-   moveMenu(menuId);
-  }, MENU_HOLD_MS) : null;
-  const end = upEvent => {
-   clearTimeout(menuTimer);
-   removeEventListener('pointermove', follow);
+  // 1.0.54: Langes Drücken macht nur noch eins: anheben und ziehen. Das Menü beim Halten (1.0.38/1.0.43) ist weg,
+  // weil es sich öffnete, sobald man nach dem Anheben kurz zögerte. Verschieben und Abhängigkeiten: Doppeltipp
+  // auf den Text → Stift (openArrange).
+  const end = () => {
    touchDragging = false;
    lifted?.classList.remove('held');
    ignoreClicksUntil = Date.now() + 350;  // Loslassen nach dem Halten ist kein Klick
    removeEventListener('pointerup', end);
    removeEventListener('pointercancel', end);
-   // 1.0.38: Gehalten und ohne zu ziehen losgelassen = Menü der Karte (Backlog / Verschieben nach …).
-   // Ersetzt am Handy die drei Punkte im Kartenkopf.
-   const still = upEvent && upEvent.type === 'pointerup' && Math.hypot(upEvent.clientX - startX, upEvent.clientY - startY) < 10;
-   if (still && menuId && $('#modal').hidden) setTimeout(() => moveMenu(menuId), 30);
   };
   addEventListener('pointerup', end);
   addEventListener('pointercancel', end);
@@ -2990,13 +2974,14 @@ function startRename(titleEl) {
  const input = editField(task.t, 'Text bearbeiten');
  titleEl.textContent = '';
  titleEl.append(input);
- // Version C: 🔗 im Bearbeitungsfeld öffnet die Verbindungen (kommt erst nach … / gehört auch zu …)
+ // 1.0.54: Stift im Bearbeitungsfeld (vorher 🔗) öffnet „Ordnen“: wohin (Bereich, Kategorie, Zeitnah/Backlog)
+ // und Abhängigkeiten (kommt erst nach … / gehört auch zu …). Ersetzt das Menü beim langen Drücken.
  const linkButton = document.createElement('button');
  linkButton.type = 'button';
- linkButton.className = 'linkbtn';
- linkButton.textContent = '🔗';
- linkButton.title = 'Verbindungen: kommt erst nach … / gehört auch zu …';
- linkButton.setAttribute('aria-label', 'Verbindungen bearbeiten');
+ linkButton.className = 'mini linkbtn editpen';
+ linkButton.innerHTML = ICON_PEN;
+ linkButton.title = 'Verschieben und Abhängigkeiten';
+ linkButton.setAttribute('aria-label', 'Verschieben und Abhängigkeiten');
  titleEl.append(linkButton);
  // 1.0.48: Mülleimer im Bearbeitungsfeld, ganz rechts: gelöscht wird dort, wo man bearbeitet
  const deleteButton = document.createElement('button');
@@ -3011,7 +2996,7 @@ function startRename(titleEl) {
  input.focus();
  input.setSelectionRange(input.value.length, input.value.length);
  let finished = false;
- // Fokus im Feld lassen, damit das Antippen von 🔗 nicht erst das Feld schließt
+ // Fokus im Feld lassen, damit das Antippen des Stifts nicht erst das Feld schließt
  linkButton.addEventListener('mousedown', event => event.preventDefault());
  linkButton.addEventListener('pointerdown', event => event.stopPropagation());
  deleteButton.addEventListener('mousedown', event => event.preventDefault());
@@ -3028,7 +3013,7 @@ function startRename(titleEl) {
   const before = snapshot();
   if (text && text !== task.t) { task.t = text; ensureList(task); save(); }
   render();
-  connectionsDialog(task.id, before);
+  arrangeDialog(task.id, before);
  });
  const finish = keep => {
   if (finished) return;
@@ -3312,6 +3297,10 @@ async function connectionsDialog(id, before = snapshot()) {
  }
 }
 function connectionsHtml(task) {
+ return `<h2>🔗 „${esc(shownTitle(task))}“</h2>${connectionsBodyHtml(task)}
+  <div class="btns">${buttonHtml('ok', 'Fertig', 'pri')}</div>`;
+}
+function connectionsBodyHtml(task) {
  const beforeList = [...task.needs.map(x => [x, 0]), ...task.soft.map(x => [x, 1])].filter(([x]) => getTask(x));
  const parents = parentsOf(task.id);
  const row = (title, buttons) => `<div class="lrow"><span>${esc(title)}</span>${buttons}</div>`;
@@ -3323,12 +3312,66 @@ function connectionsHtml(task) {
  const parentRows = parents.length
   ? parents.map(parent => row(shownTitle(parent), `<button class="mini" data-v="rmp:${parent.id}" aria-label="Verbindung lösen">×</button>`)).join('')
   : '<p class="prehint">Zu keinem anderen To-Do.</p>';
- return `<h2>🔗 „${esc(shownTitle(task))}“</h2>
-  <label class="lbl">Kommt erst nach …</label>${beforeRows}
+ return `<label class="lbl">Kommt erst nach …</label>${beforeRows}
   <button class="link" data-v="addk">+ Ein vorhandenes To-Do muss vorher erledigt sein</button>
   <label class="lbl">Gehört auch zu …</label>${parentRows}
-  <button class="link" data-v="addp">+ Gehört auch zu einem anderen To-Do</button>
-  <div class="btns">${buttonHtml('ok', 'Fertig', 'pri')}</div>`;
+  <button class="link" data-v="addp">+ Gehört auch zu einem anderen To-Do</button>`;
+}
+/* 1.0.54: Popup „Ordnen“ hinter dem Stift im Bearbeitungsfeld. Oben „Wohin“ (nur für eigene Karten, nicht für
+   Unter-To-Dos, die ihren Ort vom Haupt-To-Do erben): Bereich und Kategorie als Knöpfe, darunter Zeitnah/Backlog.
+   Unten die Abhängigkeiten wie im Popup „Verbindungen“. Jede Änderung gilt sofort; „Fertig“ schließt,
+   „Rückgängig“ nimmt danach alles aus diesem Popup auf einmal zurück. */
+function arrangeHtml(task) {
+ let where = '';
+ if (!parentsOf(task.id).length) {
+  const [bereichId, kategorieId] = placeOf(task).split('|');
+  const bereich = getBereich(bereichId);
+  const kategorie = bereich && bereich.subs.find(k => k.id === kategorieId);
+  const chip = (v, label, on, color) => `<button type="button" class="achip${on ? ' on' : ''}" data-v="${v}" aria-pressed="${on}"`
+   + `${color ? ` style="--c:${color}"` : ''}>${color ? '<i></i>' : ''}${esc(label)}</button>`;
+  const bereichChips = visibleBereiche().map(b => chip('pc:' + b.id, b.name, b.id === bereichId, b.color)).join('');
+  const kategorieChips = bereich ? bereich.subs.map(k => chip('pk:' + k.id, k.name, k.id === kategorieId)).join('') : '';
+  // Die Sammlung kennt kein Zeitnah/Backlog
+  const seg = kategorie && kategorie.inbox ? ''
+   : `<div class="aseg" role="group" aria-label="Zeitnah oder Backlog">`
+    + `<button type="button" data-v="bl:0" aria-pressed="${!task.backlog}">${wideNarrow('Zeitnah', 'Aktuell')}</button>`
+    + `<button type="button" data-v="bl:1" aria-pressed="${!!task.backlog}">Backlog</button></div>`;
+  where = `<label class="lbl">Wohin</label><div class="achips">${bereichChips}</div>`
+   + (kategorieChips ? `<div class="achips" style="--c:${bereich.color}">${kategorieChips}</div>` : '') + seg;
+ }
+ return `<div class="arrange"><h2>${esc(shownTitle(task))}</h2>${where}${connectionsBodyHtml(task)}
+  <div class="btns">${buttonHtml('ok', 'Fertig', 'pri')}</div></div>`;
+}
+async function arrangeDialog(id, before = snapshot()) {
+ for (;;) {
+  const task = getTask(id);
+  if (!task) return;
+  const r = await modal(arrangeHtml(task));
+  const [action, otherId] = (r.v || '').split(':');
+  if (action === 'pc') {
+   const bereich = getBereich(otherId);
+   if (bereich && !isIn(task, bereich.id)) {
+    // Neuer Bereich: in die erste Kategorie außer der Sammlung (gibt es keine, dann die Sammlung)
+    const kategorie = bereich.subs.find(k => !k.inbox) || bereich.subs[0];
+    await moveTo(id, { cat: bereich.id, area: kategorie ? kategorie.id : '' });
+   }
+  } else if (action === 'pk') {
+   await moveTo(id, { cat: placeOf(task).split('|')[0], area: otherId });
+  } else if (action === 'bl') {
+   await moveTo(id, { bl: otherId === '1' });
+  } else if (action === 'kind') toggleKind(task, otherId);
+  else if (action === 'rmk') unlinkBefore(task, otherId);
+  else if (action === 'rmp') { unlinkBefore(getTask(otherId), id); if (!parentsOf(id).length) task.goal = true; }
+  else if (action === 'addk' || action === 'addp') await linkExisting(task, action === 'addk');
+  else {
+   save();
+   render();
+   if (snapshot() !== before) { undoSnapshot = before; toast('Gespeichert.', true); }
+   return;
+  }
+  save();
+  render();
+ }
 }
 // Schaltet ein Vorher-To-Do zwischen „geht sonst nicht“ und „hilft nur“ um
 function toggleKind(task, beforeId) {
