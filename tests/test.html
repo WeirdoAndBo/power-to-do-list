@@ -1210,6 +1210,126 @@ test('Nur Startklares im Backlog: statt Ziel steht das Unter-To-Do da', async ()
  expect(!$$('#acc .wait').length, 'In „Nur Startklares“ steht noch ein Hinweis „Erst noch: …“');
 });
 
+// 1.0.53: Der aufgeklappte Bereich steht oben, sonst gilt die gespeicherte Reihenfolge. Umsortieren per Ziehen.
+const bereichOrder = () => [...$('#acc').children].filter(el => el.matches('.cat.open, .catbar:not(.new)'))
+ .map(el => el.matches('.catbar') ? el.dataset.cat : el.querySelector('.cathead [data-act="opencat"]').dataset.cat).join(',');
+const rowOf = id => $(`#acc .catbar[data-cat="${id}"]`) || $(`#acc .cathead [data-act="opencat"][data-cat="${id}"]`).closest('.cat');
+function pointer(el, type, x, y, pointerType = 'mouse') {
+ el.dispatchEvent(new win.PointerEvent(type, { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, pointerType, isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1 }));
+}
+// Zieht `fromEl` (an seiner Mitte angefasst) senkrecht auf die Höhe y
+async function dragBereichTo(fromEl, y, pointerType = 'mouse', holdMs = 0) {
+ const box = fromEl.getBoundingClientRect();
+ const x = box.left + 40, y0 = box.top + box.height / 2;
+ pointer(fromEl, 'pointerdown', x, y0, pointerType);
+ if (holdMs) await sleep(holdMs);
+ for (let i = 1; i <= 6; i++) { pointer(doc.body, 'pointermove', x, y0 + (y - y0) * i / 6, pointerType); await sleep(20); }
+ pointer(doc.body, 'pointerup', x, y, pointerType);
+ await sleep(120);
+}
+test('Aufgeklappter Bereich steht oben, zugeklappt gilt die gespeicherte Reihenfolge', async () => {
+ await freshApp();
+ expect(bereichOrder() === 'arbeit,privat,hobby', 'Start-Reihenfolge ist ' + bereichOrder());
+ await click('.catbar[data-cat="hobby"]');
+ expect(bereichOrder() === 'hobby,arbeit,privat', 'Hobby steht aufgeklappt nicht oben: ' + bereichOrder());
+ expect(saved().cats.map(c => c.id).join(',') === 'arbeit,privat,hobby', 'Aufklappen hat die gespeicherte Reihenfolge verändert');
+ await click('.cat.open .cathead [data-act="opencat"]');
+ expect(saved().openCat === null, 'Bereich ist nicht zugeklappt');
+ expect(bereichOrder() === 'arbeit,privat,hobby', 'Alle zu: Reihenfolge ist nicht wie angelegt: ' + bereichOrder());
+});
+test('Bereiche per Ziehen umsortieren (Maus), bleibt nach Neuladen, Rückgängig geht', async () => {
+ await freshApp();
+ await click('.cat.open .cathead [data-act="opencat"]');   // alle zu
+ const arbeit = rowOf('arbeit');
+ await dragBereichTo(arbeit, rowOf('hobby').getBoundingClientRect().bottom + 4);
+ expect(saved().cats.map(c => c.id).join(',') === 'privat,hobby,arbeit', 'Arbeit ist nicht ans Ende gezogen: ' + saved().cats.map(c => c.id));
+ expect(saved().openCat === null, 'Ziehen hat den Bereich aufgeklappt');
+ expect(bereichOrder() === 'privat,hobby,arbeit', 'Anzeige stimmt nicht: ' + bereichOrder());
+ await loadApp();
+ expect(bereichOrder() === 'privat,hobby,arbeit', 'Nach dem Neuladen ist die Reihenfolge weg');
+ // Hobby ganz nach oben
+ await dragBereichTo(rowOf('hobby'), rowOf('privat').getBoundingClientRect().top + 3);
+ expect(saved().cats.map(c => c.id).join(',') === 'hobby,privat,arbeit', 'Hobby ist nicht nach oben gezogen: ' + saved().cats.map(c => c.id));
+ await undoLast();
+ expect(saved().cats.map(c => c.id).join(',') === 'privat,hobby,arbeit', 'Rückgängig stellt die Reihenfolge nicht her');
+ expect(Object.keys(saved().tasks).length === Object.keys(testData().tasks).length, 'To-Dos sind verloren gegangen');
+});
+test('Bereich ziehen, während einer aufgeklappt ist: der offene bleibt oben', async () => {
+ await freshApp();   // Arbeit ist offen
+ rowOf('privat').scrollIntoView({ block: 'center' });
+ await sleep(60);
+ await dragBereichTo(rowOf('hobby'), rowOf('privat').getBoundingClientRect().top + 3);
+ expect(saved().cats.map(c => c.id).join(',') === 'arbeit,hobby,privat', 'Hobby steht nicht vor Privat: ' + saved().cats.map(c => c.id));
+ expect(bereichOrder() === 'arbeit,hobby,privat', 'Anzeige stimmt nicht: ' + bereichOrder());
+ // Über den offenen Bereich gezogen = ganz nach vorne
+ win.scrollTo(0, 0);
+ await sleep(60);
+ await dragBereichTo(rowOf('privat'), rowOf('arbeit').getBoundingClientRect().top + 3);
+ expect(saved().cats.map(c => c.id).join(',') === 'privat,arbeit,hobby', 'Privat ist nicht ganz nach vorne gekommen: ' + saved().cats.map(c => c.id));
+ expect(bereichOrder() === 'arbeit,privat,hobby', 'Der offene Bereich steht nicht mehr oben: ' + bereichOrder());
+ expect(saved().openCat === 'arbeit', 'Ziehen hat den offenen Bereich gewechselt');
+});
+test('Bereiche mit Alt + Pfeil umsortieren (Tastatur)', async () => {
+ await freshApp();
+ await click('.cat.open .cathead [data-act="opencat"]');
+ const bar = rowOf('arbeit');
+ bar.focus();
+ bar.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true }));
+ await sleep(60);
+ expect(saved().cats.map(c => c.id).join(',') === 'privat,arbeit,hobby', 'Alt+Pfeil runter: ' + saved().cats.map(c => c.id));
+ rowOf('hobby').dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true, cancelable: true }));
+ await sleep(60);
+ expect(saved().cats.map(c => c.id).join(',') === 'privat,hobby,arbeit', 'Alt+Pfeil hoch: ' + saved().cats.map(c => c.id));
+});
+test('Handy: lange drücken und loslassen = Popup, lange drücken und ziehen = umsortieren', async () => {
+ await freshApp();
+ frame.style.width = '360px';
+ await sleep(200);
+ try {
+  await click('.cat.open .cathead .cdot');   // alle zu
+  const bar = rowOf('privat');
+  const box = bar.getBoundingClientRect();
+  pointer(bar, 'pointerdown', box.left + 60, box.top + 20, 'touch');
+  await sleep(600);
+  expect(!modalOpen(), 'Popup geht schon vor dem Loslassen auf');
+  pointer(doc.body, 'pointerup', box.left + 60, box.top + 20, 'touch');
+  await sleep(100);
+  expect(modalOpen() && $('#modal h2').textContent === 'Bereich bearbeiten', 'Loslassen ohne Bewegung öffnet nicht „Bereich bearbeiten“');
+  await click('#modal [data-v=""]') .catch(() => {});
+  if (modalOpen()) { $('#modal').hidden = true; }
+  await sleep(500);
+  // Kurz wischen (ohne Halten) ist Scrollen, kein Ziehen
+  await dragBereichTo(rowOf('privat'), rowOf('hobby').getBoundingClientRect().bottom + 4, 'touch', 0);
+  expect(saved().cats.map(c => c.id).join(',') === 'arbeit,privat,hobby', 'Wischen ohne Halten hat umsortiert');
+  // Halten, dann ziehen
+  await dragBereichTo(rowOf('privat'), rowOf('hobby').getBoundingClientRect().bottom + 4, 'touch', 600);
+  expect(saved().cats.map(c => c.id).join(',') === 'arbeit,hobby,privat', 'Halten und Ziehen sortiert nicht um: ' + saved().cats.map(c => c.id));
+  expect(!modalOpen(), 'Nach dem Ziehen ist ein Popup offen');
+  expect(saved().openCat === null, 'Ziehen hat einen Bereich aufgeklappt');
+ } finally {
+  frame.style.width = '';
+  await sleep(150);
+ }
+});
+test('Kein Bereich offen: Plus der Schnelleingabe ist neutral, sonst in Bereichsfarbe', async () => {
+ await freshApp();
+ frame.style.width = '360px';
+ await sleep(200);
+ try {
+  const colorOf = c => { const probe = doc.createElement('i'); probe.style.color = c; doc.body.append(probe); const v = win.getComputedStyle(probe).color; probe.remove(); return v; };
+  const plus = () => win.getComputedStyle($('#qbar .qadd')).backgroundColor;
+  expect(plus() === colorOf('#5b8def'), 'Plus hat bei offenem Bereich nicht dessen Farbe: ' + plus());
+  await click('.cat.open .cathead .cdot');
+  expect(saved().openCat === null, 'Bereich ist nicht zu');
+  expect(plus() === colorOf(win.getComputedStyle(doc.documentElement).getPropertyValue('--neutral').trim()) && plus() !== colorOf('#5b8def'), 'Plus ist nicht neutral: ' + plus());
+  await click('.catbar[data-cat="privat"]');
+  expect(plus() === colorOf('#e0a03a'), 'Plus hat nach dem Aufklappen nicht die Farbe von Privat');
+ } finally {
+  frame.style.width = '';
+  await sleep(150);
+ }
+});
+
 document.getElementById('run').onclick = async () => {
  const own = localStorage.getItem(KEY); // eigene Liste sichern
  results.innerHTML = '';
