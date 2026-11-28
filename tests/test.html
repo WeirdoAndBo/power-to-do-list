@@ -328,7 +328,8 @@ test('Handy: In „Heute“ ohne Pfeile, das „+“ fragt nach dem Bereich und 
   await click(choices[0]);
   await sleep(60);
   const made = Object.values(saved().tasks).find(t => t.t === 'Heute-Test');
-  const sammlung = target.subs.find(k => k.inbox);
+  // 1.0.54: Ohne Sammlung landet es in der ersten Kategorie des Bereichs
+  const sammlung = target.subs.find(k => k.inbox) || target.subs[0];
   expect(made && made.today && made.cat === target.id && made.area === (sammlung ? sammlung.id : null), 'To-Do steht nicht für heute in der Sammlung des gewählten Bereichs');
   await undoLast();
  } finally {
@@ -1347,6 +1348,31 @@ test('Stift im Bearbeitungsfeld: „Ordnen“ verschiebt in eine andere Kategori
  await click('#modal [data-v="ok"]');
  await click('#undo');
  expect(saved().tasks.g8.area === area, 'Rückgängig hat die Kategorie nicht zurückgesetzt');
+});
+
+test('Handy: Kein Bereich offen, das „+“ fragt nach dem Bereich (nicht für heute)', async () => {
+ await freshApp();
+ frame.style.width = '360px';
+ await sleep(200);
+ try {
+  await click('.cathead .cdot');
+  await sleep(100);
+  expect(saved().openCat === null, 'Bereich ließ sich nicht zuklappen');
+  expect($('#qbar').classList.contains('qneutral'), 'Plus ist nicht neutral');
+  $('#qin').value = 'Ohne-Bereich-Test';
+  await click('.qadd');
+  const choices = $$('.ctxmenu [data-act="qheute"]');
+  expect(choices.length === saved().cats.length, 'Beim „+“ erscheint keine Auswahl der Bereiche');
+  const target = saved().cats[1];
+  await click(choices[1]);
+  await sleep(60);
+  const made = Object.values(saved().tasks).find(t => t.t === 'Ohne-Bereich-Test');
+  const sammlung = target.subs.find(k => k.inbox) || target.subs[0];
+  expect(made && !made.today && made.cat === target.id && made.area === sammlung.id, 'To-Do liegt nicht in der Sammlung des gewählten Bereichs');
+ } finally {
+  frame.style.width = '';
+  await sleep(200);
+ }
 });
 
 document.getElementById('run').onclick = async () => {

@@ -1444,6 +1444,8 @@ document.addEventListener('keydown', event => {
    ein, wohin es geht (Bereich, Kategorie, oben/unten, Backlog). Solange ausgefahren, gilt diese Wahl.
    „Mit davor/danach …“ öffnet das große Popup mit dem getippten Text. Nur am Handy (bis 600 px). */
 let quickOpen = false;   // Einsortier-Optionen ausgefahren?
+// 1.0.54: Fragt das „+“ nach dem Bereich? In „Heute“ und wenn kein Bereich aufgeklappt ist (ohne ausgefahrene Optionen).
+const quickAsksBereich = () => !quickOpen && (state.view === 'heute' || state.openCat === null);
 function quickTargetPlace() {
  return quickOpen ? $('#qopts [name=place]').value : currentPlace();
 }
@@ -1459,12 +1461,14 @@ function updateQuickBar() {
  const kategorie = bereich && bereich.subs.find(k => k.id === kategorieId);
  const where = kategorie ? kategorie.name : placeName(bereichId, kategorieId);
  // 1.0.37: kurz halten, das Feld ist schmal. Für Vorlesehilfen steht es ausführlich im aria-label.
- const hint = heute && !quickOpen ? 'für „Heute“' : `in „${where}“${backlog ? ' · Backlog' : ''}`;
+ const asks = quickAsksBereich();
+ const hint = heute && !quickOpen ? 'für „Heute“' : asks ? 'Neues To-Do' : `in „${where}“${backlog ? ' · Backlog' : ''}`;
  const input = $('#qin');
  input.placeholder = hint;
- input.setAttribute('aria-label', heute && !quickOpen ? 'Neues To-Do für Heute' : `Neues To-Do in ${where}${backlog ? ', Backlog' : ''}`);
- // 1.0.53: Ist kein Bereich aufgeklappt (und nichts ausdrücklich gewählt), bleibt das Plus neutral (Anthrazit)
- const neutral = !heute && !quickOpen && state.openCat === null;
+ input.setAttribute('aria-label', heute && !quickOpen ? 'Neues To-Do für Heute' : asks ? 'Neues To-Do (fragt nach dem Bereich)' : `Neues To-Do in ${where}${backlog ? ', Backlog' : ''}`);
+ // 1.0.53: Ist kein Bereich aufgeklappt (und nichts ausdrücklich gewählt), bleibt das Plus neutral (Anthrazit).
+ // 1.0.54: in „Heute“ ebenso.
+ const neutral = asks;
  bar.style.setProperty('--c', neutral ? 'var(--neutral)' : bereich ? bereich.color : GRAY);
  bar.classList.toggle('qneutral', neutral);
  const open = visibleBereiche().find(b => b.id === state.openCat);
@@ -1553,6 +1557,7 @@ function closeQuickOptions() {
 }
 // 1.0.43: In „Heute“ fragt das „+“ (oder Enter), zu welchem Bereich das To-Do gehört.
 // Es landet in der Sammlung dieses Bereichs und steht für heute. Bei nur einem Bereich ohne Frage.
+// 1.0.54: Genauso, wenn in der Übersicht kein Bereich aufgeklappt ist (dann nicht für heute).
 function quickAddHeute(anchor) {
  const input = $('#qin');
  const bereiche = state.cats;
@@ -1572,13 +1577,14 @@ function quickAdd(heuteBereichId) {
  const text = input.value.trim();
  if (!text) { input.focus({ preventScroll: true }); return; }
  const heuteMode = state.view === 'heute' && !quickOpen;
- if (heuteMode && heuteBereichId === undefined) { quickAddHeute(); return; }
+ const asks = quickAsksBereich();
+ if (asks && heuteBereichId === undefined) { quickAddHeute(); return; }
  closeKatMenu();
  let [cat, area] = quickTargetPlace().split('|');
- if (heuteMode) {
+ if (asks) {
   const bereich = getBereich(heuteBereichId);
   cat = bereich ? bereich.id : '';
-  area = bereich ? (bereich.subs.find(k => k.inbox) || {}).id || '' : '';
+  area = bereich ? (bereich.subs.find(k => k.inbox) || bereich.subs[0] || {}).id || '' : '';
  }
  const today = heuteMode;
  const backlog = quickOpen && $('#qopts [name=bl]').checked;
@@ -1592,6 +1598,8 @@ function quickAdd(heuteBereichId) {
  save();
  render();
  const kategorie = getBereich(cat)?.subs.find(k => k.id === area);
+ // Kein Bereich offen: kurz sagen, wo es gelandet ist (man sieht es sonst nicht)
+ if (asks && !heuteMode) toast(`„${esc(task.t)}“ liegt in ${placeName(cat, area)}.`);
  input.focus({ preventScroll: true });
 }
 document.addEventListener('keydown', event => {
