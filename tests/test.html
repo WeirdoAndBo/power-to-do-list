@@ -1162,6 +1162,54 @@ test('Handy: Schnelleingabe steht auf einer deckenden Fläche, Pfeile ohne Kreis
  }
 });
 
+// 1.0.51: „Nur Startklares“ zeigt nirgends ein To-Do, vor dem noch etwas offen ist, auch nicht in der Sammlung
+// und im Backlog. Stattdessen steht dort das Unter-To-Do, mit dem man anfangen kann.
+async function sammlungMitUnterToDo() {
+ const d = saved();
+ const t = (id, title, extra) => ({ id, t: title, needs: [], soft: [], done: false, goal: false, cat: null, prio: 0, created: Date.now(), doneAt: null, ...extra });
+ d.cats[0].subs.unshift({ id: 'sam', name: 'Sammlung', icon: 'inbox', inbox: true });
+ // Karten oben in einer Spalte sind immer Ziele (goal: true), so legt die App sie an
+ d.tasks.h = t('h', 'Haupt-To-Do', { goal: true, cat: 'arbeit', area: 'sam', needs: ['u'] });
+ d.tasks.u = t('u', 'Unter-To-Do', { needs: ['uu'], prio: 1 });
+ d.tasks.uu = t('uu', 'Unter-Unter-To-Do', { prio: 2 });
+ d.tasks.hs = t('hs', 'Haupt mit Hilfe', { goal: true, cat: 'arbeit', area: 'sam', soft: ['us'] });
+ d.tasks.us = t('us', 'Hilfe-To-Do', {});
+ win.localStorage.setItem(KEY, JSON.stringify(d));
+ await loadApp();
+}
+test('Nur Startklares in der Sammlung: statt Haupt-To-Do steht das Unter-To-Do da, ohne „Erst noch“', async () => {
+ await freshApp();
+ await sammlungMitUnterToDo();
+ await zeige(true);
+ const col = () => $('.colsammlung');
+ expect(col(), 'Sammlung-Spalte fehlt');
+ expect(!col().querySelector('.card[data-id="h"]'), 'Haupt-To-Do mit offenem Unter-To-Do steht in „Nur Startklares“');
+ expect(!col().querySelector('.card[data-id="u"]'), 'Unter-To-Do mit offenem Unter-Unter-To-Do steht in „Nur Startklares“');
+ expect(col().querySelector('.card[data-id="uu"]'), 'Das startklare Unter-Unter-To-Do fehlt');
+ expect(!col().querySelector('.card[data-id="hs"]') && col().querySelector('.card[data-id="us"]'), 'Bei „hilft nur“ steht nicht das Unter-To-Do statt des Haupt-To-Dos da');
+ expect(!$$('#acc .wait').length, 'In „Nur Startklares“ steht noch ein Hinweis „Erst noch: …“');
+ // Unter-Unter-To-Do abhaken: jetzt ist das Unter-To-Do dran, das Haupt-To-Do noch nicht
+ await click(col().querySelector('.card[data-id="uu"] .check'));
+ await sleep(60);
+ expect(col().querySelector('.card[data-id="u"]') && !col().querySelector('.card[data-id="h"]'), 'Nach dem Abhaken rückt nicht das nächste Unter-To-Do nach');
+ // Popup „Cool, geschafft! Next!“ (u ist jetzt frei) mit „Später“ schließen
+ if (modalOpen()) await click('#modal [data-v="later"]');
+ // Schalter aus: die Sammlung zeigt wieder die ganze Karte mit Unter-To-Dos
+ await zeige(false);
+ expect($('.colsammlung .card[data-id="h"]'), 'Ohne „Nur Startklares“ fehlt die Karte des Haupt-To-Dos');
+ expect(!$('.colsammlung .card[data-id="u"]'), 'Ohne „Nur Startklares“ steht das Unter-To-Do als eigene Karte da');
+ await zeige(true);
+});
+test('Nur Startklares im Backlog: statt Ziel steht das Unter-To-Do da', async () => {
+ await freshApp();
+ await zeige(true);
+ const bl = $('.blsec');
+ expect(bl, 'Backlog fehlt');
+ expect(!bl.querySelector('.card[data-id="g2"]'), 'Ziel mit offenem Unter-To-Do steht im Backlog von „Nur Startklares“');
+ expect(bl.querySelector('.card[data-id="n1"]'), 'Startklares Unter-To-Do fehlt im Backlog');
+ expect(!$$('#acc .wait').length, 'In „Nur Startklares“ steht noch ein Hinweis „Erst noch: …“');
+});
+
 document.getElementById('run').onclick = async () => {
  const own = localStorage.getItem(KEY); // eigene Liste sichern
  results.innerHTML = '';
