@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.52-c';
+const APP_VERSION = '1.0.53-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -390,6 +390,42 @@ function visibleBereiche() {
   list.push({ id: '', name: 'Ohne Bereich', color: GRAY, subs: [] });
  }
  return list;
+}
+// 1.0.53: Reihenfolge auf dem Bildschirm. Der aufgeklappte Bereich steht immer oben, die übrigen in der
+// gespeicherten Reihenfolge (state.cats, anfangs so, wie man sie angelegt hat; per Ziehen änderbar).
+// Die gespeicherte Reihenfolge selbst ändert sich beim Aufklappen nicht.
+function displayedBereiche() {
+ const list = visibleBereiche();
+ const open = list.find(b => b.id === state.openCat);
+ return open ? [open, ...list.filter(b => b !== open)] : list;
+}
+// 1.0.53: Bereich `id` in der gespeicherten Reihenfolge vor den Bereich `beforeId` setzen, so wie er auf dem
+// Bildschirm vor ihm abgelegt wurde (null = ans Ende). Liegt der aufgeklappte Bereich oben und wird davor
+// abgelegt, kommt der gezogene ganz nach vorne. Gibt true zurück, wenn sich etwas geändert hat.
+function moveBereich(id, beforeId) {
+ const bereich = getBereich(id);
+ if (!bereich || beforeId === id) return false;
+ const before = state.cats.map(b => b.id);
+ const others = state.cats.filter(b => b.id !== id);
+ const openId = state.openCat;
+ let at;
+ if (beforeId && beforeId === openId && openId !== id) at = 0;
+ else if (beforeId && others.some(b => b.id === beforeId)) at = others.findIndex(b => b.id === beforeId);
+ else {
+  // Ans Ende der Leisten: hinter den letzten Bereich, der unten als Leiste steht
+  const lastBar = others.filter(b => b.id !== openId).at(-1);
+  at = lastBar ? others.indexOf(lastBar) + 1 : others.length;
+ }
+ others.splice(at, 0, bereich);
+ if (others.every((b, i) => b.id === before[i])) return false;
+ undoSnapshot = snapshot();
+ state.cats = others;
+ save();
+ render();
+ toast(state.openCat === id && others.length > 1
+  ? `„${esc(bereich.name)}“ verschoben. Solange er offen ist, steht er oben.`
+  : `„${esc(bereich.name)}“ verschoben.`, true);
+ return true;
 }
 // Ort eines To-Dos als Text „bereichId|kategorieId“
 function placeOf(task) {
@@ -1094,10 +1130,12 @@ function render() {
   return;
  }
  // Übersicht (Schalter „Machbar“ an oder aus): Bereiche untereinander, einer davon aufgeklappt
- const bereiche = visibleBereiche();
- if (state.openCat !== null && !bereiche.some(b => b.id === state.openCat)) {
-  state.openCat = bereiche[0] ? bereiche[0].id : null;
+ if (state.openCat !== null && !visibleBereiche().some(b => b.id === state.openCat)) {
+  const first = visibleBereiche()[0];
+  state.openCat = first ? first.id : null;
  }
+ // 1.0.53: aufgeklappter Bereich oben, die übrigen in der gespeicherten Reihenfolge
+ const bereiche = displayedBereiche();
  const openBereich = bereiche.find(b => b.id === state.openCat);
  currentColumn = Math.max(0, Math.min(currentColumn, columnsOf(openBereich).length - 1));
  const scrollBefore = $('#cols')?.scrollLeft || 0;
@@ -1328,18 +1366,22 @@ document.addEventListener('selectstart', event => { if (Date.now() < noSelectUnt
  if (swallowHoldClick) setTimeout(() => { swallowHoldClick = false; }, 350);
  if (Date.now() < noSelectUntil) setTimeout(() => { if (!document.activeElement?.matches?.('input,textarea')) getSelection()?.removeAllRanges(); }, 0);
 }, true));
+// 1.0.53: Nach dem langen Drücken hebt sich der Kopf an. Jetzt ziehen = Reihenfolge der Bereiche ändern
+// (dragBereich). Loslassen, ohne zu bewegen = Popup „Bereich bearbeiten“ (am Handy, wie bisher).
+// Gilt für jeden Finger, auch auf Tablets; das Popup nur am Handy (am Desktop gibt es den Stift).
 document.addEventListener('pointerdown', event => {
  swallowHoldClick = false;  // neuer Finger = neuer Klick
  clearTimeout(headPress?.timer);
  headPress = null;
- if (!isNarrow() || event.button > 0 || !event.target.closest) return;
- const head = event.target.closest('.cathead, .catbar:not(.new)');
- if (!head || event.target.closest('.mswitch')) return;
- const id = head.matches('.catbar') ? head.dataset.cat : head.querySelector('.cdot')?.dataset.cat;
- if (!id || !getBereich(id)) return;
+ if (event.button > 0 || !event.target.closest || !$('#modal').hidden) return;
+ if (event.pointerType === 'mouse' || (!isNarrow() && event.pointerType !== 'touch' && event.pointerType !== 'pen')) return;
+ const head = bereichHeadAt(event.target);
+ if (!head) return;
+ const id = bereichIdOf(head);
  head.classList.add('pressing');
+ const startX = event.clientX, startY = event.clientY;
  headPress = {
-  x: event.clientX, y: event.clientY, head,
+  x: startX, y: startY, head,
   timer: setTimeout(() => {
    head.classList.remove('pressing');
    headPress = null;
@@ -1347,10 +1389,21 @@ document.addEventListener('pointerdown', event => {
    if (navigator.vibrate) try { navigator.vibrate(10); } catch (e) {}
    noSelectUntil = Date.now() + 1500;
    swallowHoldClick = true;
-   bereichDialog(id, true);
+   dragBereich(head, startX, startY, { touch: true, onStill: () => { if (isNarrow()) bereichDialog(id, true); } });
   }, LONG_PRESS_MS)
  };
 }, true);
+// Kopf bzw. Leiste eines echten Bereichs unter dem Zeiger (nicht „Ohne Bereich“, nicht auf Schaltern/Stift/Feldern)
+function bereichHeadAt(target) {
+ if (!target.closest || !target.closest('#acc')) return null;
+ const head = target.closest('.cathead, .catbar:not(.new)');
+ if (!head || target.closest('.mswitch, .iconbtn, input, textarea')) return null;
+ const id = bereichIdOf(head);
+ return id && getBereich(id) ? head : null;
+}
+function bereichIdOf(head) {
+ return head.matches('.catbar') ? head.dataset.cat : head.querySelector('[data-act="opencat"]')?.dataset.cat;
+}
 document.addEventListener('pointermove', event => {
  if (headPress && Math.hypot(event.clientX - headPress.x, event.clientY - headPress.y) > 10) { clearTimeout(headPress.timer); headPress.head.classList.remove('pressing'); headPress = null; }
 }, true);
@@ -1410,7 +1463,10 @@ function updateQuickBar() {
  const input = $('#qin');
  input.placeholder = hint;
  input.setAttribute('aria-label', heute && !quickOpen ? 'Neues To-Do für Heute' : `Neues To-Do in ${where}${backlog ? ', Backlog' : ''}`);
- bar.style.setProperty('--c', bereich ? bereich.color : GRAY);
+ // 1.0.53: Ist kein Bereich aufgeklappt (und nichts ausdrücklich gewählt), bleibt das Plus neutral (Anthrazit)
+ const neutral = !heute && !quickOpen && state.openCat === null;
+ bar.style.setProperty('--c', neutral ? 'var(--neutral)' : bereich ? bereich.color : GRAY);
+ bar.classList.toggle('qneutral', neutral);
  const open = visibleBereiche().find(b => b.id === state.openCat);
  const count = open && !heute ? columnsOf(open).length : 0;
  // 1.0.43: In „Heute“ keine Pfeile, das Feld nimmt ihren Platz ein
@@ -2456,6 +2512,98 @@ document.addEventListener('keydown', event => {
  const index = columnsOf(bereich).findIndex(k => k.id === kategorieId);
  moveKategorie(bereichId, kategorieId, index + (event.key === 'ArrowRight' ? 1 : -1));
  document.querySelector(`.colgrip[data-cat="${bereichId}"][data-s="${kategorieId}"]`)?.focus({ preventScroll: true });
+});
+
+// 4b) 1.0.53: Bereiche untereinander umsortieren. Maus: Kopf bzw. Leiste drücken und ziehen.
+//     Finger: lange drücken, dann ziehen (siehe headPress oben). Eine farbige Linie zeigt die Zielstelle.
+//     Tastatur: Kopf bzw. Leiste fokussieren, Alt + Pfeil hoch/runter.
+//     Die Reihenfolge steckt in state.cats (wie bisher gespeichert und in der Sicherung).
+function bereichRows() {
+ return [...$('#acc').children].filter(el => el.matches('.cat.open, .catbar:not(.new)')
+  && getBereich(el.matches('.catbar') ? el.dataset.cat : bereichIdOf(el.querySelector('.cathead'))));
+}
+const rowBereichId = row => row.matches('.catbar') ? row.dataset.cat : bereichIdOf(row.querySelector('.cathead'));
+function dragBereich(head, startX, startY, { touch = false, onStill = null } = {}) {
+ const id = bereichIdOf(head);
+ const bereich = getBereich(id);
+ const source = head.matches('.catbar') ? head : head.closest('.cat');
+ if (!bereich || !source) return;
+ const rows = bereichRows();
+ const ghost = document.createElement('div');
+ ghost.className = 'colghost dragghost catghost';
+ ghost.textContent = bereich.name;
+ ghost.style.setProperty('--c', bereich.color);
+ const line = document.createElement('div');
+ line.className = 'treeline';
+ line.style.setProperty('--c', bereich.color);
+ let moved = false;
+ let beforeRow = null;   // Zeile, vor der der Bereich landet (null = ans Ende)
+ let pointerY = startY;
+ let frame = 0;
+ if (touch) { touchDragging = true; source.classList.add('held'); }
+ const markTarget = () => {
+  beforeRow = itemBelow(rows, source, pointerY);
+  const others = rows.filter(r => r !== source);
+  if (!others.length) return;
+  const y = beforeRow ? beforeRow.getBoundingClientRect().top - 4 : others.at(-1).getBoundingClientRect().bottom + 4;
+  const box = $('#acc').getBoundingClientRect();
+  Object.assign(line.style, { left: box.left + 8 + 'px', width: box.width - 16 + 'px', top: y - 1 + 'px' });
+  if (!line.isConnected) document.body.append(line);
+ };
+ // Am oberen/unteren Rand: Seite mitscrollen
+ const scrollAtEdge = () => {
+  if (pointerY < 60) { scrollBy(0, -12); markTarget(); }
+  else if (pointerY > innerHeight - 90) { scrollBy(0, 12); markTarget(); }
+  frame = requestAnimationFrame(scrollAtEdge);
+ };
+ trackPointer(moveEvent => {
+  pointerY = moveEvent.clientY;
+  if (!moved) {
+   if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < (touch ? 10 : 6)) return;
+   moved = true;
+   document.body.append(ghost);
+   source.classList.add('src-drag');
+   document.body.classList.add('catdrag');
+   frame = requestAnimationFrame(scrollAtEdge);
+  }
+  ghost.style.left = Math.max(4, Math.min(moveEvent.clientX - 24, innerWidth - ghost.offsetWidth - 4)) + 'px';
+  ghost.style.top = pointerY - 22 + 'px';
+  markTarget();
+ }, upEvent => {
+  cancelAnimationFrame(frame);
+  touchDragging = false;
+  ghost.remove();
+  line.remove();
+  source.classList.remove('src-drag', 'held');
+  document.body.classList.remove('catdrag');
+  if (!moved) {
+   if (upEvent.type !== 'pointercancel' && onStill) onStill();
+   return;
+  }
+  ignoreClicksUntil = Date.now() + 350;
+  if (upEvent.type === 'pointercancel') return;
+  moveBereich(id, beforeRow ? rowBereichId(beforeRow) : null);
+ });
+}
+document.addEventListener('pointerdown', event => {
+ if (event.pointerType !== 'mouse' || event.button > 0 || !$('#modal').hidden) return;
+ const head = bereichHeadAt(event.target);
+ if (!head) return;
+ event.preventDefault();   // keine Textauswahl; der Klick (auf-/zuklappen) kommt trotzdem an
+ dragBereich(head, event.clientX, event.clientY);
+});
+document.addEventListener('keydown', event => {
+ if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') || !$('#modal').hidden) return;
+ const head = event.target.closest && bereichHeadAt(event.target.closest('.catbar, .cathead [data-act="opencat"]') || document.body);
+ if (!head) return;
+ event.preventDefault();
+ const id = bereichIdOf(head);
+ const ids = bereichRows().map(rowBereichId);
+ const i = ids.indexOf(id);
+ if (i < 0) return;
+ if (event.key === 'ArrowUp' && i > 0) moveBereich(id, ids[i - 1]);
+ if (event.key === 'ArrowDown' && i < ids.length - 1) moveBereich(id, ids[i + 2] ?? null);
+ document.querySelector(`#acc .catbar[data-cat="${id}"], #acc .cathead [data-act="opencat"][data-cat="${id}"]`)?.focus({ preventScroll: true });
 });
 
 // 5) Tab „Übersicht“: Unter-To-Dos innerhalb einer Karte am Griff umsortieren – wie die Vorher-Liste

@@ -110,6 +110,7 @@ Die Datei ist in Abschnitte gegliedert, erkennbar an Kommentaren mit `----------
 | Übersicht mit Schalter aus             | `uebersichtColumnHtml`, `treeNodeHtml` (Ziel ganz oben = `cardHtml` mit `options.tree`; Zeilen nicht eingerückt, Ebene als `.lvl`-Punkte) |
 | Unter-To-Dos in der Übersicht umsortieren | `moveInTree`, `treeDropTarget`, `applyTreeMove`, Ziehen am Griff (`.tgrip`, Abschnitt „Ziehen“ Nr. 5), Pfeiltasten |
 | Bereiche und Kategorien (Akkordeon)    | `bereichBarHtml`, `bereichOpenHtml`, `bereichDialog`, `kategorieDialog` |
+| Reihenfolge der Bereiche (offener oben, Ziehen) | `displayedBereiche`, `moveBereich`, `dragBereich` (Abschnitt „Ziehen“ Nr. 4b), langes Drücken über `headPress` |
 | Kategorie-Navigation (Knöpfe über den Spalten) | `subtabs` in `bereichOpenHtml`, `goToColumn` (Sprung + Aufleuchten), `markCurrentTab`; am Handy (bis 600 px) stattdessen die runden Pfeile `.qarrow` der Schnelleingabe: kurz = `quickStep`, lang = `openKatMenu` (Menü `.ctxmenu`). Die alten Pfeile `.colarrow` sind am Handy ausgeblendet |
 | Bereichskopf am Handy (Punkt = Farbe, Name = bearbeiten, „Bereich löschen“) | `.ctm` in `bereichOpenHtml`, `openColorMenu`, `startBereichRename`/`commitBereichRename`, `deleteBereich` |
 | Text nur am Desktop / nur am Handy (z. B. kein „zeitnah“ am Handy) | `wideNarrow()` mit den CSS-Klassen `.wide`/`.narrow` |

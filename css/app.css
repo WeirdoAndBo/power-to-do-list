@@ -25,6 +25,7 @@
 --soft:light-dark(#eceef1,#25292d);         /* sanfte Flächen, z. B. beim Drüberfahren */
 --acc:light-dark(#1c1f23,#eceef0);          /* Hauptknöpfe */
 --accInk:light-dark(#fff,#141618);          /* Schrift auf Hauptknöpfen */
+--neutral:light-dark(#2f3439,#3b4148);      /* 1.0.53: Plus der Schnelleingabe, wenn kein Bereich offen ist (Anthrazit) */
 --shadow:0 1px 2px rgb(20 25 30/.05),0 4px 14px rgb(20 25 30/.05)}
 :root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
 *{box-sizing:border-box;min-width:0}
@@ -345,6 +346,11 @@ body.dnd .over{background:color-mix(in srgb,var(--c) 22%,var(--card))!important;
    .dropl/.dropr = farbige Kante links/rechts an der Zielstelle, .colghost = Namensschild am Finger */
 body.coldrag{user-select:none;-webkit-user-select:none;cursor:grabbing}
 body.coldrag .cat .cols{scroll-snap-type:none!important}
+/* 1.0.53: Bereiche untereinander umsortieren. body.catdrag = es wird gerade ein Bereich gezogen,
+   .catghost = Namensschild am Zeiger; die Linie (.treeline) zeigt die Zielstelle. */
+body.catdrag{user-select:none;-webkit-user-select:none;cursor:grabbing}
+.catghost{border-radius:14px}
+.cat.open.src-drag,.catbar.src-drag{opacity:.35}
 .cat .col.lift{opacity:.45}
 .cat .col.dropl{box-shadow:inset 4px 0 0 var(--c),inset 0 0 0 1px color-mix(in srgb,var(--c) 18%,transparent)}
 .cat .col.dropr{box-shadow:inset -4px 0 0 var(--c),inset 0 0 0 1px color-mix(in srgb,var(--c) 18%,transparent)}
