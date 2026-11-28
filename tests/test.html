@@ -1117,7 +1117,7 @@ test('Bearbeitungsfeld ist so viele Zeilen hoch wie der Text', async () => {
  await pressKey(field, 'Enter');
  expect(getTaskTitle('g8') === 'Zeile eins Zeile zwei', 'Enter speichert nicht');
 });
-test('Handy: Karte mit Unter-To-Dos zeigt die „+“-Linie nur aufgeklappt, unter dem letzten Unter-To-Do', async () => {
+test('Handy: Karte mit Unter-To-Dos zeigt die „+“-Linie nur aufgeklappt, ab 1.0.55 über dem ersten Unter-To-Do', async () => {
  await freshApp();
  frame.style.width = '360px';
  await sleep(200);
@@ -1132,8 +1132,9 @@ test('Handy: Karte mit Unter-To-Dos zeigt die „+“-Linie nur aufgeklappt, unt
   win.eval('markTouchStrips()');
   const vis = card().querySelectorAll('.ins.tvis');
   expect(vis.length === 1, `Aufgeklappt ${vis.length} statt einer „+“-Linie`);
-  const lastRow = [...card().querySelectorAll('li > .row')].at(-1);
-  expect(vis[0].compareDocumentPosition(lastRow) & Node.DOCUMENT_POSITION_PRECEDING, '„+“-Linie steht nicht unter dem letzten Unter-To-Do');
+  // 1.0.55: Die Karte klappt nach oben auf, die „+“-Linie steht oben über allen Unter-To-Dos
+  const tops = [...card().querySelectorAll('li > .row')].map(r => r.getBoundingClientRect().top);
+  expect(vis[0].getBoundingClientRect().bottom <= Math.min(...tops) + 1, '„+“-Linie steht nicht über dem ersten Unter-To-Do');
   // Kein farbiger Streifen links an der Karte
   expect(win.getComputedStyle(card(), '::after').display === 'none', 'Farbiger Streifen links an der Karte ist noch da');
   await click(tog());
@@ -1369,6 +1370,35 @@ test('Handy: Kein Bereich offen, das „+“ fragt nach dem Bereich (nicht für 
   const made = Object.values(saved().tasks).find(t => t.t === 'Ohne-Bereich-Test');
   const sammlung = target.subs.find(k => k.inbox) || target.subs[0];
   expect(made && !made.today && made.cat === target.id && made.area === sammlung.id, 'To-Do liegt nicht in der Sammlung des gewählten Bereichs');
+ } finally {
+  frame.style.width = '';
+  await sleep(200);
+ }
+});
+
+// 1.0.55
+test('Handy: Karten der Übersicht klappen nach oben auf (Unter-To-Dos über dem Haupt-To-Do)', async () => {
+ await freshApp();
+ frame.style.width = '360px';
+ await sleep(200);
+ try {
+  await zeigeG1Offen();
+  await sleep(100);
+  const card = $('.tree li.card[data-id="g1"]');
+  const main = card.querySelector(':scope > .cbody > .check').getBoundingClientRect();
+  const bar = card.querySelector(':scope > .pdiv').getBoundingClientRect();
+  const rows = [...card.querySelectorAll('li > .row')].map(r => r.getBoundingClientRect());
+  expect(rows.length && rows.every(r => r.bottom <= bar.top + 1), 'Unter-To-Dos stehen nicht über dem Fortschritt');
+  expect(bar.bottom <= main.top + 1, 'Fortschritt steht nicht über dem Haupt-To-Do');
+  const plus = card.querySelector(':scope > .ins.tvis');
+  expect(plus && plus.getBoundingClientRect().bottom <= Math.min(...rows.map(r => r.top)) + 1, '„+“-Linie steht nicht oben in der Karte');
+  // Jedes Unter-To-Do mit Vorher-To-Dos steht unter diesen
+  [...card.querySelectorAll('li[data-tid]')].forEach(li => {
+   const own = li.querySelector(':scope > .row').getBoundingClientRect();
+   li.querySelectorAll(':scope > ul > li > .row').forEach(child => {
+    expect(child.getBoundingClientRect().bottom <= own.top + 1, 'Ein Vorher-To-Do steht unter seinem To-Do');
+   });
+  });
  } finally {
   frame.style.width = '';
   await sleep(200);
