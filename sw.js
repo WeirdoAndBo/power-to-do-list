@@ -2,7 +2,7 @@
 // Bei jeder Änderung an den App-Dateien VERSION erhöhen (und APP_VERSION in js/app.js gleich setzen).
 // Die neue VERSION sorgt dafür, dass der Browser den neuen Service Worker installiert und die App
 // sich einmal neu lädt. Die Dateien selbst holt der Service Worker immer zuerst aus dem Netz.
-const VERSION = '1.0.51-c';
+const VERSION = '1.0.52-c';
 const CACHE = 'powerliste-' + VERSION;
 const FILES = [
   './',

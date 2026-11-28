@@ -892,3 +892,12 @@ textarea.tinput{display:block;resize:none;overflow:hidden;line-height:inherit;mi
  .qopts{max-width:520px;background:none;box-shadow:none;border-radius:0}
  .qbar.open .qopts{margin-top:0;padding:2px 8px 6px;border-top:1px solid var(--line)}
 }
+
+/* ============================================================================
+   Version C 1.0.52 – Handy: „Heute“ über dem Schalter, wenn der Titel länger als eine Zeile ist
+   app.js markLongTitles setzt dann .tlong an die Karte. Gilt in der Übersicht (beide Modi) und in „Heute“.
+   ============================================================================ */
+@media(max-width:600px){
+ .card.tlong .chead>.today{flex-direction:column-reverse;flex-wrap:nowrap;justify-content:center;gap:2px;padding:0 2px}
+ .card.tlong .chead>.today span{font-size:10px;line-height:1}
+}
