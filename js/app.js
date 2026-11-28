@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.51-c';
+const APP_VERSION = '1.0.52-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -1089,6 +1089,7 @@ function render() {
  if (state.view === 'heute') {
   $('#acc').innerHTML = heuteViewHtml();
   lastRenderedBereich = undefined;
+  markLongTitles();
   updateQuickBar();
   return;
  }
@@ -1115,8 +1116,31 @@ function render() {
  lastRenderedBereich = state.openCat;
  updateColumnEdges();
  markTouchStrips();
+ markLongTitles();
  updateQuickBar();
 }
+/* 1.0.52, Handy: Ist der Text einer Karte (Titel, ggf. mit „Gehört zu: …“) länger als eine Zeile, steht das Wort „Heute“ über dem Schalter
+   statt rechts daneben (Klasse .tlong an der Karte). So bekommt der Titel mehr Breite.
+   Gemessen wird in der normalen Anordnung (Wort daneben). Passt der Titel danach in eine Zeile, bleibt es trotzdem
+   so, damit die Karte nicht hin- und herspringt. */
+function markLongTitles() {
+ const cards = document.querySelectorAll('#acc .card');
+ cards.forEach(card => card.classList.remove('tlong'));
+ if (!matchMedia('(max-width:600px)').matches) return;
+ const long = [...cards].filter(card => {
+  // Text = Titel plus Zeile „Gehört zu: …“ darunter, ohne das Schild „Liste“ darüber
+  const title = card.querySelector(':scope h3 .t');
+  const text = card.querySelector(':scope .ctext');
+  if (!title || !text || !card.querySelector(':scope > .chead > .today')) return false;
+  const mark = text.querySelector('.lmark');
+  const height = text.getBoundingClientRect().height - (mark ? mark.getBoundingClientRect().height + 4 : 0);
+  const lineHeight = parseFloat(getComputedStyle(title).lineHeight) || 20;
+  return height > lineHeight * 1.5;
+ });
+ long.forEach(card => card.classList.add('tlong'));
+}
+let longTitlesTimer;
+addEventListener('resize', () => { clearTimeout(longTitlesTimer); longTitlesTimer = setTimeout(markLongTitles, 120); });
 /* Version C, Handy (ohne Maus, kein Drüberfahren): Statt aller „+“-Linien ist pro Stelle nur eine zu sehen
    (Klasse .tvis): die unterste einer Spalten-Liste und die unterste in jeder Karte. Antippt man eine Zeile
    in einer Karte (nicht den Text), erscheinen genau ihre „+“ (Klasse .tsel am <li>). */
