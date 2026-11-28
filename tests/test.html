@@ -259,6 +259,12 @@ test('Handy: nichts ragt seitlich heraus, Schnelleingabe statt Pfeilen an den Sp
   // Leere Spalte am Ende mit „+ Neue Kategorie“
   const add = $('#cols > .coladd [data-act="newsub"]');
   expect(add && add.offsetParent !== null, 'Leere Spalte „+ Neue Kategorie“ fehlt');
+  // 1.0.49: Plus oben, gleicher Abstand links, oben, rechts
+  {
+   const c = add.closest('.coladd').getBoundingClientRect(), p = add.querySelector('span').getBoundingClientRect();
+   const l = p.left - c.left, r = c.right - p.right, t = p.top - c.top;
+   expect(Math.abs(l - r) < 3 && Math.abs(t - l) < 3, `Plus nicht oben mit gleichem Abstand (links ${l|0}, oben ${t|0}, rechts ${r|0})`);
+  }
   await click(add);
   expect(modalOpen(), '„+ Neue Kategorie“ öffnet kein Popup');
   await click('#modal [data-v=""]');
