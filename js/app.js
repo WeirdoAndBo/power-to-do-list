@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.49-c';
+const APP_VERSION = '1.0.50-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -674,19 +674,40 @@ function deleteListItem(taskId, itemId) {
  toast('Punkt gelöscht.', true);
 }
 // Punkt direkt bearbeiten: Enter speichert, Escape bricht ab, leer = löschen
+// 1.0.50: Bearbeitungsfeld für Titel und Listenpunkte. Ein Textfeld (textarea), das so viele Zeilen hoch ist wie
+// der Text (wächst beim Tippen mit). Zeilenumbrüche gibt es nicht: Enter speichert, eingefügte Umbrüche werden Leerzeichen.
+function editField(value, label) {
+ const field = document.createElement('textarea');
+ field.className = 'tinput tarea';
+ field.rows = 1;
+ field.value = value;
+ field.setAttribute('aria-label', label);
+ field.setAttribute('autocomplete', 'off');
+ field.setAttribute('enterkeyhint', 'done');
+ field.addEventListener('input', () => {
+  if (/[\r\n]/.test(field.value)) {
+   const at = field.selectionStart;
+   field.value = field.value.replace(/\r?\n/g, ' ');
+   field.setSelectionRange(at, at);
+  }
+  fitEditField(field);
+ });
+ return field;
+}
+function fitEditField(field) {
+ field.style.height = 'auto';
+ field.style.height = field.scrollHeight + 'px';
+}
 function startItemEdit(el) {
  const task = getTask(el.dataset.id);
  const item = listItem(task, el.dataset.i);
- if (!item || el.querySelector('input')) return;
- const input = document.createElement('input');
- input.className = 'tinput';
- input.value = item.t;
- input.setAttribute('aria-label', 'Punkt bearbeiten');
- input.setAttribute('autocomplete', 'off');
- input.setAttribute('enterkeyhint', 'done');
+ if (!item || el.querySelector('.tinput')) return;
+ const input = editField(item.t, 'Punkt bearbeiten');
  el.textContent = '';
  el.append(input);
+ fitEditField(input);
  input.focus();
+ input.setSelectionRange(input.value.length, input.value.length);
  let finished = false;
  const finish = keep => {
   if (finished) return;
@@ -1100,6 +1121,8 @@ function markTouchStrips() {
   if (strips.length) strips.at(-1).classList.add('tvis');
  });
  document.querySelectorAll('#acc .card').forEach(card => {
+  // 1.0.50: Karte mit Unter-To-Dos, zugeklappt: keine „+“-Linie. Aufgeklappt steht sie unter dem letzten Unter-To-Do.
+  if (card.querySelector(':scope > .pdiv .divtog[aria-expanded="false"]')) return;
   const own = [...card.querySelectorAll(`.ins[data-p="${card.dataset.id}"]:not(.chainafter)`)];
   if (own.length) own.at(-1).classList.add('tvis');
  });
@@ -2785,13 +2808,8 @@ function startInsertRoot(button) {
 // Text eines To-Dos direkt an Ort und Stelle bearbeiten. Enter (oder woanders hintippen) speichert, Escape bricht ab.
 function startRename(titleEl) {
  const task = getTask(titleEl.dataset.id);
- if (!task || titleEl.querySelector('input')) return;
- const input = document.createElement('input');
- input.className = 'tinput';
- input.value = task.t;
- input.setAttribute('aria-label', 'Text bearbeiten');
- input.setAttribute('autocomplete', 'off');
- input.setAttribute('enterkeyhint', 'done');
+ if (!task || titleEl.querySelector('.tinput')) return;
+ const input = editField(task.t, 'Text bearbeiten');
  titleEl.textContent = '';
  titleEl.append(input);
  // Version C: 🔗 im Bearbeitungsfeld öffnet die Verbindungen (kommt erst nach … / gehört auch zu …)
@@ -2811,6 +2829,7 @@ function startRename(titleEl) {
  deleteButton.setAttribute('aria-label', `${task.t} löschen`);
  titleEl.append(deleteButton);
  titleEl.classList.add('editing');
+ fitEditField(input);
  input.focus();
  input.setSelectionRange(input.value.length, input.value.length);
  let finished = false;

@@ -1064,9 +1064,9 @@ test('Listenpunkt erst beim Doppeltippen bearbeiten, Tasten-Hinweis „Senden“
  await loadApp();
  const item = () => $('.card[data-id="g8"] .lt[data-i="p1"]');
  await click(item());
- expect(!item().querySelector('input'), 'Einmal antippen soll noch nicht bearbeiten');
+ expect(!item().querySelector('.tinput'), 'Einmal antippen soll noch nicht bearbeiten');
  await dblclick(item());
- const input = item().querySelector('input');
+ const input = item().querySelector('.tinput');
  expect(input && input.getAttribute('enterkeyhint') === 'done', 'Doppeltippen öffnet das Feld nicht');
  await pressKey(input, 'Escape');
  expect($('.card[data-id="g8"] .linput').getAttribute('enterkeyhint') === 'send', 'Feld „+ Punkt“ zeigt nicht „Senden“');
@@ -1092,6 +1092,74 @@ test('Übersicht: Pfeil mit Anzahl sitzt auch auf der Trennlinie', async () => {
  expect($('.tree li.card[data-id="g1"] > .pdiv .divtog').getAttribute('aria-expanded') === String(!open), 'Pfeil auf der Trennlinie klappt nicht auf/zu');
  await click('.tree li.card[data-id="g1"] > .pdiv .divtog');
  await zeige(true);
+});
+
+// 1.0.50
+test('Bearbeitungsfeld ist so viele Zeilen hoch wie der Text', async () => {
+ await freshApp();
+ const d = saved(); d.tasks.g8.t = 'Ein sehr langer Titel, der garantiert über mehrere Zeilen geht, damit das Feld mitwachsen muss';
+ win.localStorage.setItem(KEY, JSON.stringify(d));
+ await loadApp();
+ const shown = $('.card[data-id="g8"] h3 .t');
+ const lines = Math.round(shown.getBoundingClientRect().height / parseFloat(win.getComputedStyle(shown).lineHeight));
+ expect(lines >= 2, 'Testtitel steht nicht auf mehreren Zeilen');
+ await dblclick(shown);
+ const field = $('.card[data-id="g8"] h3 .tinput');
+ expect(field && field.tagName === 'TEXTAREA', 'Bearbeitungsfeld ist kein mehrzeiliges Feld');
+ const lh = parseFloat(win.getComputedStyle(field).lineHeight);
+ expect(field.clientHeight >= lh * 1.8, `Feld ist nur ${field.clientHeight}px hoch (eine Zeile)`);
+ expect(field.scrollHeight <= field.clientHeight + 1, 'Text passt nicht ganz ins Feld');
+ // Enter speichert weiterhin, eingefügte Zeilenumbrüche werden Leerzeichen
+ field.value = 'Zeile eins\nZeile zwei';
+ field.dispatchEvent(new Event('input', { bubbles: true }));
+ expect(field.value === 'Zeile eins Zeile zwei', 'Zeilenumbruch bleibt im Titel');
+ await pressKey(field, 'Enter');
+ expect(getTaskTitle('g8') === 'Zeile eins Zeile zwei', 'Enter speichert nicht');
+});
+test('Handy: Karte mit Unter-To-Dos zeigt die „+“-Linie nur aufgeklappt, unter dem letzten Unter-To-Do', async () => {
+ await freshApp();
+ frame.style.width = '360px';
+ await sleep(200);
+ try {
+  await zeige(false);
+  win.eval('markTouchStrips()');
+  const card = () => $('.tree li.card[data-id="g1"]');
+  const tog = () => card().querySelector(':scope > .pdiv .divtog');
+  if (tog().getAttribute('aria-expanded') === 'true') { await click(tog()); win.eval('markTouchStrips()'); }
+  expect(!card().querySelector('.ins.tvis'), 'Zugeklappte Karte zeigt eine „+“-Linie');
+  await click(tog());
+  win.eval('markTouchStrips()');
+  const vis = card().querySelectorAll('.ins.tvis');
+  expect(vis.length === 1, `Aufgeklappt ${vis.length} statt einer „+“-Linie`);
+  const lastRow = [...card().querySelectorAll('li > .row')].at(-1);
+  expect(vis[0].compareDocumentPosition(lastRow) & Node.DOCUMENT_POSITION_PRECEDING, '„+“-Linie steht nicht unter dem letzten Unter-To-Do');
+  // Kein farbiger Streifen links an der Karte
+  expect(win.getComputedStyle(card(), '::after').display === 'none', 'Farbiger Streifen links an der Karte ist noch da');
+  await click(tog());
+ } finally {
+  frame.style.width = '';
+  await sleep(150);
+ }
+});
+test('Handy: Schnelleingabe steht auf einer deckenden Fläche, Pfeile ohne Kreis in Bereichsfarbe', async () => {
+ await freshApp();
+ frame.style.width = '360px';
+ await sleep(200);
+ try {
+  const bar = $('#qbar'), next = $('.qarrow.qnext'), field = $('.qfield');
+  const bg = win.getComputedStyle(bar).backgroundColor;
+  expect(bg && bg !== 'transparent' && !/rgba\(.*, 0\)$/.test(bg), 'Schnelleingabe hat keinen deckenden Hintergrund');
+  const nb = win.getComputedStyle(next).backgroundColor;
+  expect(nb === 'transparent' || /rgba\(.*, 0\)$/.test(nb), 'Pfeil hat noch einen Kreis');
+  const bereich = saved().cats.find(c => c.id === saved().openCat);
+  const probe = doc.createElement('i'); probe.style.color = bereich.color; doc.body.append(probe);
+  const want = win.getComputedStyle(probe).color; probe.remove();
+  if (!next.classList.contains('off')) expect(win.getComputedStyle(next).color === want, 'Pfeil hat nicht die Farbe des Bereichs');
+  expect(bar.getBoundingClientRect().left <= field.getBoundingClientRect().left - 30, 'Fläche reicht nicht hinter die Pfeile');
+ } finally {
+  frame.style.width = '';
+  await sleep(150);
+ }
 });
 
 document.getElementById('run').onclick = async () => {
