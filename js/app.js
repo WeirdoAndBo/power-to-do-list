@@ -35,7 +35,7 @@ const STORAGE_KEY = 'powerliste-b-v1';
 // APP_VERSION = Stand der App (immer gleich wie VERSION in sw.js).
 // FORMAT = Version des gespeicherten Datenformats. Nur erhöhen, wenn sich die Datenstruktur
 // ändert, und dann in migrate() nachziehen.
-const APP_VERSION = '1.0.54-c';
+const APP_VERSION = '1.0.55-c';
 const FORMAT = 1;
 // Kennung in Sicherungsdateien
 const BACKUP_APP_NAME = 'power-liste';
@@ -1182,6 +1182,11 @@ addEventListener('resize', () => { clearTimeout(longTitlesTimer); longTitlesTime
 /* Version C, Handy (ohne Maus, kein Drüberfahren): Statt aller „+“-Linien ist pro Stelle nur eine zu sehen
    (Klasse .tvis): die unterste einer Spalten-Liste und die unterste in jeder Karte. Antippt man eine Zeile
    in einer Karte (nicht den Text), erscheinen genau ihre „+“ (Klasse .tsel am <li>). */
+/* 1.0.55, Handy: Karten mit Unter-To-Dos in der Übersicht („Alles anzeigen“) klappen nach oben auf („Drop-up“).
+   Das Haupt-To-Do steht unten, darüber Fortschritt mit Pfeil, darüber die Unter-To-Dos: ganz oben das, womit
+   man anfängt, nach unten hin Richtung Haupt-To-Do. Nur die Anzeige dreht sich (CSS order), die Daten und die
+   Reihenfolge im HTML bleiben. Gilt nur am Handy; am Desktop bleibt die Karte, wie sie war. */
+const isDropUp = el => !!el && el.matches('.tcard, .tcard *') && matchMedia('(max-width:600px)').matches;
 function markTouchStrips() {
  // Im Backlog bleibt das „+“ versteckt (wie am Desktop)
  document.querySelectorAll('#acc [data-drop="zone"]:not([data-bl="1"])').forEach(zone => {
@@ -1191,6 +1196,8 @@ function markTouchStrips() {
  document.querySelectorAll('#acc .card').forEach(card => {
   // 1.0.50: Karte mit Unter-To-Dos, zugeklappt: keine „+“-Linie. Aufgeklappt steht sie unter dem letzten Unter-To-Do.
   if (card.querySelector(':scope > .pdiv .divtog[aria-expanded="false"]')) return;
+  // 1.0.55: Karten der Übersicht klappen am Handy nach oben auf, die „+“-Linie steht oben (neues Unter-To-Do)
+  if (isDropUp(card)) { card.querySelector(':scope > .ins')?.classList.add('tvis'); return; }
   const own = [...card.querySelectorAll(`.ins[data-p="${card.dataset.id}"]:not(.chainafter)`)];
   if (own.length) own.at(-1).classList.add('tvis');
  });
@@ -2622,7 +2629,8 @@ const TREE_INDENT = 18;   // so weit rückt die Linie beim Ziehen je Ebene ein (
 const treeParentLi = li => li.parentElement.closest('li');
 // Wo das gezogene To-Do landen würde. rows = sichtbare Zeilen der Karte ohne das gezogene (mit Unterbaum),
 // y = Zeiger, wantedLevel = gewünschte Ebene. Gibt { level, parentLi, afterLi, lineY } zurück.
-function treeDropTarget(rows, y, wantedLevel) {
+function treeDropTarget(rows, y, wantedLevel, up) {
+ if (up) return treeDropTargetUp(rows, y, wantedLevel);
  let index = rows.findIndex((r, i) => i > 0 && y < r.box.top + r.box.height / 2);
  if (index < 0) index = rows.length;
  const above = rows[index - 1];
@@ -2635,6 +2643,23 @@ function treeDropTarget(rows, y, wantedLevel) {
   if (rows[i].level === level - 1) { parentLi = rows[i].li; break; }
  }
  const lineY = below ? below.box.top : above.li.getBoundingClientRect().bottom;
+ return { level, parentLi, afterLi, lineY };
+}
+// 1.0.55: Dasselbe für Karten, die nach oben aufklappen. rows sind dort von oben nach unten sortiert: jedes
+// To-Do steht UNTER seinen Unter-To-Dos (das Haupt-To-Do ganz unten), Geschwister stehen in ihrer Reihenfolge.
+// Das Eltern-To-Do einer Lücke liegt also darunter, das Geschwister davor direkt darüber.
+function treeDropTargetUp(rows, y, wantedLevel) {
+ let index = rows.findIndex(r => y < r.box.top + r.box.height / 2);
+ if (index < 0 || index > rows.length - 1) index = rows.length - 1;  // nie unter das Haupt-To-Do
+ const above = rows[index - 1];
+ const below = rows[index];
+ const level = Math.max(1, above ? above.level : 1, Math.min(wantedLevel, below.level + 1));
+ let parentLi = null;
+ for (let i = index; i < rows.length; i++) {
+  if (rows[i].level === level - 1) { parentLi = rows[i].li; break; }
+ }
+ const afterLi = above && above.level === level ? above.li : null;
+ const lineY = below.box.top - 3;
  return { level, parentLi, afterLi, lineY };
 }
 // Hängt das To-Do `id` von oldParentId nach newParentId um, direkt hinter afterId
@@ -2710,6 +2735,13 @@ function dragTreeRow(event, grip) {
  const rows = [card, ...card.querySelectorAll('li')]
   .filter(x => x !== li && !li.contains(x))
   .map(x => ({ li: x, level: +x.dataset.l, row: x.querySelector(':scope > .row, :scope > .cbody') }));
+ // 1.0.55: Nach oben aufklappende Karte: Zeilen nach ihrer Lage auf dem Bildschirm ordnen. Die Haupt-Zeile
+ // (.cbody) ist am Handy nur ein Rahmen ohne eigene Größe (display: contents), gemessen wird am Häkchen.
+ const up = isDropUp(card);
+ if (up) {
+  rows.forEach(r => { if (r.li === card) r.row = card.querySelector(':scope > .cbody > .check'); });
+  rows.sort((a, b) => a.row.getBoundingClientRect().top - b.row.getBoundingClientRect().top);
+ }
  const line = document.createElement('div');
  line.className = 'treeline';
  line.style.setProperty('--c', card.style.getPropertyValue('--c'));
@@ -2750,7 +2782,7 @@ function dragTreeRow(event, grip) {
    beforeEl = items.length ? itemBelow(items, null, moveEvent.clientY) : null;
    return;
   }
-  drop = treeDropTarget(rows, moveEvent.clientY, wanted);
+  drop = treeDropTarget(rows, moveEvent.clientY, wanted, up);
   const cardBox = card.getBoundingClientRect();
   const left = cardBox.left + 10 + drop.level * TREE_INDENT;
   Object.assign(line.style, { left: left + 'px', width: Math.max(40, cardBox.right - 10 - left) + 'px', top: drop.lineY - 1 + 'px' });
@@ -2893,6 +2925,8 @@ function startInsert(button) {
  const box = document.createElement('div');
  box.className = 'insrow';
  box.style.setProperty('--c', button.style.getPropertyValue('--c'));
+ // 1.0.55: In nach oben aufklappenden Karten steht der Streifen per CSS order an seiner Stelle, das Feld auch
+ if (isDropUp(button)) box.style.order = getComputedStyle(button).order;
  box.innerHTML = `<input class="tinput" placeholder="${esc(button.querySelector('em') ? button.querySelector('em').textContent : insertQuestion(parent))}" aria-label="Neues To-Do" autocomplete="off" enterkeyhint="send">`;
  button.replaceWith(box);
  const input = box.querySelector('input');
@@ -4060,7 +4094,11 @@ function toggleTreeBranch(key, level) {
   [...treeOpen.keys()].forEach(k => { if (k.startsWith(key + '/')) treeOpen.delete(k); });
  }
  treeOpen.set(key, !isOpen);
+ // 1.0.55: Klappt die Karte nach oben auf, bleibt das Haupt-To-Do unter dem Finger: Seite um die neue Höhe mitscrollen
+ const mainCheck = () => document.querySelector(`.tcard[data-k="${CSS.escape(key)}"] > .cbody > .check`);
+ const before = level === 0 && isDropUp(mainCheck()) ? mainCheck().getBoundingClientRect().top : null;
  render();
+ if (before !== null && mainCheck()) scrollBy(0, mainCheck().getBoundingClientRect().top - before);
 }
 // 1.0.47: Text bearbeiten erst beim zweiten Antippen desselben Titels bzw. Listenpunkts kurz hintereinander.
 // Einmal antippen tut nichts; so lassen sich Karten mit viel Text auch am Text anfassen und verschieben.

@@ -930,3 +930,31 @@ textarea.tinput{display:block;resize:none;overflow:hidden;line-height:inherit;mi
 .aseg button[aria-pressed=true]{background:var(--card);color:var(--ink);font-weight:600;box-shadow:var(--shadow)}
 .arrange .link{display:block;width:100%;text-align:left;text-decoration:none;color:var(--acc);font-size:14px;padding:6px 0;margin:0}
 .arrange .prehint{color:var(--mute)}
+
+/* ============================================================================
+   Version C 1.0.55 – Handy: Karten der Übersicht klappen nach oben auf („Drop-up“)
+   Haupt-To-Do unten, darüber Fortschritt mit Pfeil (zugeklappt am oberen Kartenrand), darüber die Unter-To-Dos:
+   ganz oben das, womit man anfängt. Die „+“-Linie steht oben. Nur die Anzeige dreht sich (order), siehe isDropUp.
+   ============================================================================ */
+@media(max-width:600px){
+ .tree>li.tcard.card>.ins{order:-4}
+ .tree>li.tcard.card>ul{order:-3}
+ .tree>li.tcard.card>.pdiv{order:-2;margin:2px -8px 10px -12px}
+ .tree>li.tcard.card:not(:has(>ul))>.pdiv{margin-top:-6px}
+ /* Pfeil: zu = nach oben (klappt nach oben auf), offen = nach unten */
+ .tree>li.tcard.card>.pdiv .cardtog svg{transform:rotate(-90deg)}
+ .tree>li.tcard.card>.pdiv .cardtog[aria-expanded=true] svg{transform:rotate(90deg)}
+ /* In der Karte: Unter-To-Dos über dem To-Do, zu dem sie gehören */
+ .tree .tcard li{display:flex;flex-direction:column}
+ .tree .tcard li>.ins.parallel{order:0}
+ .tree .tcard li>ul{order:1}
+ .tree .tcard li>.ins.deeper,.tree .tcard li>.ins.inchain{order:2}
+ .tree .tcard li>.row{order:4}
+ .tree .tcard li>.mbar{order:5}
+ .tree .tcard li>.llist{order:6}
+ .tree .tcard li>.ins.chainafter{order:7}
+ .tree .tcard li>.ins:not(.parallel):not(.deeper):not(.inchain):not(.chainafter){order:8}
+ /* Ketten-Linie zeigt jetzt nach oben zum nächsten Glied */
+ .tcard .row.down::after{top:-9px;bottom:calc(50% + 14px)}
+ .tcard .row.up::before{top:calc(50% + 14px);bottom:-9px}
+}
